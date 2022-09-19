@@ -1,0 +1,104 @@
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/ll_StatusBar_titleAll"
+    android:layout_width="0dp"
+    android:layout_height="0dp"
+    android:background="@drawable/bg_black"
+    android:orientation="vertical"
+    android:visibility="gone"
+    app:layout_constraintDimensionRatio="h,1:1"
+    app:layout_constraintEnd_toEndOf="@+id/view_bg"
+    app:layout_constraintStart_toStartOf="@+id/view_bg"
+    app:layout_constraintTop_toTopOf="@+id/view_bg">
+
+
+    <!-- App图标显示 -->
+    <ScrollView
+        android:id="@+id/sv_StatusBar_titleData"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:padding="10dp"
+        app:layout_constraintBottom_toTopOf="@+id/tv_statusBar_message"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <LinearLayout
+            android:id="@+id/ll_statusBar_set"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+
+            android:orientation="vertical">
+
+            <SeekBar
+                android:id="@+id/sb_diaphaneity"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:max="100"
+                android:thumb="@drawable/img_diaphaneity_16" />
+
+            <SeekBar
+                android:id="@+id/sb_width"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:thumb="@drawable/img_width_16" />
+
+            <SeekBar
+                android:id="@+id/sb_height"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="5dp"
+                android:thumb="@drawable/img_height_16" />
+
+            <view
+                class="com.gsls.gt.GT$ViewUtils$FlowLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_margin="10dp">
+
+                <ImageView
+                    android:id="@+id/iv_cut"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:src="@drawable/img_cut_16" />
+
+                <ImageView
+                    android:id="@+id/iv_reset"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_marginTop="10dp"
+                    android:src="@drawable/img_reset_16" />
+
+                <ImageView
+                    android:id="@+id/iv_fill"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_marginTop="10dp"
+                    android:src="@drawable/img_fill_16" />
+
+            </view>
+
+
+        </LinearLayout>
+
+    </ScrollView>
+
+    <TextView
+        android:id="@+id/tv_statusBar_message"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="@drawable/bg_gray_title"
+        android:gravity="center"
+        android:padding="8dp"
+        android:text="暂无通知"
+        android:textColor="#494343"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

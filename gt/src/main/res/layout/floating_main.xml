@@ -1,0 +1,318 @@
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_black_shell"
+    android:padding="8dp">
+
+    <!-- 背景大小 -->
+    <View
+        android:id="@+id/view_bg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/bg_black"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- App图标显示 -->
+    <ScrollView
+        android:id="@+id/sv"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:orientation="vertical"
+        android:padding="10dp"
+        app:layout_constraintBottom_toTopOf="@+id/ll_bottom"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/cl_title">
+
+        <view
+            android:id="@+id/flowLayout"
+            class="com.gsls.gt.GT$ViewUtils$FlowLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="10dp" />
+    </ScrollView>
+
+    <!-- 页面容器 -->
+    <FrameLayout
+        android:id="@+id/fl_main"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintBottom_toBottomOf="@+id/sv"
+        app:layout_constraintEnd_toEndOf="@+id/sv"
+        app:layout_constraintStart_toStartOf="@+id/sv"
+        app:layout_constraintTop_toTopOf="@+id/sv" />
+
+    <!-- 状态栏 -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/cl_title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_gray_bottom"
+        android:paddingLeft="10dp"
+        android:paddingTop="5dp"
+        android:paddingRight="10dp"
+        android:paddingBottom="5dp"
+        app:layout_constraintEnd_toEndOf="@+id/view_bg"
+        app:layout_constraintStart_toStartOf="@+id/view_bg"
+        app:layout_constraintTop_toTopOf="@+id/view_bg">
+
+        <SearchView
+            android:id="@+id/sv_find"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:queryHint="请输入搜索内容"
+            app:layout_constraintEnd_toStartOf="@+id/tv_hide"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <TextView
+            android:id="@+id/tv_hide"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:padding="8dp"
+            android:rotation="0"
+            android:rotationX="0"
+            android:rotationY="0"
+            android:text="▬"
+            android:textColor="#FF00"
+            android:textStyle="bold"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toStartOf="@+id/cb_expansion"
+            app:layout_constraintTop_toTopOf="parent" />
+        
+        <CheckBox
+            android:id="@+id/cb_expansion"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#FF00"
+            android:textStyle="bold"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintEnd_toStartOf="@+id/tv_close"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <TextView
+            android:id="@+id/tv_close"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:padding="8dp"
+            android:text="✖"
+            android:textColor="#FF00"
+            android:textStyle="bold"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <!-- 下面返回键 -->
+    <LinearLayout
+        android:id="@+id/ll_bottom"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_gray_top"
+        android:orientation="horizontal"
+        android:padding="5dp"
+        app:layout_constraintBottom_toBottomOf="@+id/view_bg"
+        app:layout_constraintEnd_toEndOf="@+id/view_bg"
+        app:layout_constraintStart_toStartOf="@+id/view_bg">
+
+        <TextView
+            android:id="@+id/tv_back"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:padding="5dp"
+            android:text="◀" />
+
+        <TextView
+            android:id="@+id/tv_home"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:padding="5dp"
+            android:text="●" />
+
+        <TextView
+            android:id="@+id/tv_task"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:padding="5dp"
+            android:text="■" />
+
+    </LinearLayout>
+
+    <!-- 全屏状态时才会显示出来 -->
+    <ImageView
+        android:id="@+id/iv_fillTop"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:padding="10dp"
+        android:src="@drawable/img_fill_16"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="@+id/sv"
+        app:layout_constraintStart_toStartOf="@+id/sv" />
+
+    <!-- 展开的状态栏的背景 -->
+    <View
+        android:id="@+id/view_bg_floating_title"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:alpha="0.01"
+        android:background="@drawable/bg_black_shell"
+        android:visibility="gone"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- 展开的状态栏 -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/ll_StatusBar_titleAll"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="@drawable/bg_black"
+        android:orientation="vertical"
+        android:visibility="gone"
+        app:layout_constraintDimensionRatio="h,1:1"
+        app:layout_constraintEnd_toEndOf="@+id/view_bg"
+        app:layout_constraintStart_toStartOf="@+id/view_bg"
+        app:layout_constraintTop_toTopOf="@+id/view_bg">
+
+
+        <!-- App图标显示 -->
+        <ScrollView
+            android:id="@+id/sv_StatusBar_titleData"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:padding="10dp"
+            app:layout_constraintBottom_toTopOf="@+id/tv_statusBar_message"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent">
+
+            <LinearLayout
+                android:id="@+id/ll_statusBar_set"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+
+                android:orientation="vertical">
+
+                <SeekBar
+                    android:id="@+id/sb_diaphaneity"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:max="100"
+                    android:thumb="@drawable/img_diaphaneity_16" />
+
+                <SeekBar
+                    android:id="@+id/sb_width"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:thumb="@drawable/img_width_16" />
+
+                <SeekBar
+                    android:id="@+id/sb_height"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="5dp"
+                    android:thumb="@drawable/img_height_16" />
+
+                <view
+                    class="com.gsls.gt.GT$ViewUtils$FlowLayout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="10dp">
+
+                    <ImageView
+                        android:id="@+id/iv_cut"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:src="@drawable/img_cut_16" />
+
+                    <ImageView
+                        android:id="@+id/iv_reset"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:layout_marginTop="10dp"
+                        android:src="@drawable/img_reset_16" />
+
+                    <ImageView
+                        android:id="@+id/iv_fill"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:layout_marginTop="10dp"
+                        android:src="@drawable/img_fill_16" />
+
+                </view>
+
+
+            </LinearLayout>
+
+        </ScrollView>
+
+        <TextView
+            android:id="@+id/tv_statusBar_message"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_gray_title"
+            android:gravity="center"
+            android:padding="8dp"
+            android:text="暂无通知"
+            android:textColor="#494343"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <!-- 关机或开机动画 -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/cl_close"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="#020202"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="@+id/view_bg"
+        app:layout_constraintEnd_toEndOf="@+id/view_bg"
+        app:layout_constraintStart_toStartOf="@+id/view_bg"
+        app:layout_constraintTop_toTopOf="@+id/view_bg">
+
+        <TextView
+            android:id="@+id/tv_shutdown"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="关机"
+            android:textColor="#BAFFEB3B"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <ProgressBar
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="#36554A4A"
+            app:layout_constraintBottom_toTopOf="@+id/tv_shutdown"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintVertical_bias="0.8" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

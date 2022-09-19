@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 遥感组件 .RockerView_rockerBackground -->
+    <declare-styleable name="RockerView">
+        <attr name="areaBackground" format="color|reference" />
+        <attr name="rockerBackground" format="color|reference" />
+        <attr name="rockerRadius" format="dimension" />
+    </declare-styleable>
+
+    <!-- 圆角图片 RoundImageView_border_color -->
+    <declare-styleable name="RoundImageView">
+        <attr name="border_width" format="dimension"/>
+        <attr name="border_color" format="color"/>
+        <attr name="corner_x" format="dimension"/>
+        <attr name="corner_y" format="dimension"/>
+    </declare-styleable>
+
+    <declare-styleable name="GTImageView">
+        <attr name="radius" format="dimension" />
+        <attr name="radius_top_left" format="dimension" />
+        <attr name="radius_top_right" format="dimension" />
+        <attr name="radius_bottom_left" format="dimension" />
+        <attr name="radius_bottom_right" format="dimension" />
+    </declare-styleable>
+
+</resources>

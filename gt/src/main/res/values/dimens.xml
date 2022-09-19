@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--定义尺寸资源-->
+    <dimen name="dime_30dp">130dp</dimen>
+</resources>
