@@ -47,10 +47,6 @@ dependencies {
     implementation 'com.google.code.gson:gson:2.9.0'// json解析
     implementation 'com.github.bumptech.glide:glide:4.13.2'//加载图片
 
-    //发布版本
-//    implementation files('libs/gt-DataBinding.jar')
-//    annotationProcessor files('libs/gt-DataBinding.jar')
-
     //注册本地库 gt-DataBinding
     implementation project(':gt-DataBinding')
     annotationProcessor project(':gt-DataBinding')

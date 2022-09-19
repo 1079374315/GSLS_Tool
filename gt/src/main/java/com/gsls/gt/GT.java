@@ -315,10 +315,10 @@ import dalvik.system.PathClassLoader;
  * GSLS_Tool
  * <p>
  * <p>
- * 更新时间:2022.9.17
+ * 更新时间:2022.9.19
  * CSDN 博客/官网教程:https://blog.csdn.net/qq_39799899
  * GitHub https://github.com/1079374315/GT
- * 更新内容 1.4.1.2 版本 大爆料：
+ * 更新内容 1.4.1.13 版本 大爆料：
  * 新增 MVC、MVP、MVVM (辅助框架)、
  * GT.EventBus (数据传递)框架、
  * Observable (异步框架）、
