@@ -10,7 +10,7 @@
 
 #### [下载网址：DataBinding.jar-v1.0.6](http://gsls.3vfree.cn/Servers/GT/gt-DataBinding.jar)
 
-# 最新版本: v1.4.2.1
+# 最新版本: v1.4.2.2
 发布时间：2022.9.19
 
 # 此次版本更新：
@@ -135,7 +135,7 @@ dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         ...
-        maven { url 'https://jitpack.io' }
+        maven { url 'https://jitpack.io' } 
     }
 }
 
