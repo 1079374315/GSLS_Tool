@@ -48,11 +48,11 @@ dependencies {
     implementation 'com.github.bumptech.glide:glide:4.13.2'//加载图片
 
     //发布版本
-    implementation files('libs/gt-DataBinding.jar')
-    annotationProcessor files('libs/gt-DataBinding.jar')
+//    implementation files('libs/gt-DataBinding.jar')
+//    annotationProcessor files('libs/gt-DataBinding.jar')
 
     //注册本地库 gt-DataBinding
-//    implementation project(':gt-DataBinding')
-//    annotationProcessor project(':gt-DataBinding')
+    implementation project(':gt-DataBinding')
+    annotationProcessor project(':gt-DataBinding')
 
 }
