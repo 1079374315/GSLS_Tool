@@ -8,7 +8,7 @@
 # <a href="https://blog.csdn.net/qq_39799899"><img src="http://gsls.3vfree.cn/Servers/img/GT/logo.png"  width="200px"></a>[GT库源码](https://github.com/1079374315/GSLS_Tool)
 #### ============[请不要关注源码页](https://github.com/1079374315/GSLS_Tool)
 
-#### [gt-DataBinding-v1.0.7](http://gsls.3vfree.cn/Servers/index.html)
+#### [gt-DataBinding-v1.0.7-更新详情](http://gsls.3vfree.cn/Servers/index.html)
 
 # 最新版本: v1.4.2.2
 发布时间：2022.9.19
@@ -155,7 +155,7 @@ dependencies {
 }
 ````
 
-**2. GT包混淆：[整体项目混淆参考](https://github.com/1079374315/GSLS_Tool/blob/master/gt/proguard-rules.pro)
+**1. GT包混淆：** [整体项目混淆参考](https://github.com/1079374315/GSLS_Tool/blob/master/gt/proguard-rules.pro)
 
 ````gradle
 #不混淆GT库
@@ -169,7 +169,8 @@ dependencies {
 ````
 ## 部分功能使用到的权限：（权限参考）
 ````
-    <uses-permission android:name="android.permission.MOUNT_UNMOUNT_FILESYSTEMS" tools:ignore="ProtectedPermissions" /><!-- U盘操作 --> 
+    <!-- U盘操作 --> 
+    <uses-permission android:name="android.permission.MOUNT_UNMOUNT_FILESYSTEMS" tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" /> <!-- 悬浮窗 -->
     <uses-permission android:name="android.permission.INTERNET" /> <!-- 网络权限 -->
     <!-- SD读写权限 -->
