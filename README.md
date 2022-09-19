@@ -8,7 +8,7 @@
 # <a href="https://blog.csdn.net/qq_39799899"><img src="http://gsls.3vfree.cn/Servers/img/GT/logo.png"  width="200px"></a>[GT库源码](https://github.com/1079374315/GSLS_Tool)
 #### ============[请不要关注源码页](https://github.com/1079374315/GSLS_Tool)
 
-#### [下载网址：DataBinding.jar-v1.0.6](http://gsls.3vfree.cn/Servers/GT/gt-DataBinding.jar)
+#### [gt-DataBinding-v1.0.7](http://gsls.3vfree.cn/Servers/index.html)
 
 # 最新版本: v1.4.2.2
 发布时间：2022.9.19
@@ -135,7 +135,7 @@ dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         ...
-        maven { url 'https://jitpack.io' } 
+        maven { url 'https://jitpack.io' }//必要的
     }
 }
 
@@ -147,7 +147,7 @@ dependencies {
 	//GT基础功能
 	implementation 'com.github.1079374315:GSLS_Tool:v1.4.2.1'//如果不需要使用全部功能，可以只添加GT基础依赖。
 	
-	//如需使用 gt-DataBinding 才需要添加以下注册否则可以不注册，请前往官网下载最新 jar 进行注册
+	//如需使用 gt-DataBinding 才需要添加以下注册否则可以不注册
     annotationProcessor 'com.github.1079374315:GSLS_Tool:v1.4.2.1'//注册 gt-DataBinding 功能
 	
 	//同步后如果出现 ：The number of method references in a .dex file cannot exceed 64K. 错误，
@@ -155,7 +155,7 @@ dependencies {
 }
 ````
 
-**2. GT包混淆：**
+**2. GT包混淆：[整体项目混淆参考](https://github.com/1079374315/GSLS_Tool/blob/master/gt/proguard-rules.pro)
 
 ````gradle
 #不混淆GT库
@@ -169,12 +169,10 @@ dependencies {
 ````
 ## 部分功能使用到的权限：（权限参考）
 ````
-<!-- U盘操作 -->
-    <uses-permission
-        android:name="android.permission.MOUNT_UNMOUNT_FILESYSTEMS"
-        tools:ignore="ProtectedPermissions" /> <!-- 悬浮窗 -->
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" /> <!-- 网络权限 -->
-    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.MOUNT_UNMOUNT_FILESYSTEMS" tools:ignore="ProtectedPermissions" /><!-- U盘操作 --> 
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" /> <!-- 悬浮窗 -->
+    <uses-permission android:name="android.permission.INTERNET" /> <!-- 网络权限 -->
+    <!-- SD读写权限 -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" /> <!-- 读取手机权限 -->
@@ -188,4 +186,5 @@ dependencies {
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_LOCATION_EXTRA_COMMANDS" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    
 ````
