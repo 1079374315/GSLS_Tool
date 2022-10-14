@@ -35,6 +35,7 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.content.pm.ApplicationInfo;
@@ -90,7 +91,9 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.Message;
+import android.os.Messenger;
 import android.os.PowerManager;
+import android.os.RemoteException;
 import android.os.SystemClock;
 import android.provider.MediaStore;
 import android.provider.Settings;
@@ -111,7 +114,6 @@ import android.text.style.CharacterStyle;
 import android.text.style.ForegroundColorSpan;
 import android.util.ArrayMap;
 import android.util.AttributeSet;
-import android.util.Base64;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.util.TypedValue;
@@ -143,6 +145,7 @@ import android.webkit.ClientCertRequest;
 import android.webkit.ConsoleMessage;
 import android.webkit.GeolocationPermissions;
 import android.webkit.HttpAuthHandler;
+import android.webkit.JavascriptInterface;
 import android.webkit.JsPromptResult;
 import android.webkit.JsResult;
 import android.webkit.PermissionRequest;
@@ -199,7 +202,6 @@ import com.github.mjdev.libaums.fs.UsbFileOutputStream;
 import com.github.mjdev.libaums.partition.Partition;
 import com.google.gson.Gson;
 import com.gsls.gt_databinding.annotation.GT_HttpCallBuild;
-import com.gsls.gt_toolkit.GT_Floating;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -315,60 +317,31 @@ import dalvik.system.PathClassLoader;
  * GSLS_Tool
  * <p>
  * <p>
- * 更新时间:2022.9.19
- * 更新内容 v1.4.2.2 版本 大爆料：
+ * 更新时间:2022.10.14
+ * 更新内容 v1.4.2.3 版本 大爆料：
  * CSDN 博客/官网教程:https://blog.csdn.net/qq_39799899
  * GitHub https://github.com/1079374315/GT
- * 新增 MVC、MVP、MVVM (辅助框架)、
+ * 新增 MVC、MVP、MVVM、GT_MVVM(辅助框架)、
  * GT.EventBus (数据传递)框架、
  * Observable (异步框架）、
  * HttpCall (网络请求框架)、
  * Glide (图片加载框架，支持三级缓存)
  * 内容如下：
- * 1.新增 GT_PopupWindow 类
- * 2.LOG 类新增 GT.logt("标记日志"); GT.errt("标记日志");
- * 3.优化 时间与时间戳互转的方法
- * 4.新增 编程辅助框架 MVC/MVP/MVVM/GT/GT_Binding模式
- * 5.增强 AnnotationAssist 反射、注解工具类
- * 6.增强分享功能
- * 7.优化所有的 DataBinding自动生成类 ，增强 GT_BindingViewModel 并支持 通过泛类映射实例化 ，增加了 适配器的 DataBinding
- * 8.增加 WebViewUtils 类
- * 9.GT.Thread 增加线程池管理功能
- * 10.新增 GT.EventBus 类，具体使用教程清参考官网教程
- * 11.新增异步操作的框架 Observable 具体使用教程清参考官网
- * 12.增加 GT_Cache GT内部缓存类 （随时随地从缓存里拿对象使用）
- * 目前支持:GT_SharedPreferences、Hibernate、GT_Fragment、HttpCall、SerialPortUtils、GT_Socket.TCP
- * 13.去掉 OkGo 与 OkHttp 的封装类，增加 HttpCall 网络请求框架(支持网络请求与文件下载上传) ,具体使用教程清参考官网
- * 14.新增图片加载类 GT.Glide 使用方法类似于 Glide框架  GT.Glide.with(MainActivity.this).load(url).into(imageView);
- * 支持功能：
- * (1).加载图片的类型非常丰富
- * (2).支持三级缓存,可设置是否缓存
- * (3).占位图（图片完成前的图）
- * (4).异常图（图片加载异常的）
- * (5).高斯模糊(如：.blurTransformation(5))
- * (6).GIF(可使用 GTImageView 组件 来实现圆角动态图)
- * (6).支持圆角图片(.roundedCorners(30,0,30,90))
- * (6).指定图片大小(与设置缩略图同一个 api 方法)
- * 16.将 Permission 权限申请类 转移到 AppAuthorityManagement 类中
- * 17.新增 StrColor 类，动态设置文字颜色
- * 18. Observable 异步线程操作，让你的业务流程，干净又清爽
- * 19.新增 ImageViewTools 强大的图片工具包
- * 20.新增 GTImageView 加载图片组件,可以圆角动态图
- * 21.新增 NeverCrash 类，防止APP奔溃类，APP产生奔溃后，会捕获，并将异常手机信息与异常原因发送出来
- * 22.所有UI基类增加 手机 与 Pad 布局切换功能，并全部支持 DataBinding
- * 23.增加 Zip 工具包
- * 24.优化 GT调试悬浮窗
- * 25.优化 热修复类、下载app类、安装app类
- * 26.HttpUtil 类增加下载文件 API
- * 27.新增 GT_Notification 通知封装类 (让自定义通知更加简单)
+ * 1.新增 GT.EventBus 取消事件分发 、跨进程功能
+ * 2.新增 GT_Notification 通知封装类 (让自定义通知更加简单)
+ * 3.新增 BaseWeb 封装类，让 JS 交互更轻松
  * <p>
  * 优化:
- * 1.修复适配器 布局限制的问题,且增加瀑布流一键设置功能
- * 2.新增 BaseFragment 类中 show 与 hide 方法用于监听 Fragment 在不经历生命周期时的调用
- * 3.修复 GT_DataBinding 在不同布局的相同 ID的组件上，获取异常的情况.
- * 解决项目包名大于三层后 适配器在 GT_DataBinding 自动生成的时候，出现 ID,R路径 少生成一个的问题
- * 4.HttpUtil 类修改了使用方法 需要实例化进行请求 如：new GT.HttpUtil().postRequest(....)
- * 5.优化 HttpCall 无法请求下载文件的问题，新版教程请参考官网
+ * 1.优化 封装的适配器
+ * 2.优化 GT.Glide 框架
+ * 3.增加新的应用检测 前后台切换的方法：
+ * //监听是否前台
+ * registerActivityLifecycleCallbacks(new GT.GTApplication.AppLifecycleManager(new GT.OnListener<Boolean>() {
+ *
+ * @Override public void onListener(Boolean... obj) {
+ * GT.logt("是否前台:" + obj[0]);
+ * }
+ * }));
  *
  * <p>
  * <p>
@@ -901,6 +874,29 @@ public class GT {
         toast.show();
     }
 
+
+    private static GT.TOAST.ToastView toastView;
+
+    /**
+     * 简易自定义吐司
+     *
+     * @param context 上下文
+     * @param layout  自定义布局
+     * @param Gravity 吐司弹出位置 默认 Gravity.BOTTOM
+     */
+    public static GT.TOAST.ToastView toastView(Context context, int layout, int... gravitys) {
+        int gravity = Gravity.BOTTOM;
+        if (gravitys.length > 0) {
+            gravity = gravitys[0];
+        }
+        if (toastView == null) {
+            toastView = new GT.TOAST.ToastView().initLayout(layout, gravity, context);
+        }
+
+        return toastView;
+    }
+
+
     public static GT_Fragment getGT_Fragment() {
         return GT_Fragment.gt_fragment;
     }
@@ -1379,7 +1375,7 @@ public class GT {
 
         //向日志广播发送日志信息
         public static void setLogData(String value) {
-            EventBus.getDefault().post(value, "logAllData", GT_Floating.class);
+//            EventBus.getDefault().post(value, "logAllData", GT_Floating.class);
         }
 
     }
@@ -1667,10 +1663,11 @@ public class GT {
     //============================================= 数据类 =====================================
 
     /**
-     * 观察者与订阅者
+     * 观察者与订阅者-(增增加跨进程能力)
      * 使用教程:https://blog.csdn.net/qq_39799899/article/details/123871288?spm=1001.2014.3001.5501
      */
     public static class EventBus {
+
         /**
          * TODO 注意:在自定义 evenKey 时请不要写入 "_GT_" 字符,该字符为关键字
          * TODO 彩蛋 发布事件后可接收到订阅者返回值,但如果订阅者与发布者不在同一线程中或发布的事件中有两个订阅者,将无法在发布事件的线程接收到订阅者的返回值
@@ -1697,7 +1694,10 @@ public class GT {
         //用于注销订阅者
         private List<String> deleteList = new ArrayList<>();
         //用于订阅者优先级
-        private CopyOnWriteArrayList<EventBusBean> eventBusList = new CopyOnWriteArrayList<>();
+        private CopyOnWriteArrayList<EventBusBean> priorityList = new CopyOnWriteArrayList<>();
+        //用于事件分发拦截
+        private CopyOnWriteArrayList<Object> interceptList = new CopyOnWriteArrayList<>();
+
         //用于发布指定key的
         private List<String> keyStringList = new ArrayList<>();
         private List<Class<?>> keyClassList = new ArrayList<>();
@@ -1743,12 +1743,63 @@ public class GT {
         }
 
         /**
+         * 发布跨进程 事件
+         * TODO 注意:在自定义 evenKey 时请不要写入 "_GT_" 字符,该字符为关键字
+         *
+         * @param 无法返回数据
+         * @param eventData 发布的事件 (参数仅支持一个,若需要传多参数可传递 Bundle,List,Map,实体类Bean等等)
+         * @param eventKeys 指定发送的区域 (如果不填则默认向所有订阅者发布事件)
+         * @return
+         */
+        public static void postAcrossProcessess(Object eventData, Object... eventKeys) {
+            GT.EventBus.getDefault().postAcrossProcesses(eventData, eventKeys);
+        }
+
+        /**
+         * 发布事件 到本进程 与 跨进程
+         * @param eventData 发布的事件 (参数仅支持一个)
+         * @param eventKeys 指定发送的区域 (如果不填则默认向所有订阅者发布事件)
+         */
+        public static void postAlls(Object eventData, Object... eventKeys) {
+            GT.EventBus.getDefault().postAll(eventData,eventKeys);
+        }
+
+        /**
          * 注册被观察者
          *
          * @param subscriber
          */
-        public void registers(Object subscriber) {
+        public static void registers(Object subscriber) {
             EventBus.getDefault().register(subscriber);
+        }
+
+        /**
+         * 注册跨进程
+         * @param context
+         * @param subscriber    注册的类
+         */
+        public static void registerAcrossProcessess(Object subscriber,Context... mContext) {
+            GT.EventBus.getDefault().registerAcrossProcesses(subscriber,mContext);
+        }
+
+
+        /**
+         * 取消事件分发
+         *
+         * @param eventNames 填写要取消的事件分发，若不填则默认将调用该方法 的方法名作为 要拦截的事件分发者
+         */
+        public static void cancelEventDeliverys(Object... eventNames) {
+            //如果你指定了 要拦截的事件分发者，那就按照你指定的事件来拦截
+            if (eventNames.length > 0) {
+                EventBus.getDefault().cancelEventDelivery(eventNames);
+            } else {//如果没有指定，那就默认将调用该方法 的方法名作为 要拦截的事件分发者
+                try {
+                    String methodName = java.lang.Thread.currentThread().getStackTrace()[3].getMethodName();//调用的方法名
+                    EventBus.getDefault().cancelEventDelivery(methodName);
+                } catch (Exception e) {
+
+                }
+            }
         }
 
         /**
@@ -1756,17 +1807,48 @@ public class GT {
          *
          * @param subscriber
          */
-        public void unregisters(Object subscriber) {
+        public static void unregisters(Object subscriber) {
             EventBus.getDefault().unregister(subscriber);
+        }
+
+        /**
+         * 取消跨进程 被观察者
+         *
+         * @param subscriber
+         */
+        public static void unregisterAcrossProcessess(Context context) {
+            GT.EventBus.getDefault().unregisterAcrossProcesses(context);
         }
 
         /**
          * 查看普通事件
          */
-        public void showEventBusMap() {
+        public Map<String, EventBusBean> showEventBusMap() {
             GT.logt("eventBusSize:" + eventBusMap.keySet().size());
             for (String s : eventBusMap.keySet()) {
                 GT.logt("eventBus:" + eventBusMap.get(s));
+            }
+            return eventBusMap;
+        }
+
+        /**
+         * 取消事件分发
+         *
+         * @param eventNames 填写要取消的事件分发，若不填则默认将调用该方法 的方法名作为 要拦截的事件分发者
+         */
+        public void cancelEventDelivery(Object... eventNames) {
+            //如果你指定了 要拦截的事件分发者，那就按照你指定的事件来拦截
+            if (eventNames.length > 0) {
+                for (Object obj : eventNames) {
+                    interceptList.add(obj);
+                }
+            } else {//如果没有指定，那就默认将调用该方法 的方法名作为 要拦截的事件分发者
+                try {
+                    String methodName = java.lang.Thread.currentThread().getStackTrace()[3].getMethodName();//调用的方法名
+                    interceptList.add(methodName);
+                } catch (Exception e) {
+
+                }
             }
         }
 
@@ -1785,7 +1867,7 @@ public class GT {
          *
          * @param eventKeys 填写的 key 必须要与发布事件的 key 一模一样,包括字母顺序
          */
-        public boolean deleteEventBusSticky(Object... eventKeys) {
+        public boolean removeStickyEvent(Object... eventKeys) {
             try {
                 String key = "";
                 if (eventKeys.length != 0) {
@@ -1821,7 +1903,7 @@ public class GT {
         /**
          * 清空粘性事件
          */
-        public void clearEventBusStickyMap() {
+        public void clearStickyEvent() {
             eventBusStickyMap.clear();
         }
 
@@ -1845,7 +1927,7 @@ public class GT {
                     Subscribe subscribeAnnotation = method.getAnnotation(Subscribe.class);
                     if (subscribeAnnotation == null) continue;
                     Class<?>[] parameterTypes = method.getParameterTypes();
-                    String methodName = method.getName();
+                    String methodName = method.getName();//获取方法名称
 
                     //如果参数不是一个,那就进行精准提示并跳过操作
                     if (parameterTypes.length > 1) {
@@ -1870,21 +1952,23 @@ public class GT {
                         continue;
                     }
 
-                    Class<?> returnType = method.getReturnType();
-                    String eventKey = subscribeAnnotation.eventKey().length() == 0 ? methodName : subscribeAnnotation.eventKey();//订阅者唯一名称,若没有填订阅者名称那就默认使用当前方法名
+                    Class<?> returnType = method.getReturnType();//获取方法返回类型
+                    //订阅者唯一名称,若没有填订阅者名称那就默认使用当前方法名
+                    String eventKey = subscribeAnnotation.eventKey().length() == 0 ? methodName : subscribeAnnotation.eventKey();//订阅者唯一名称
                     String threadMode = subscribeAnnotation.threadMode();//线程类型
                     int priority = subscribeAnnotation.priority();//优先级
                     boolean sticky = subscribeAnnotation.sticky();//是否支持粘性事件
 
                     //class + 唯一标识(方法名) + 参数类型 生成订阅者唯一标识
                     eventKey = aClass + SEPARATOR + eventKey + (parameterTypes.length == 1 ? (SEPARATOR + parameterTypes[0]) : "");
+//                    GT.logl("订阅者唯一标识:" + eventKey);
 
                     //如果订阅者没有被注册,那就进行注册
                     if (!eventBusMap.containsKey(eventKey))
                         eventBusMap.put(eventKey, new EventBusBean(subscriber, aClass, parameterTypes, returnType, eventKey, methodName, threadMode, priority, sticky));
 
                     //---------------------------------------------------------------  粘性事件处理 ----------------------------------------------
-                    //粘性事件处理
+                    //粘性事件处理,普通事件在这个方法里是订阅，粘性事件在这个方法里是发送
                     if (sticky) {
                         //进行粘性事件处理
                         for (String key : eventBusStickyMap.keySet()) {
@@ -1941,6 +2025,20 @@ public class GT {
             }
 
         }
+
+        /**
+         * 注册跨进程
+         * @param subscriber
+         * @param mContext    注册的类
+         */
+        public void registerAcrossProcesses(Object subscriber,Context... mContext) {
+            Context context = GT.getActivity();
+            if(mContext.length > 0){
+                context = mContext[0];
+            }
+            GT.EventBus.EventBusClient.registerAcrossProcesses(context,subscriber);
+        }
+
 
         /**
          * 取消被观察者
@@ -2013,6 +2111,15 @@ public class GT {
         }
 
         /**
+         * 取消跨进程 被观察者
+         *
+         * @param subscriber
+         */
+        public synchronized void unregisterAcrossProcesses(Context context) {
+            GT.EventBus.EventBusClient.unregisterAcrossProcesses(context);
+        }
+
+        /**
          * 发布事件
          * TODO 注意:在自定义 evenKey 时请不要写入 "_GT_" 字符,该字符为关键字
          *
@@ -2021,26 +2128,28 @@ public class GT {
          * @param eventKeys 指定发送的区域 (如果不填则默认向所有订阅者发布事件)
          * @return
          */
-        @SuppressLint("NewApi")
         public <T> T post(Object eventData, Object... eventKeys) {
+
             try {
                 T t = null;
 
-                eventBusList.clear();
+                priorityList.clear();
+                interceptList.clear();
 
                 //订阅方法的优先级
                 for (String key : eventBusMap.keySet()) {
-                    eventBusList.add(eventBusMap.get(key));
+                    priorityList.add(eventBusMap.get(key));
                 }
 
                 //按照订阅者实体类中的线程大小进行从小到大排序
-                eventBusList.sort(Comparator.comparing(EventBusBean::getPriority));
+                priorityList.sort(Comparator.comparing(EventBusBean::getPriority));
 
                 //如果有指定订阅者类型,那就进行分类
                 if (eventKeys != null && eventKeys.length != 0) {
                     //给指定或筛选后的订阅者发布该事件
                     keyClassList.clear();
                     keyStringList.clear();
+                    //分别用 集合装入 String 与 class
 
                     for (Object eventKey : eventKeys) {
                         if (eventKey instanceof Class<?>) {
@@ -2053,18 +2162,27 @@ public class GT {
                 }
 
                 //类型匹配后进行向订阅者按照线程优先级进行遍历 发布事件
-                for (EventBusBean eventBusBean : eventBusList) {
+                for (EventBusBean eventBusBean : priorityList) {
+
                     //如果有指定订阅者类型,那就进行过滤筛选
                     if (eventKeys != null && eventKeys.length != 0) {
                         if (!eventBusBean.eventKey.contains(SEPARATOR)) continue;
                         String[] split = eventBusBean.eventKey.split(SEPARATOR);
-                        if (split.length < 2) continue;
+                        if (split.length < 2) continue;//如果少于两个分隔符，那就有问题，过滤掉
                         String keyStr = split[1];
+
+                        //事件分发拦截
+                        if (interceptList.size() != 0 && (interceptList.contains(keyStr) || interceptList.contains(eventBusBean.aClass)))
+                            continue;
+                        //字符串拦截
                         if (keyStringList.size() != 0 && !keyStringList.contains(keyStr)) continue;
+                        //class 拦截
                         if (keyClassList.size() != 0 && !keyClassList.contains(eventBusBean.aClass))
                             continue;
                     }
+
                     //按照订阅者的线程类型进行处理
+//                    GT.logt("eventBusBean.threadMode:" + eventBusBean.threadMode);
                     switch (eventBusBean.threadMode) {
                         case ThreadMode.POSTING://默认使用发布事件的当前线程
                             t = setMethodValue(eventBusBean, eventData);
@@ -2092,6 +2210,8 @@ public class GT {
                     }
 
                 }
+
+                interceptList.clear();//清空拦截事件对象
 
                 //获取本次发布事件订阅者数量
                 int count = 0;
@@ -2165,6 +2285,26 @@ public class GT {
         }
 
         /**
+         * 发布跨进程事件 (postAcrossProcesse)
+         * @param eventData
+         * @param eventKeys
+         */
+        public void postAcrossProcesses(Object eventData, Object... eventKeys) {
+            GT.EventBus.EventBusService.sendMsg(eventData, eventKeys);
+            GT.EventBus.EventBusClient.sendMsg(eventData, eventKeys);
+        }
+
+        /**
+         * 发布事件 到本进程 与 跨进程
+         * @param eventData 发布的事件 (参数仅支持一个)
+         * @param eventKeys 指定发送的区域 (如果不填则默认向所有订阅者发布事件)
+         */
+        public void postAll(Object eventData, Object... eventKeys) {
+            postAcrossProcesses(eventData,eventKeys);
+            posts(eventData,eventKeys);
+        }
+
+        /**
          * 设置方法值
          *
          * @param eventBusBean
@@ -2195,7 +2335,7 @@ public class GT {
             boolean sticky() default false;
 
             // 订阅方法优先级默认为0，多个事件订阅方法可以接收相同的事件，在发布事件后,订阅者无需切换线程的情况下,优先级高的先接收到事件,若发布事件时订阅者会切换线程 则不会保证 优先级高的先接收到事件
-            int priority() default 0;
+            int priority() default 0;//发送顺序从 最优先(最小)开始 向 后优先(最大)的 逐递发布
         }
 
         //设置在那个线程执行事件
@@ -2322,6 +2462,352 @@ public class GT {
 //                    ", sticky=" + sticky +
                         '}';
             }
+        }
+
+        public static class EventBusClient {
+
+            // 4. 客户端发送消息给服务端
+            private static Messenger servermessenger;
+            private static final ServiceConnection connection = new ServiceConnection() {
+                public void onServiceConnected(ComponentName name, IBinder service) {
+                    servermessenger = new Messenger(service);//获取服务端信使
+//                    GT.logt("获取到服务器信使");
+                }
+
+                public void onServiceDisconnected(ComponentName name) {
+                }
+            };
+
+            /**
+             * 注册跨进程
+             * @param context
+             * @param subscriber    注册的类
+             */
+            public static void registerAcrossProcesses(Context context, Object subscriber) {
+                //第二种：Messenger 传递消息
+                Intent intent = new Intent("com.gsls.gt.EventBus");
+                intent.setPackage(context.getPackageName());
+                context.bindService(intent, connection, Service.BIND_AUTO_CREATE);
+            }
+
+            public static void sendMsg(Object eventData, Object... eventKeys) {
+//                GT.logt("servermessenger:" + servermessenger);
+                if(servermessenger == null) return;
+                Message message = Message.obtain();
+                Bundle bundle = new Bundle();
+                //解析发布事件标识
+                String keys = null;
+                if (eventKeys.length > 0) {
+                    keys = "";
+
+//                    GT.logt("eventBusMap:" + eventBusMap);
+                    //获取当前进程中 已存在的订阅者
+                    String eventBusMapStr = String.valueOf(eventBusMap);
+                    List<String> strList = new ArrayList<>();
+                    for(String str : eventBusMapStr.split(EventBus.SEPARATOR)){
+                        strList.add(str);
+                    }
+
+                    if(eventKeys.length == 1){
+                        keys = String.valueOf(eventKeys[0]);
+//                        GT.logt("keys:" + keys);
+                        if(strList.contains(keys)){//如果当前进程已存在将要发送的订阅者，那就取消跨进程发送，直接转本进程发布事件
+                            posts(eventData,eventKeys);
+                            return;
+                        }
+                    }else{
+                        for (Object keyValue : eventKeys) {
+//                            GT.logt("key:" + keyValue);
+                            if(strList.contains(String.valueOf(keyValue))){//如果当前进程已存在将要发送的订阅者，那就取消跨进程发送，直接转本进程发布事件
+                                posts(eventData,keyValue);
+                                continue;
+                            }
+                            keys += String.valueOf(keyValue) + EventBus.SEPARATOR;
+                        }
+                        //去掉最后一个,
+                        keys = keys.substring(0, keys.length() - EventBus.SEPARATOR.length());
+                    }
+
+
+
+                    if (keys != null) {
+                        bundle.putString("key", keys);
+                    }
+                }
+
+                //解析发布事件值
+                if(eventData == null){
+                    bundle.putString("type", "null");
+                    bundle.putString("value", String.valueOf(eventData));
+                }else if (eventData instanceof String) {
+                    bundle.putString("type", "String");
+                    bundle.putString("value", String.valueOf(eventData));
+                } else if (eventData instanceof Integer) {
+                    bundle.putString("type", "Integer");
+                    bundle.putInt("value", Integer.parseInt(String.valueOf(eventData)));
+                } else if (eventData instanceof Boolean) {
+                    bundle.putString("type", "Boolean");
+                    bundle.putBoolean("value", Boolean.parseBoolean(String.valueOf(eventData)));
+                } else if (eventData instanceof Double) {
+                    bundle.putString("type", "Double");
+                    bundle.putDouble("value", Double.parseDouble(String.valueOf(eventData)));
+                } else if (eventData instanceof Float) {
+                    bundle.putString("type", "Float");
+                    bundle.putFloat("value", Float.parseFloat(String.valueOf(eventData)));
+                } else if (eventData instanceof Long) {
+                    bundle.putString("type", "Long");
+                    bundle.putLong("value", Long.parseLong(String.valueOf(eventData)));
+                } else if (eventData instanceof Short) {
+                    bundle.putString("type", "Short");
+                    bundle.putShort("value", Short.parseShort(String.valueOf(eventData)));
+                }else{//其余的类型均解析成 json
+                    String objJson = "";
+                    try{
+                        objJson = JSON.toJson2(eventData);
+                    }catch (Exception e){
+                        objJson = String.valueOf(eventData);
+                    }
+                    bundle.putString("type", "Object");
+                    bundle.putString("valueObject", objJson);
+                }
+                message.setData(bundle);
+//                GT.logt("向非跨进程发送一波数据");
+                //非常重要的一句话
+                message.replyTo = clientmesssager;
+                try {
+                    servermessenger.send(message);
+                } catch (RemoteException e) {
+                    e.printStackTrace();
+                }
+            }
+
+
+            //3.客户端的信使:负责接受服务器发来的消息
+            private static final Messenger clientmesssager = new Messenger(new Handler(Looper.myLooper()) {
+                @Override
+                public void dispatchMessage(@NonNull Message msg) {
+                    super.handleMessage(msg);
+                    Bundle bundle = msg.getData();
+                    String type = bundle.getString("type");
+                    String key = bundle.getString("key");
+                    Object value = null;
+
+                    switch (type){
+                        case "null":
+                            value = null;
+                            break;
+                        case "String":
+                            value = bundle.getString("value");
+                            break;
+                        case "Integer":
+                            value = bundle.getInt("value");
+                            break;
+                        case "Boolean":
+                            value = bundle.getBoolean("value");
+                            break;
+                        case "Double":
+                            value = bundle.getDouble("value");
+                            break;
+                        case "Float":
+                            value = bundle.getFloat("value");
+                            break;
+                        case "Long":
+                            value = bundle.getLong("value");
+                            break;
+                        case "Short":
+                            value = bundle.getShort("value");
+                            break;
+                        case "Object":
+                            value = bundle.getString("value");
+                            break;
+                    }
+
+//                    GT.logt("type:" + type);
+//                    GT.logt("key:" + key);
+//                    GT.logt("value:" + value);
+
+                    if (key != null) {
+                        //如果存在多个发布目标，那就发分割发送多个
+                        if(key.contains(EventBus.SEPARATOR)){
+                            GT.EventBus.posts(value, key.split(EventBus.SEPARATOR));
+                        }else{
+                            GT.EventBus.posts(value, key);
+                        }
+                    } else {
+                        GT.EventBus.posts(value);
+                    }
+                }
+            });
+
+            public static void unregisterAcrossProcesses(Context context) {
+                context.unbindService(connection);
+            }
+
+        }
+
+        public static class EventBusService extends Service {
+
+            private static Messenger clientMessager;
+
+            public static void sendMsg(Object eventData, Object... eventKeys) {
+//                GT.logt("clientMessager:" + clientMessager);
+                if(clientMessager == null) return;
+
+                Message messenge = Message.obtain();
+                Bundle bundle = new Bundle();
+
+                //解析发布事件标识
+                String keys = null;
+                if (eventKeys.length > 0) {
+                    keys = "";
+
+//                    GT.logt("eventBusMap:" + eventBusMap);
+
+                    //获取当前进程中 已存在的订阅者
+                    String eventBusMapStr = String.valueOf(eventBusMap);
+                    List<String> strList = new ArrayList<>();
+                    for(String str : eventBusMapStr.split(EventBus.SEPARATOR)){
+                        strList.add(str);
+                    }
+
+                    if(eventKeys.length == 1){
+                        keys = String.valueOf(eventKeys[0]);
+//                        GT.logt("keys:" + keys);
+                        if(strList.contains(keys)){//如果当前进程已存在将要发送的订阅者，那就取消跨进程发送，直接转本进程发布事件
+                            posts(eventData,eventKeys);
+                            return;
+                        }
+                    }else{
+                        for (Object keyValue : eventKeys) {
+//                            GT.logt("key:" + keyValue);
+                            if(strList.contains(String.valueOf(keyValue))){//如果当前进程已存在将要发送的订阅者，那就取消跨进程发送，直接转本进程发布事件
+                                posts(eventData,keyValue);
+                                continue;
+                            }
+                            keys += String.valueOf(keyValue) + EventBus.SEPARATOR;
+                        }
+                        //去掉最后一个,
+                        keys = keys.substring(0, keys.length() - EventBus.SEPARATOR.length());
+                    }
+
+                    if (keys != null) {
+                        bundle.putString("key", keys);
+                    }
+                }
+
+                //解析发布事件值
+                if(eventData == null){
+                    bundle.putString("type", "null");
+                    bundle.putString("value", String.valueOf(eventData));
+                }else if (eventData instanceof String) {
+                    bundle.putString("type", "String");
+                    bundle.putString("value", String.valueOf(eventData));
+                } else if (eventData instanceof Integer) {
+                    bundle.putString("type", "Integer");
+                    bundle.putInt("value", Integer.parseInt(String.valueOf(eventData)));
+                } else if (eventData instanceof Boolean) {
+                    bundle.putString("type", "Boolean");
+                    bundle.putBoolean("value", Boolean.parseBoolean(String.valueOf(eventData)));
+                } else if (eventData instanceof Double) {
+                    bundle.putString("type", "Double");
+                    bundle.putDouble("value", Double.parseDouble(String.valueOf(eventData)));
+                } else if (eventData instanceof Float) {
+                    bundle.putString("type", "Float");
+                    bundle.putFloat("value", Float.parseFloat(String.valueOf(eventData)));
+                } else if (eventData instanceof Long) {
+                    bundle.putString("type", "Long");
+                    bundle.putLong("value", Long.parseLong(String.valueOf(eventData)));
+                } else if (eventData instanceof Short) {
+                    bundle.putString("type", "Short");
+                    bundle.putShort("value", Short.parseShort(String.valueOf(eventData)));
+                }else{//其余的类型均解析成 json
+                    String objJson = "";
+                    try{
+                        objJson = JSON.toJson2(eventData);
+                    }catch (Exception e){
+                        objJson = String.valueOf(eventData);
+                    }
+                    bundle.putString("type", "Object");
+                    bundle.putString("valueObject", objJson);
+                }
+
+                messenge.setData(bundle);
+//                GT.logt("向跨进程发送一波数据");
+                try {
+                    clientMessager.send(messenge);
+                } catch (RemoteException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            public EventBusService() {
+            }
+
+            //TODO 返回server_messager的代理人，便于客户端获取服务端信使
+            @Override
+            public IBinder onBind(Intent intent) {
+                return new Messenger(new Handler(Looper.myLooper()) {
+                    @Override
+                    public void dispatchMessage(@NonNull Message msg) {
+                        //接受客户端消息
+                        Bundle bundle = msg.getData();
+                        String type = bundle.getString("type");
+                        String key = bundle.getString("key");
+                        Object value = null;
+
+                        switch (type){
+                            case "null":
+                                value = null;
+                                break;
+                            case "String":
+                                value = bundle.getString("value");
+                                break;
+                            case "Integer":
+                                value = bundle.getInt("value");
+                                break;
+                            case "Boolean":
+                                value = bundle.getBoolean("value");
+                                break;
+                            case "Double":
+                                value = bundle.getDouble("value");
+                                break;
+                            case "Float":
+                                value = bundle.getFloat("value");
+                                break;
+                            case "Long":
+                                value = bundle.getLong("value");
+                                break;
+                            case "Short":
+                                value = bundle.getShort("value");
+                                break;
+                            case "Object":
+                                value = bundle.getString("value");
+                                break;
+                        }
+
+//                        GT.logt("type:" + type);
+//                        GT.logt("key:" + key);
+//                        GT.logt("value:" + value);
+
+                        //如果存在多个发布目标，那就发分割发送多个
+                        if (key != null) {
+                            if(key.contains(EventBus.SEPARATOR)){
+                                GT.EventBus.posts(value, key.split(EventBus.SEPARATOR));
+                            }else{
+                                GT.EventBus.posts(value, key);
+                            }
+                        } else {
+                            GT.EventBus.posts(value);
+                        }
+
+                        //向客户端发送消息
+                        clientMessager = msg.replyTo;//用于获取客户端的信使
+
+                        super.handleMessage(msg);
+                    }
+                }).getBinder();
+            }
+
         }
 
     }
@@ -10603,7 +11089,7 @@ public class GT {
          */
         public static synchronized void putSocketTCP(String key, GT_Socket.TCP obj) {
             try {
-                if (socketTCP_cache != null && !socketTCP_cache.containsKey(key)) {
+                if (socketTCP_cache != null) {
                     socketTCP_cache.put(key, obj);
                 }
             } catch (Exception e) {
@@ -12210,15 +12696,11 @@ public class GT {
             public void onDownloadStart(File file) {
             }
 
-            ;
-
             /**
              * 下载进度
              */
             public void onDownloading(int progress) {
             }
-
-            ;
 
             /**
              * 下载成功
@@ -12226,15 +12708,11 @@ public class GT {
             public void onDownloadSuccess(File file) {
             }
 
-            ;
-
             /**
              * 下载异常信息
              */
             public void onDownloadFailed(Exception e) {
             }
-
-            ;
 
         }
 
@@ -13794,30 +14272,59 @@ public class GT {
      * 5.支持GIF                             支持动态图的加载
      * 6.指定图片大小							Glide.with(this).load(file).override(100, 100).into(imageView);
      * 7.支持圆角图片
-     * 8.可接受监听下载进度，只需要加入 Callback 的返回接口即可
      */
     public static class Glide {
-
         private static Glide glide = null;//定义 GT 对象
         private static final Map<String, Object> keyList = new HashMap<>();//缓存图片
         private static final Map<String, Object> objList = new HashMap<>();//缓存加载对象
-        private Object placeholder;//占位图
-        private Object error;//异常图
         private static boolean isCache = true;//是否缓存
-        private boolean isThumbnail = false;//是否缩略图
-        private boolean isGIF = false;//是否动态图
-        private int width, height;//缩略图的宽高
-        private boolean isAnimation = true;//是否采用透明渐变动画
-        private double compressionRatio = -1;//压缩比例
-        private float blurRadius = 0;//高斯模糊
-        private int roundCorner = 0;//全角
-        private int roundCorner_topLeft = 0;//左上
-        private int roundCorner_topRight = 0;//右上
-        private int roundCorner_bottomLeft = 0;//左下
-        private int roundCorner_bottomRight = 0;//右下
+        private static String CACHE_PATH = null;//默认的本地缓存位置
 
-        private boolean isCompression = true;//是否支持压缩图片
-        private static String CACHE_PATH = Environment.getExternalStorageDirectory().getAbsolutePath() + "/GT/";//默认的本地缓存位置
+        //图片信息
+        private class GlideBean {
+
+            private Object imgObjet;//处理好的图片资源
+            private Object resource;//图片资源
+            private Object placeholder;//占位图
+            private Object error;//异常图
+            private boolean isCaches = true;//是否缓存
+            private boolean isThumbnail = false;//是否缩略图
+            private boolean isGIF = false;//是否动态图
+            private int width, height;//缩略图的宽高
+            private boolean isAnimation = true;//是否采用透明渐变动画
+            private double compressionRatio = -1;//压缩比例
+            private float blurRadius = 0;//高斯模糊
+            private int roundCorner = 0;//全角
+            private int roundCorner_topLeft = 0;//左上
+            private int roundCorner_topRight = 0;//右上
+            private int roundCorner_bottomLeft = 0;//左下
+            private int roundCorner_bottomRight = 0;//右下
+            private boolean isCompression = true;//是否支持压缩图片
+
+            @Override
+            public String toString() {
+                return "GlideBean{" +
+                        "imgObjet=" + imgObjet +
+                        ", resource=" + resource +
+                        ", placeholder=" + placeholder +
+                        ", error=" + error +
+                        ", isCaches=" + isCaches +
+                        ", isThumbnail=" + isThumbnail +
+                        ", isGIF=" + isGIF +
+                        ", width=" + width +
+                        ", height=" + height +
+                        ", isAnimation=" + isAnimation +
+                        ", compressionRatio=" + compressionRatio +
+                        ", blurRadius=" + blurRadius +
+                        ", roundCorner=" + roundCorner +
+                        ", roundCorner_topLeft=" + roundCorner_topLeft +
+                        ", roundCorner_topRight=" + roundCorner_topRight +
+                        ", roundCorner_bottomLeft=" + roundCorner_bottomLeft +
+                        ", roundCorner_bottomRight=" + roundCorner_bottomRight +
+                        ", isCompression=" + isCompression +
+                        '}';
+            }
+        }
 
         private Glide() {
         }
@@ -13846,6 +14353,8 @@ public class GT {
             return glide;
         }
 
+        private GlideBean glideBean;
+
         /**
          * 设置加载图片的页面
          *
@@ -13853,7 +14362,23 @@ public class GT {
          * @return
          */
         public static Glide with(Object obj) {
-            if (glide == null) glide = getInstance();
+//            if (glide == null) glide = getInstance();
+            glide = new Glide();
+            if (CACHE_PATH == null) {
+                try {
+                    Context activity = getActivity();
+                    if (activity != null) {
+                        CACHE_PATH = FileUtils.getGTPath(activity) + "img/";
+                    }
+                } catch (Exception e) {
+
+                } finally {
+                    File file = new File(CACHE_PATH);
+                    if (!file.exists()) {
+                        file.mkdirs();
+                    }
+                }
+            }
             //需要监听声明周期
 
             return glide;
@@ -13871,7 +14396,10 @@ public class GT {
          * @return
          */
         public Glide placeholder(Object resource) {
-            placeholder = resource;
+            if (glideBean == null) {
+                glideBean = new GlideBean();
+            }
+            glideBean.placeholder = resource;
             return glide;
         }
 
@@ -13882,7 +14410,10 @@ public class GT {
          * @return
          */
         public Glide compressionRatio(double ratio) {
-            compressionRatio = ratio;
+            if (glideBean == null) {
+                glideBean = new GlideBean();
+            }
+            glideBean.compressionRatio = ratio;
             return glide;
         }
 
@@ -13893,7 +14424,10 @@ public class GT {
          * @return
          */
         public Glide isCompression(boolean compression) {
-            isCompression = compression;
+            if (glideBean == null) {
+                glideBean = new GlideBean();
+            }
+            glideBean.isCompression = compression;
             return glide;
         }
 
@@ -13904,7 +14438,10 @@ public class GT {
          * @return
          */
         public Glide isThumbnail(boolean thumbnail) {
-            isThumbnail = thumbnail;
+            if (glideBean == null) {
+                glideBean = new GlideBean();
+            }
+            glideBean.isThumbnail = thumbnail;
             return glide;
         }
 
@@ -13915,7 +14452,10 @@ public class GT {
          * @return
          */
         public Glide blurTransformation(float ambiguity) {
-            blurRadius = ambiguity;
+            if (glideBean == null) {
+                glideBean = new GlideBean();
+            }
+            glideBean.blurRadius = ambiguity;
             return glide;
         }
 
@@ -13926,7 +14466,10 @@ public class GT {
          * @return
          */
         public Glide roundedCorners(int roundedAll) {
-            roundCorner = roundedAll;
+            if (glideBean == null) {
+                glideBean = new GlideBean();
+            }
+            glideBean.roundCorner = roundedAll;
             return glide;
         }
 
@@ -13938,13 +14481,16 @@ public class GT {
          * @return
          */
         public Glide roundedCorners(int topLeft, int topRight, int bottomLeft, int bottomRight) {
-            roundCorner_topLeft = topLeft;
-            roundCorner_topRight = topRight;
-            roundCorner_bottomLeft = bottomLeft;
-            roundCorner_bottomRight = bottomRight;
+            if (glideBean == null) {
+                glideBean = new GlideBean();
+            }
+            glideBean.roundCorner_topLeft = topLeft;
+            glideBean.roundCorner_topRight = topRight;
+            glideBean.roundCorner_bottomLeft = bottomLeft;
+            glideBean.roundCorner_bottomRight = bottomRight;
+
             return glide;
         }
-
 
         /**
          * 是否动态图
@@ -13953,10 +14499,13 @@ public class GT {
          * @return
          */
         public Glide asGif() {
-            isGIF = true;
+            if (glideBean == null) {
+                glideBean = new GlideBean();
+            }
+            glideBean.isGIF = true;
+
             return glide;
         }
-
 
         /**
          * 加载异常图
@@ -13970,11 +14519,47 @@ public class GT {
          * @return
          */
         public Glide error(Object resource) {
-            error = resource;
+            if (glideBean == null) {
+                glideBean = new GlideBean();
+            }
+            glideBean.error = resource;
+//            GT.logt("设置error：" + resource);
             return glide;
         }
 
-        private Observable observable;//异步加载框架
+
+        /**
+         * 剪切指定大小图片
+         *
+         * @param resource 图片地址
+         * @param width    宽度
+         * @param height   高度
+         * @param isCaches 是否缓存
+         * @return
+         */
+        public Glide loadThumbnail(Object resource, int width, int height, boolean... isCaches) {
+            if (glideBean == null) {
+                glideBean = new GlideBean();
+            }
+            glideBean.width = width;
+            glideBean.height = height;
+            glideBean.isThumbnail = true;
+
+            return load(resource, isCaches);
+        }
+
+
+        /**
+         * 是否使用缓存,建议单独使用
+         *
+         * @param isCache
+         * @return
+         */
+        public static Glide diskCacheStrategy(boolean isCache) {
+            Glide.isCache = isCache;
+            return glide;
+        }
+
 
         /**
          * 处理图片缓存
@@ -13996,293 +14581,14 @@ public class GT {
         public Glide load(Object resource, boolean... isCaches) {
             if (resource == null) return glide;
 
-            boolean isCache2 = true;
+            if (glideBean == null) {
+                glideBean = new GlideBean();
+            }
+            glideBean.resource = resource;
             if (isCaches.length > 0) {
-                isCache2 = isCaches[0];
+                glideBean.isCaches = isCaches[0];
             }
-
-            try {
-                final String[] key = {null};
-                boolean finalIsCache = isCache2;
-                observable = Observable.getDefault().execute(new Observable.RunJavaR<Object>() {
-                    @Override
-                    public Object run() {
-                        Object imgObjet = null;
-                        if (isGIF) {
-                            //GIF 处理逻辑
-                            isGIF = false;
-                            ViewUtils.GTImageView gtIv = new ViewUtils.GTImageView(getActivity());
-                            gtIv.setUrl(String.valueOf(resource));
-                            imgObjet = gtIv;
-                        } else {
-                            //非 GIF 处理逻辑
-                            boolean isSaveSD = false;
-                            try {
-                                if (resource instanceof String) { //网络请求 或 本地路径加载 ,需要三级缓存
-                                    String url = resource.toString();
-                                    if (key[0] == null) {
-                                        key[0] = url;
-                                    }
-
-                                    //使用缓存，内存缓存
-                                    if (isCache && finalIsCache && keyList.containsKey(key[0])) {
-                                        imgObjet = keyList.get(key[0]);
-                                        if (imgObjet != null && LOG.GT_LOG_TF) {
-                                            GT.logl("使用 使用内存缓存图片");
-                                        }
-                                    }
-
-                                    //从本地取图片，本地缓存
-                                    if (isCache && finalIsCache && imgObjet == null) {
-                                        imgObjet = ImageViewTools.getBitmapFromLocal(key[0], CACHE_PATH);
-                                        if (imgObjet != null && LOG.GT_LOG_TF) {
-                                            GT.logl("使用 本地缓存");
-                                        }
-                                    }
-
-                                    //使用网络缓存或请求,开启网络缓存
-                                    if (imgObjet == null) {
-//                                    GT.logl("使用 网络");
-                                        //网络加载或本地加载图片
-                                        if (url.contains("http")) {
-                                            imgObjet = ImageViewTools.getImageInputStream(url);//Bitmap 网络
-                                            if (imgObjet != null && LOG.GT_LOG_TF) {
-                                                GT.logl("使用 网络下载图片");
-                                            }
-                                        } else {
-                                            imgObjet = ApplicationUtils.getLoacalBitmap(url);//Bitmap 本地
-                                            if (imgObjet != null && LOG.GT_LOG_TF) {
-                                                GT.logl("使用 本地图片");
-                                            }
-                                        }
-                                        isSaveSD = true;
-                                    }
-                                } else if (resource instanceof File) {
-                                    //加载本地图片(需要加缓存)
-                                    String filePath = ((File) resource).getPath();
-                                    if (key[0] == null) {
-                                        key[0] = filePath;
-                                    }
-
-                                    //使用缓存
-                                    if (isCache && finalIsCache && keyList.containsKey(key[0])) {
-                                        isCache = true;
-                                        imgObjet = keyList.get(key[0]);
-                                    }
-
-                                    if (imgObjet == null) {
-                                        imgObjet = ApplicationUtils.getLoacalBitmap(filePath);//Bitmap
-                                        isSaveSD = true;
-                                    }
-                                } else if (resource instanceof Byte[]) {
-                                    //流加载图片(需要加缓存)
-                                    byte[] bytes = (byte[]) resource;
-                                    String byteStr = resource.toString();
-                                    if (key[0] == null) {
-                                        key[0] = byteStr;
-                                    }
-
-                                    //使用缓存
-                                    if (isCache && finalIsCache && keyList.containsKey(key[0])) {
-                                        isCache = true;
-                                        imgObjet = keyList.get(key[0]);
-                                    }
-
-                                    if (imgObjet == null) {
-                                        Bitmap bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
-                                        bitmap.copyPixelsFromBuffer(ByteBuffer.wrap(bytes));
-                                        imgObjet = bitmap;//Bitmap
-                                        isSaveSD = true;
-                                    }
-                                } else if (resource instanceof Uri) {
-                                    //加载路径图片(需要加缓存)
-                                    String uri = ((Uri) resource).getPath();
-                                    if (key[0] == null) {
-                                        key[0] = uri;
-                                    }
-                                    //使用缓存
-                                    if (isCache && finalIsCache && keyList.containsKey(key[0])) {
-                                        isCache = true;
-                                        imgObjet = keyList.get(key[0]);
-                                    }
-
-                                    if (imgObjet == null) {
-                                        imgObjet = ApplicationUtils.getLoacalBitmap(uri);//Bitmap
-                                        isSaveSD = true;
-                                    }
-                                } else if (resource instanceof Bitmap) {
-                                    //加载 Bitmap 资源
-                                    Bitmap bitmap = (Bitmap) resource;
-                                    if (key[0] == null) {
-                                        key[0] = String.valueOf(bitmap.hashCode());
-                                    }
-                                    imgObjet = bitmap;//Bitmap
-                                } else if (resource instanceof Integer) {
-                                    //加载项目中已有资源
-                                    if (key[0] == null) {
-                                        key[0] = String.valueOf(resource);
-                                    }
-
-                                    BitmapFactory.Options options = new BitmapFactory.Options();
-                                    options.inPurgeable = true;
-                                    options.inInputShareable = true;
-                                    options.inJustDecodeBounds = false;
-                                    InputStream is = getActivity().getResources().openRawResource((Integer) resource);
-                                    Bitmap bitmap = BitmapFactory.decodeStream(is, null, options);
-
-                                    imgObjet = bitmap;//Integer
-                                } else if (resource instanceof Drawable) {
-                                    //加载 Drawable 资源
-                                    Drawable drawable = (Drawable) resource;
-                                    if (key[0] == null) {
-                                        key[0] = String.valueOf(drawable.hashCode());
-                                    }
-
-                                    Bitmap bitmap = ImageViewTools.drawable2Bitmap(drawable);
-
-                                    imgObjet = bitmap;//Bitmap
-                                } else if (resource instanceof ImageView) {
-                                    //加载组件图片
-                                    ImageView iv2 = (ImageView) resource;
-                                    if (key[0] == null) {
-                                        key[0] = String.valueOf(iv2.hashCode());
-                                    }
-                                    imgObjet = iv2;//ImageView
-                                }
-
-                                keyList.put(key[0], imgObjet);//存储缓存
-
-                                //开始处理图片
-                                if (imgObjet instanceof Bitmap) {
-
-                                    Bitmap bitmap = (Bitmap) imgObjet;
-
-                                    //是否缩略图
-                                    if (isThumbnail) {
-                                        bitmap = ImageViewTools.getThumbnail(bitmap, width, height);
-                                        isThumbnail = false;
-                                    }
-
-                                    //是否压缩
-                                    if (isCompression) {
-                                        // 检测到文件太大，就需要做压缩处理(默认执行压缩处理)
-                                        if (compressionRatio != -1) {
-                                            bitmap = ImageViewTools.compressImage(bitmap, compressionRatio);
-                                        } else {//在进过压缩的时候，再返回 异步框架会来不及
-                                            bitmap = ImageViewTools.comp(bitmap);
-                                        }
-                                    } else {
-                                        compressionRatio = -1;
-                                        isCompression = true;
-                                    }
-
-                                    //高斯模糊
-                                    if (blurRadius != 0) {
-                                        bitmap = ImageViewTools.blurBitmap(getActivity(), bitmap, blurRadius);
-                                        blurRadius = 0;
-                                    }
-
-                                    //处理圆角
-                                    if (roundCorner > 0) {
-                                        bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, roundCorner, ImageViewTools.RoundedCorners.CORNER_ALL);
-                                    } else if (roundCorner_topLeft > 0 || roundCorner_topRight > 0 || roundCorner_bottomLeft > 0 || roundCorner_bottomRight > 0) {
-
-                                        //上圆角
-                                        if (roundCorner_topLeft > 0 && roundCorner_topRight > 0 && roundCorner_topLeft == roundCorner_topRight) {
-                                            bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, roundCorner_topLeft, ImageViewTools.RoundedCorners.CORNER_TOP);
-                                            roundCorner_topLeft = roundCorner_topRight = 0;
-                                        }
-
-                                        //下圆角
-                                        if (roundCorner_bottomLeft > 0 && roundCorner_bottomRight > 0 && roundCorner_bottomLeft == roundCorner_bottomRight) {
-                                            bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, roundCorner_bottomLeft, ImageViewTools.RoundedCorners.CORNER_BOTTOM);
-                                            roundCorner_bottomLeft = roundCorner_bottomRight = 0;
-                                        }
-
-                                        //左圆角
-                                        if (roundCorner_topLeft > 0 && roundCorner_bottomLeft > 0 && roundCorner_topLeft == roundCorner_bottomLeft) {
-                                            bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, roundCorner_topLeft, ImageViewTools.RoundedCorners.CORNER_LEFT);
-                                            roundCorner_topLeft = roundCorner_bottomLeft = 0;
-                                        }
-
-                                        //右圆角
-                                        if (roundCorner_topRight > 0 && roundCorner_bottomRight > 0 && roundCorner_topRight == roundCorner_bottomRight) {
-                                            bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, roundCorner_topRight, ImageViewTools.RoundedCorners.CORNER_RIGHT);
-                                            roundCorner_topRight = roundCorner_bottomRight = 0;
-                                        }
-
-
-                                        //左上圆角
-                                        if (roundCorner_topLeft > 0) {
-                                            bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, roundCorner_topLeft, ImageViewTools.RoundedCorners.CORNER_TOP_LEFT);
-                                        }
-
-                                        //右上
-                                        if (roundCorner_topRight > 0) {
-                                            bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, roundCorner_topRight, ImageViewTools.RoundedCorners.CORNER_TOP_RIGHT);
-                                        }
-
-                                        //左下圆角
-                                        if (roundCorner_bottomLeft > 0) {
-                                            bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, roundCorner_bottomLeft, ImageViewTools.RoundedCorners.CORNER_BOTTOM_LEFT);
-                                        }
-
-                                        //右下圆角
-                                        if (roundCorner_bottomRight > 0) {
-                                            bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, roundCorner_bottomRight, ImageViewTools.RoundedCorners.CORNER_BOTTOM_RIGHT);
-                                        }
-
-                                        //全部初始化
-                                        roundCorner = 0;
-                                        roundCorner_topLeft = 0;
-                                        roundCorner_topRight = 0;
-                                        roundCorner_bottomLeft = 0;
-                                        roundCorner_bottomRight = 0;
-                                    }
-
-                                    //是否保存本地
-                                    if (isSaveSD) {
-                                        bitmap = ImageViewTools.saveBitmapToLocal(key[0], bitmap, CACHE_PATH);
-                                    }
-                                    imgObjet = bitmap;
-                                }
-
-                            } catch (Exception e) {
-                                if (LOG.GT_LOG_TF) {
-                                    GT.err("loadGlideError:" + e);
-                                }
-
-                            }
-                        }
-
-
-//                        GT.logt("返回的:" + imgObjet);
-                        return imgObjet;
-                    }
-                }, new boolean[]{});
-            } catch (Exception e) {
-                if (LOG.GT_LOG_TF) {
-                    GT.logt("e:" + e);
-                }
-            }
-
             return glide;
-        }
-
-        /**
-         * 剪切指定大小图片
-         *
-         * @param resource 图片地址
-         * @param width    宽度
-         * @param height   高度
-         * @param isCaches 是否缓存
-         * @return
-         */
-        public Glide loadThumbnail(Object resource, int width, int height, boolean... isCaches) {
-            isThumbnail = true;
-            this.width = width;
-            this.height = height;
-            return load(resource, isCaches);
         }
 
         /**
@@ -14293,33 +14599,39 @@ public class GT {
          */
         public Glide into(ImageView iv, boolean... isAnimations) {
 
+            //设置是否需要显示 加载显示动画
             final View[] view = {null};
             final float alpha = iv.getAlpha();
-
             if (isAnimations.length > 0) {
-                isAnimation = isAnimations[0];
+                glideBean.isAnimation = isAnimations[0];
             } else {
-                isAnimation = true;
+                //如果是第一次设置图片才设置默认动画
+                if (iv.getDrawable() == null) {
+                    glideBean.isAnimation = true;
+                } else {
+                    glideBean.isAnimation = false;
+                }
             }
 
+
+            //开始设置 占位图
             try {
-                //开始设置 占位图
                 Thread.runAndroid(new Runnable() {
                     @Override
                     public void run() {
                         if (iv != null && iv.getDrawable() == null) {
                             try {
-                                if (iv != null || placeholder != null) {
-                                    if (placeholder instanceof Bitmap) {
-                                        Bitmap bitmap = (Bitmap) placeholder;
+                                if (iv != null || glideBean.placeholder != null) {
+                                    if (glideBean.placeholder instanceof Bitmap) {
+                                        Bitmap bitmap = (Bitmap) glideBean.placeholder;
                                         iv.setImageBitmap(bitmap);
-                                    } else if (placeholder instanceof Drawable) {
-                                        Drawable drawable = (Drawable) placeholder;
+                                    } else if (glideBean.placeholder instanceof Drawable) {
+                                        Drawable drawable = (Drawable) glideBean.placeholder;
                                         iv.setImageDrawable(drawable);
-                                    } else if (placeholder instanceof Integer) {
-                                        iv.setImageResource((Integer) placeholder);
-                                    } else if (placeholder instanceof ImageView) {
-                                        ImageView iv2 = (ImageView) placeholder;
+                                    } else if (glideBean.placeholder instanceof Integer) {
+                                        iv.setImageResource((Integer) glideBean.placeholder);
+                                    } else if (glideBean.placeholder instanceof ImageView) {
+                                        ImageView iv2 = (ImageView) glideBean.placeholder;
                                         iv.setBackground(iv2.getBackground());
                                         iv.setImageBitmap(iv2.getDrawingCache());
                                         iv.setImageDrawable(iv2.getDrawable());
@@ -14332,22 +14644,277 @@ public class GT {
                                     }
                                 }
                             } catch (Exception e) {
-                                loadError(iv, e);
+                                loadError(glideBean, iv, e);
                             }
                         }
+                        glideBean.placeholder = null;
                     }
                 });
+            } catch (Exception e) {
 
-                //开始最终加载经过缓存处理好的图片
-                Observable.RunAndroidV<Object> loadingResource = new Observable.RunAndroidV<Object>() {
+            }
+
+            try {
+                final String[] key = {null};
+                boolean finalIsCache = glideBean.isCaches;
+                Observable.getDefault().execute(new Observable.RunJavaR<GlideBean>() {
                     @Override
-                    public void run(Object obj) {
-//                        GT.logt("接收到:" + obj);
-//                    Object o = keyList.get(key[0]);
-//                    obj = o;
-                        if (iv == null) return;
-                        if (obj == null) {
-                            loadError(iv, new Exception("图片资源为空"));
+                    public GlideBean run() {
+                        if (glideBean.isGIF) {
+                            //GIF 处理逻辑
+                            ViewUtils.GTImageView gtIv = new ViewUtils.GTImageView(getActivity());
+                            gtIv.setUrl(String.valueOf(glideBean.resource));
+                            glideBean.imgObjet = gtIv;
+                        } else {
+                            //非 GIF 处理逻辑
+                            boolean isSaveSD = false;
+                            try {
+                                if (glideBean.resource instanceof String) { //网络请求 或 本地路径加载 ,需要三级缓存
+                                    String url = glideBean.resource.toString();
+                                    if (key[0] == null) {
+                                        key[0] = url;
+                                    }
+
+                                    //使用缓存，内存缓存
+                                    if (isCache && finalIsCache && keyList.containsKey(key[0])) {
+                                        glideBean.imgObjet = keyList.get(key[0]);
+                                        if (glideBean.imgObjet != null && LOG.GT_LOG_TF) {
+                                            GT.logl("使用 使用内存缓存图片");
+                                        }
+                                    }
+
+                                    //从本地取图片，本地缓存
+                                    if (isCache && finalIsCache && glideBean.imgObjet == null) {
+                                        glideBean.imgObjet = ImageViewTools.getBitmapFromLocal(key[0], CACHE_PATH);
+                                        if (glideBean.imgObjet != null && LOG.GT_LOG_TF) {
+                                            GT.logl("使用 本地缓存");
+                                        }
+                                    }
+
+                                    //使用网络缓存或请求,开启网络缓存
+                                    if (glideBean.imgObjet == null) {
+//                                    GT.logl("使用 网络");
+                                        //网络加载或本地加载图片
+                                        if (url.contains("http")) {
+                                            glideBean.imgObjet = ImageViewTools.getImageInputStream(url);//Bitmap 网络
+                                            if (glideBean.imgObjet != null && LOG.GT_LOG_TF) {
+                                                GT.logl("使用 网络下载图片");
+                                            }
+                                        } else {
+                                            glideBean.imgObjet = ApplicationUtils.getLoacalBitmap(url);//Bitmap 本地
+                                            if (glideBean.imgObjet != null && LOG.GT_LOG_TF) {
+                                                GT.logl("使用 本地图片");
+                                            }
+                                        }
+                                        isSaveSD = true;
+                                    }
+                                } else if (glideBean.resource instanceof File) {
+                                    //加载本地图片(需要加缓存)
+                                    String filePath = ((File) glideBean.resource).getPath();
+                                    if (key[0] == null) {
+                                        key[0] = filePath;
+                                    }
+
+                                    //使用缓存
+                                    if (isCache && finalIsCache && keyList.containsKey(key[0])) {
+                                        isCache = true;
+                                        glideBean.imgObjet = keyList.get(key[0]);
+                                    }
+
+                                    if (glideBean.imgObjet == null) {
+                                        glideBean.imgObjet = ApplicationUtils.getLoacalBitmap(filePath);//Bitmap
+                                        isSaveSD = true;
+                                    }
+                                } else if (glideBean.resource instanceof Byte[]) {
+                                    //流加载图片(需要加缓存)
+                                    byte[] bytes = (byte[]) glideBean.resource;
+                                    String byteStr = glideBean.resource.toString();
+                                    if (key[0] == null) {
+                                        key[0] = byteStr;
+                                    }
+
+                                    //使用缓存
+                                    if (isCache && finalIsCache && keyList.containsKey(key[0])) {
+                                        isCache = true;
+                                        glideBean.imgObjet = keyList.get(key[0]);
+                                    }
+
+                                    if (glideBean.imgObjet == null) {
+                                        Bitmap bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+                                        bitmap.copyPixelsFromBuffer(ByteBuffer.wrap(bytes));
+                                        glideBean.imgObjet = bitmap;//Bitmap
+                                        isSaveSD = true;
+                                    }
+                                } else if (glideBean.resource instanceof Uri) {
+                                    //加载路径图片(需要加缓存)
+                                    String uri = ((Uri) glideBean.resource).getPath();
+                                    if (key[0] == null) {
+                                        key[0] = uri;
+                                    }
+                                    //使用缓存
+                                    if (isCache && finalIsCache && keyList.containsKey(key[0])) {
+                                        isCache = true;
+                                        glideBean.imgObjet = keyList.get(key[0]);
+                                    }
+
+                                    if (glideBean.imgObjet == null) {
+                                        glideBean.imgObjet = ApplicationUtils.getLoacalBitmap(uri);//Bitmap
+                                        isSaveSD = true;
+                                    }
+                                } else if (glideBean.resource instanceof Bitmap) {
+                                    //加载 Bitmap 资源
+                                    Bitmap bitmap = (Bitmap) glideBean.resource;
+                                    if (key[0] == null) {
+                                        key[0] = String.valueOf(bitmap.hashCode());
+                                    }
+                                    glideBean.imgObjet = bitmap;//Bitmap
+                                } else if (glideBean.resource instanceof Integer) {
+                                    //加载项目中已有资源
+                                    if (key[0] == null) {
+                                        key[0] = String.valueOf(glideBean.resource);
+                                    }
+
+                                    BitmapFactory.Options options = new BitmapFactory.Options();
+                                    options.inPurgeable = true;
+                                    options.inInputShareable = true;
+                                    options.inJustDecodeBounds = false;
+                                    InputStream is = getActivity().getResources().openRawResource((Integer) glideBean.resource);
+                                    Bitmap bitmap = BitmapFactory.decodeStream(is, null, options);
+
+                                    glideBean.imgObjet = bitmap;//Integer
+                                } else if (glideBean.resource instanceof Drawable) {
+                                    //加载 Drawable 资源
+                                    Drawable drawable = (Drawable) glideBean.resource;
+                                    if (key[0] == null) {
+                                        key[0] = String.valueOf(drawable.hashCode());
+                                    }
+
+                                    Bitmap bitmap = ImageViewTools.drawable2Bitmap(drawable);
+
+                                    glideBean.imgObjet = bitmap;//Bitmap
+                                } else if (glideBean.resource instanceof ImageView) {
+                                    //加载组件图片
+                                    ImageView iv2 = (ImageView) glideBean.resource;
+                                    if (key[0] == null) {
+                                        key[0] = String.valueOf(iv2.hashCode());
+                                    }
+                                    glideBean.imgObjet = iv2;//ImageView
+                                }
+
+                                keyList.put(key[0], glideBean.imgObjet);//存储缓存
+
+                                //开始处理图片
+                                if (glideBean.imgObjet instanceof Bitmap) {
+
+                                    Bitmap bitmap = (Bitmap) glideBean.imgObjet;
+
+                                    //是否缩略图
+                                    if (glideBean.isThumbnail) {
+                                        bitmap = ImageViewTools.getThumbnail(bitmap, glideBean.width, glideBean.height);
+                                        glideBean.isThumbnail = false;
+                                    }
+
+                                    //是否压缩
+                                    if (glideBean.isCompression) {
+                                        // 检测到文件太大，就需要做压缩处理(默认执行压缩处理)
+                                        if (glideBean.compressionRatio != -1) {
+                                            bitmap = ImageViewTools.compressImage(bitmap, glideBean.compressionRatio);
+                                        } else {//在进过压缩的时候，再返回 异步框架会来不及
+                                            bitmap = ImageViewTools.comp(bitmap);
+                                        }
+                                    } else {
+                                        glideBean.compressionRatio = -1;
+                                        glideBean.isCompression = true;
+                                    }
+
+                                    //高斯模糊
+                                    if (glideBean.blurRadius != 0) {
+                                        bitmap = ImageViewTools.blurBitmap(getActivity(), bitmap, glideBean.blurRadius);
+                                        glideBean.blurRadius = 0;
+                                    }
+
+                                    //处理圆角
+                                    if (glideBean.roundCorner > 0) {
+                                        bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, glideBean.roundCorner, ImageViewTools.RoundedCorners.CORNER_ALL);
+                                    } else if (glideBean.roundCorner_topLeft > 0 || glideBean.roundCorner_topRight > 0 || glideBean.roundCorner_bottomLeft > 0 || glideBean.roundCorner_bottomRight > 0) {
+
+                                        //上圆角
+                                        if (glideBean.roundCorner_topLeft > 0 && glideBean.roundCorner_topRight > 0 && glideBean.roundCorner_topLeft == glideBean.roundCorner_topRight) {
+                                            bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, glideBean.roundCorner_topLeft, ImageViewTools.RoundedCorners.CORNER_TOP);
+                                            glideBean.roundCorner_topLeft = glideBean.roundCorner_topRight = 0;
+                                        }
+
+                                        //下圆角
+                                        if (glideBean.roundCorner_bottomLeft > 0 && glideBean.roundCorner_bottomRight > 0 && glideBean.roundCorner_bottomLeft == glideBean.roundCorner_bottomRight) {
+                                            bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, glideBean.roundCorner_bottomLeft, ImageViewTools.RoundedCorners.CORNER_BOTTOM);
+                                            glideBean.roundCorner_bottomLeft = glideBean.roundCorner_bottomRight = 0;
+                                        }
+
+                                        //左圆角
+                                        if (glideBean.roundCorner_topLeft > 0 && glideBean.roundCorner_bottomLeft > 0 && glideBean.roundCorner_topLeft == glideBean.roundCorner_bottomLeft) {
+                                            bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, glideBean.roundCorner_topLeft, ImageViewTools.RoundedCorners.CORNER_LEFT);
+                                            glideBean.roundCorner_topLeft = glideBean.roundCorner_bottomLeft = 0;
+                                        }
+
+                                        //右圆角
+                                        if (glideBean.roundCorner_topRight > 0 && glideBean.roundCorner_bottomRight > 0 && glideBean.roundCorner_topRight == glideBean.roundCorner_bottomRight) {
+                                            bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, glideBean.roundCorner_topRight, ImageViewTools.RoundedCorners.CORNER_RIGHT);
+                                            glideBean.roundCorner_topRight = glideBean.roundCorner_bottomRight = 0;
+                                        }
+
+
+                                        //左上圆角
+                                        if (glideBean.roundCorner_topLeft > 0) {
+                                            bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, glideBean.roundCorner_topLeft, ImageViewTools.RoundedCorners.CORNER_TOP_LEFT);
+                                        }
+
+                                        //右上
+                                        if (glideBean.roundCorner_topRight > 0) {
+                                            bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, glideBean.roundCorner_topRight, ImageViewTools.RoundedCorners.CORNER_TOP_RIGHT);
+                                        }
+
+                                        //左下圆角
+                                        if (glideBean.roundCorner_bottomLeft > 0) {
+                                            bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, glideBean.roundCorner_bottomLeft, ImageViewTools.RoundedCorners.CORNER_BOTTOM_LEFT);
+                                        }
+
+                                        //右下圆角
+                                        if (glideBean.roundCorner_bottomRight > 0) {
+                                            bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, glideBean.roundCorner_bottomRight, ImageViewTools.RoundedCorners.CORNER_BOTTOM_RIGHT);
+                                        }
+
+                                        //全部初始化
+                                        glideBean.roundCorner = 0;
+                                        glideBean.roundCorner_topLeft = 0;
+                                        glideBean.roundCorner_topRight = 0;
+                                        glideBean.roundCorner_bottomLeft = 0;
+                                        glideBean.roundCorner_bottomRight = 0;
+                                    }
+
+                                    //是否保存本地
+                                    if (isSaveSD) {
+                                        bitmap = ImageViewTools.saveBitmapToLocal(key[0], bitmap, CACHE_PATH);
+                                    }
+
+                                    glideBean.imgObjet = bitmap;
+                                }
+
+                            } catch (Exception e) {
+                                if (LOG.GT_LOG_TF) {
+                                    GT.err("loadGlideError:" + e);
+                                }
+
+                            }
+                        }
+//                        GT.logt("返回的:" + glideBean.imgObjet);
+                        return glideBean;
+                    }
+                }).execute(new Observable.RunAndroidV<GlideBean>() {
+                    @Override
+                    public void run(GlideBean glideBean) {
+
+                        if (iv == null || glideBean == null || glideBean.imgObjet == null) {
+                            loadError(glideBean, iv, new Exception("图片组件或资源为空"));
                             return;
                         }
 
@@ -14356,7 +14923,7 @@ public class GT {
 //                    GT.logt("已加载图片:" + obj2);
 //                    GT.logt("待加载图片:" + obj);
 
-                        if (obj2 != null && String.valueOf(obj2).equals(String.valueOf(obj))) {
+                        if (obj2 != null && String.valueOf(obj2).equals(String.valueOf(glideBean.imgObjet))) {
 //                            GT.logt("过滤掉");
                             return;
                         } else {
@@ -14365,13 +14932,13 @@ public class GT {
 
                         try {
 
-                            if (isAnimation) {
+                            if (glideBean.isAnimation) {
                                 iv.setAlpha(0.1f);
                             }
 
-                            if (String.valueOf(obj).contains("GTImageView")) {
+                            if (String.valueOf(glideBean.imgObjet).contains("GTImageView")) {
                                 //GIF
-                                ViewUtils.GTImageView gtIv = (ViewUtils.GTImageView) obj;
+                                ViewUtils.GTImageView gtIv = (ViewUtils.GTImageView) glideBean.imgObjet;
                                 gtIv.setGifResource(getActivity());
                                 gtIv.setAlpha(iv.getAlpha());
                                 gtIv.setBackground(iv.getBackground());
@@ -14389,17 +14956,17 @@ public class GT {
                                 view[0] = gtIv;
                             } else {
                                 //非 GIF
-                                if (obj instanceof Bitmap) {
-                                    Bitmap bitmap = (Bitmap) obj;
+                                if (glideBean.imgObjet instanceof Bitmap) {
+                                    Bitmap bitmap = (Bitmap) glideBean.imgObjet;
                                     iv.setImageBitmap(bitmap);
-                                } else if (obj instanceof Drawable) {
-                                    Drawable drawable = (Drawable) obj;
+                                } else if (glideBean.imgObjet instanceof Drawable) {
+                                    Drawable drawable = (Drawable) glideBean.imgObjet;
                                     iv.setImageDrawable(drawable);
-                                } else if (obj instanceof Integer) {
+                                } else if (glideBean.imgObjet instanceof Integer) {
                                     Resources resources = iv.getResources();
-                                    iv.setImageResource((Integer) obj);
-                                } else if (obj instanceof ImageView) {
-                                    ImageView iv2 = (ImageView) obj;
+                                    iv.setImageResource((Integer) glideBean.imgObjet);
+                                } else if (glideBean.imgObjet instanceof ImageView) {
+                                    ImageView iv2 = (ImageView) glideBean.imgObjet;
                                     iv.setBackground(iv2.getBackground());
                                     iv.setImageBitmap(iv2.getDrawingCache());
                                     iv.setImageDrawable(iv2.getDrawable());
@@ -14412,10 +14979,10 @@ public class GT {
                                 view[0] = iv;
                             }
                         } catch (Exception e) {
-                            loadError(iv, e);
+                            loadError(glideBean, iv, e);
                         } finally {
-                            objList.put(String.valueOf(view[0].hashCode()), obj);
-                            if (isAnimation) {
+                            objList.put(String.valueOf(view[0].hashCode()), glideBean.imgObjet);
+                            if (glideBean.isAnimation) {
                                 Thread.getInstance(0).execute(new Runnable() {
                                     @Override
                                     public void run() {
@@ -14439,12 +15006,10 @@ public class GT {
                                 });
                             }
                         }
+
+
                     }
-                };
-
-                //上面的逻辑都处理好了，就开始异步执行
-                observable.execute(loadingResource);
-
+                });
             } catch (Exception e) {
                 if (LOG.GT_LOG_TF) {
                     GT.logt("e:" + e);
@@ -14453,41 +15018,33 @@ public class GT {
             return glide;
         }
 
-        /**
-         * 是否使用缓存,建议单独使用
-         *
-         * @param isCache
-         * @return
-         */
-        public static Glide diskCacheStrategy(boolean isCache) {
-            Glide.isCache = isCache;
-            return glide;
-        }
 
         /**
          * 加载异常图
          *
          * @param iv
          */
-        private void loadError(ImageView iv, Exception e) {
+        private void loadError(GlideBean glideBean, ImageView iv, Exception e) {
 
             if (LOG.GT_LOG_TF) {
                 GT.errt("loadGlideError:" + e);
             }
 
-            if (iv != null) {
+//            GT.logt("进入异常:" + error);
+
+            if (iv != null && glideBean != null && glideBean.error != null) {
                 try {
-                    if (iv != null || error != null) {
-                        if (error instanceof Bitmap) {
-                            Bitmap bitmap = (Bitmap) error;
+                    if (iv != null || glideBean.error != null) {
+                        if (glideBean.error instanceof Bitmap) {
+                            Bitmap bitmap = (Bitmap) glideBean.error;
                             iv.setImageBitmap(bitmap);
-                        } else if (error instanceof Drawable) {
-                            Drawable drawable = (Drawable) error;
+                        } else if (glideBean.error instanceof Drawable) {
+                            Drawable drawable = (Drawable) glideBean.error;
                             iv.setImageDrawable(drawable);
-                        } else if (error instanceof Integer) {
-                            iv.setImageResource((Integer) error);
-                        } else if (error instanceof ImageView) {
-                            ImageView iv2 = (ImageView) error;
+                        } else if (glideBean.error instanceof Integer) {
+                            iv.setImageResource((Integer) glideBean.error);
+                        } else if (glideBean.error instanceof ImageView) {
+                            ImageView iv2 = (ImageView) glideBean.error;
                             iv.setBackground(iv2.getBackground());
                             iv.setImageBitmap(iv2.getDrawingCache());
                             iv.setImageDrawable(iv2.getDrawable());
@@ -14501,6 +15058,8 @@ public class GT {
                 } catch (Exception e1) {
 
                 }
+//                GT.logt("错误图片==null");
+                glideBean.error = null;
             }
 
         }
@@ -14512,6 +15071,7 @@ public class GT {
         }
 
     }
+
 
     /**
      * WebWiew 工具类
@@ -14830,11 +15390,6 @@ public class GT {
                     return super.onJsTimeout();
                 }
 
-                @Override
-                public void onReachedMaxAppCacheSize(long requiredStorage, long quota, WebStorage.QuotaUpdater quotaUpdater) {
-                    super.onReachedMaxAppCacheSize(requiredStorage, quota, quotaUpdater);
-                    onLoadWebViewListener.onReachedMaxAppCacheSize(requiredStorage, quota, quotaUpdater);
-                }
 
                 @Override
                 public void onShowCustomView(View view, int requestedOrientation, CustomViewCallback callback) {
@@ -15074,16 +15629,12 @@ public class GT {
                 String cacheDirPath = FileUtils.getGTPath(context) + "WebCache/";
                 webSettings.setDatabasePath(cacheDirPath);
 
-                //设置缓存大小
-                webSettings.setAppCacheMaxSize(20 * 1024 * 1024);
-
                 //使用缓存:
                 webSettings.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
                 webSettings.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);//没网，则从本地获取，即离线加载
 
                 webSettings.setDomStorageEnabled(true); // 开启 DOM storage API 功能
                 webSettings.setDatabaseEnabled(true);   //开启 database storage API 功能
-                webSettings.setAppCacheEnabled(true);//开启 Application Caches 功能
             } else {
                 //不使用缓存:
                 webSettings.setCacheMode(WebSettings.LOAD_NO_CACHE);
@@ -15335,13 +15886,14 @@ public class GT {
             void close(Object obj);
         }
 
+        //待更新升级
         public static class TCP {
 
             //构建 GT_SharedPreferences
             @Target(ElementType.FIELD)
             @Retention(RetentionPolicy.RUNTIME)
             public @interface Build {
-                String setIP() default "127.0.0.1";      //默认IP地址
+                String setIP() default "null";      //默认IP地址 127.0.0.1
 
                 int setPort();                      //默认的端口号
 
@@ -15359,6 +15911,8 @@ public class GT {
             private DataInputStream dataInputStream;//输入
 
             private int port = -1;//端口号：必须大于1023 0~1023为系统保留端口
+            private String ip = "";//IP地址
+            private boolean isDisconnect = false;//是否断开网络
 
             /**
              * 创建服务器
@@ -15366,27 +15920,44 @@ public class GT {
              * @param port
              */
             public TCP(int port) {
+                GT.logt("开始创建 服务器TCP");
+                isDisconnect = false;
                 this.port = port;
                 Thread.getInstance(0).execute(new Runnable() {
                     @Override
                     public void run() {
+
+                        GT.logt("服务器网线:" + serverSocket);
+
                         try {
                             serverSocket = new ServerSocket(port);//创建服务器
                             if (isLog)
                                 GT.log("服务器：创建好服务器，等待连接");
-                            socket = serverSocket.accept();//开始等待客户端连接
-                            if (isLog)
-                                GT.log("服务器：有客户端连接");
-                            //文字
-                            printStream = new PrintStream(socket.getOutputStream());//输出
-                            bufferedReader = new BufferedReader(new InputStreamReader(socket.getInputStream()));//输入
-                            //图片
-                            dataOutputStream = new DataOutputStream(socket.getOutputStream());//输出
-                            dataInputStream = new DataInputStream(socket.getInputStream());//输入
+                            while (!isDisconnect) {
+                                if (socket == null) {
+                                    socket = serverSocket.accept();//开始等待客户端连接
+                                    if (isLog)
+                                        GT.log("服务器：有客户端连接");
+                                    //文字
+                                    printStream = new PrintStream(socket.getOutputStream());//服务器 输出
+                                    bufferedReader = new BufferedReader(new InputStreamReader(socket.getInputStream()));//服务器 输入
+                                    //图片
+                                    dataOutputStream = new DataOutputStream(socket.getOutputStream());//服务器 输出
+                                    dataInputStream = new DataInputStream(socket.getInputStream());//服务器 输入
+                                } else {
+                                    //等待断开重连
+                                    GT.Thread.sleep(2000);
+                                    GT.logt("服务器等待:" + socket);
+                                    socket = null;
+                                }
+
+                            }
 
                         } catch (IOException e) {
                             e.printStackTrace();
                         }
+
+
                     }
                 });
             }
@@ -15397,25 +15968,46 @@ public class GT {
              * @param port
              */
             public TCP(String ip, int port) {
+                GT.logt("开始创建 客户端TCP");
+                isDisconnect = false;
                 this.port = port;
+                this.ip = ip;
                 Thread.getInstance(0).execute(new Runnable() {
                     @Override
                     public void run() {
-                        try {
-                            if (isLog)
-                                GT.log("客户端：开始连接服务器");
-                            socket = new Socket(ip, port);//连接服务器
-                            if (isLog)
-                                GT.log("客户端：连接服务器成功！");
-                            //文字
-                            printStream = new PrintStream(socket.getOutputStream());//输出
-                            bufferedReader = new BufferedReader(new InputStreamReader(socket.getInputStream()));//输入
-                            //图片
-                            dataOutputStream = new DataOutputStream(socket.getOutputStream());//输出
-                            dataInputStream = new DataInputStream(socket.getInputStream());//输入
-                        } catch (IOException e) {
-                            e.printStackTrace();
+
+                        while (!isDisconnect) {
+                            GT.logt("客户端网线:" + socket);
+                            if (socket == null) {
+                                try {
+                                    if (isLog)
+                                        GT.log("客户端：开始连接服务器");
+                                    socket = new Socket(ip, port);//连接服务器
+                                    if (isLog)
+                                        GT.log("客户端：连接服务器成功！");
+                                    //文字
+                                    printStream = new PrintStream(socket.getOutputStream());//客户端 输出
+                                    bufferedReader = new BufferedReader(new InputStreamReader(socket.getInputStream()));//客户端 输入
+                                    //图片
+                                    dataOutputStream = new DataOutputStream(socket.getOutputStream());//客户端 输出
+                                    dataInputStream = new DataInputStream(socket.getInputStream());//客户端 输入
+                                } catch (IOException e) {
+                                    e.printStackTrace();
+                                }
+                            } else {
+                                //断线重连
+                                GT.Thread.sleep(2000);
+                                GT.logt("客户端等待:" + socket);
+
+//                                if (socket != null) {
+//                                    socket = null;
+//                                }
+                            }
+
+
                         }
+
+
                     }
                 });
             }
@@ -15427,6 +16019,7 @@ public class GT {
              * @return
              */
             public TCP sendText(Object data) {
+//                GT.logt("发送流:" + printStream);
                 if (printStream == null) return this;
                 Thread.getInstance(0).execute(new Runnable() {
                     @Override
@@ -15443,7 +16036,11 @@ public class GT {
              * @return
              */
             public String readText() {
-                if (bufferedReader == null) return null;
+//                GT.logt("接收流:" + bufferedReader);
+//                GT.logt("输出流:" + printStream);
+                if (bufferedReader == null) {
+                    return null;
+                }
                 String data = null;
                 try {
                     data = bufferedReader.readLine();
@@ -15689,6 +16286,10 @@ public class GT {
              * 释放资源
              */
             public void close() {
+
+                GT_Cache.putSocketTCP(ip + port, null);
+
+                isDisconnect = true;
                 //关闭输入输出流
                 if (socket != null) {
                     try {
@@ -18958,56 +19559,57 @@ public class GT {
 
         private static final Map<String, Bitmap> mapBitmap = new HashMap<>();
 
+        //自带内存缓存的 图片资源 转 Bitmap
         public static Bitmap ObjectToBitmap(Object resource) {
 
             Bitmap imgObjet = mapBitmap.get(String.valueOf(resource));
+            if (imgObjet == null) {
+                if (resource instanceof String) { //网络请求 或 本地路径加载 ,需要三级缓存
+                    String url = resource.toString();
 
-            if (resource instanceof String) { //网络请求 或 本地路径加载 ,需要三级缓存
-                String url = resource.toString();
-
-                //使用网络缓存或请求,开启网络缓存
-                if (imgObjet == null) {
-                    //网络加载或本地加载图片
-                    if (url.contains("http")) {
-                        imgObjet = ImageViewTools.getImageInputStream(url);//Bitmap 网络
-                    } else {
-                        imgObjet = ApplicationUtils.getLoacalBitmap(url);//Bitmap 本地
+                    //使用网络缓存或请求,开启网络缓存
+                    if (imgObjet == null) {
+                        //网络加载或本地加载图片
+                        if (url.contains("http")) {
+                            imgObjet = ImageViewTools.getImageInputStream(url);//Bitmap 网络
+                        } else {
+                            imgObjet = ApplicationUtils.getLoacalBitmap(url);//Bitmap 本地
+                        }
                     }
-                }
-            } else if (resource instanceof File) {
-                //加载本地图片(需要加缓存)
-                String filePath = ((File) resource).getPath();
-                if (imgObjet == null) {
-                    imgObjet = ApplicationUtils.getLoacalBitmap(filePath);//Bitmap
-                }
-            } else if (resource instanceof Byte[]) {
-                //流加载图片(需要加缓存)
-                byte[] bytes = (byte[]) resource;
-                if (imgObjet == null) {
-                    Bitmap bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
-                    bitmap.copyPixelsFromBuffer(ByteBuffer.wrap(bytes));
+                } else if (resource instanceof File) {
+                    //加载本地图片(需要加缓存)
+                    String filePath = ((File) resource).getPath();
+                    if (imgObjet == null) {
+                        imgObjet = ApplicationUtils.getLoacalBitmap(filePath);//Bitmap
+                    }
+                } else if (resource instanceof Byte[]) {
+                    //流加载图片(需要加缓存)
+                    byte[] bytes = (byte[]) resource;
+                    if (imgObjet == null) {
+                        Bitmap bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+                        bitmap.copyPixelsFromBuffer(ByteBuffer.wrap(bytes));
+                        imgObjet = bitmap;//Bitmap
+                    }
+                } else if (resource instanceof Uri) {
+                    //加载路径图片(需要加缓存)
+                    String uri = ((Uri) resource).getPath();
+                    if (imgObjet == null) {
+                        imgObjet = ApplicationUtils.getLoacalBitmap(uri);//Bitmap
+                    }
+                } else if (resource instanceof Bitmap) {
+                    //加载 Bitmap 资源
+                    Bitmap bitmap = (Bitmap) resource;
                     imgObjet = bitmap;//Bitmap
+                } else if (resource instanceof Integer) {
+                    //加载项目中已有资源
+                    imgObjet = BitmapFactory.decodeResource(getActivity().getResources(), (Integer) resource);
+                } else if (resource instanceof Drawable) {
+                    //加载 Drawable 资源
+                    Drawable drawable = (Drawable) resource;
+                    imgObjet = ImageViewTools.drawable2Bitmap(drawable);
                 }
-            } else if (resource instanceof Uri) {
-                //加载路径图片(需要加缓存)
-                String uri = ((Uri) resource).getPath();
-                if (imgObjet == null) {
-                    imgObjet = ApplicationUtils.getLoacalBitmap(uri);//Bitmap
-                }
-            } else if (resource instanceof Bitmap) {
-                //加载 Bitmap 资源
-                Bitmap bitmap = (Bitmap) resource;
-                imgObjet = bitmap;//Bitmap
-            } else if (resource instanceof Integer) {
-                //加载项目中已有资源
-                imgObjet = BitmapFactory.decodeResource(getActivity().getResources(), (Integer) resource);
-            } else if (resource instanceof Drawable) {
-                //加载 Drawable 资源
-                Drawable drawable = (Drawable) resource;
-                imgObjet = ImageViewTools.drawable2Bitmap(drawable);
-            }
 
-            if (!mapBitmap.keySet().contains(String.valueOf(resource))) {
+                //缓存起来
                 mapBitmap.put(String.valueOf(resource), imgObjet);
             }
 
@@ -20760,7 +21362,7 @@ public class GT {
                     Cipher cipher = Cipher.getInstance("DES");
                     cipher.init(Cipher.ENCRYPT_MODE, key);
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-                        return Base64.encodeToString(cipher.doFinal(String.valueOf(clearText).getBytes(UTF_8)), Base64.DEFAULT);
+                        return android.util.Base64.encodeToString(cipher.doFinal(String.valueOf(clearText).getBytes(UTF_8)), android.util.Base64.DEFAULT);
                     }
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -20784,7 +21386,7 @@ public class GT {
                     SecretKeyFactory keyFactory = SecretKeyFactory.getInstance("DES");
                     SecretKey key = keyFactory.generateSecret(keySpec);
 
-                    byte[] encryptedWithoutB64 = Base64.decode(String.valueOf(encryptedPwd), Base64.DEFAULT);
+                    byte[] encryptedWithoutB64 = android.util.Base64.decode(String.valueOf(encryptedPwd), android.util.Base64.DEFAULT);
                     Cipher cipher = Cipher.getInstance("DES");
                     cipher.init(Cipher.DECRYPT_MODE, key);
                     byte[] plainTextPwdBytes = cipher.doFinal(encryptedWithoutB64);
@@ -20796,7 +21398,291 @@ public class GT {
             }
         }
 
+        /**
+         * @Base64 加密算法
+         */
+        public static final class Base64 {
 
+            private static final int BASELENGTH = 128;
+            private static final int LOOKUPLENGTH = 64;
+            private static final int TWENTYFOURBITGROUP = 24;
+            private static final int EIGHTBIT = 8;
+            private static final int SIXTEENBIT = 16;
+            private static final int FOURBYTE = 4;
+            private static final int SIGN = -128;
+            private static char PAD = '=';
+            private static byte[] base64Alphabet = new byte[BASELENGTH];
+            private static char[] lookUpBase64Alphabet = new char[LOOKUPLENGTH];
+
+            static {
+                for (int i = 0; i < BASELENGTH; ++i) {
+                    base64Alphabet[i] = -1;
+                }
+                for (int i = 'Z'; i >= 'A'; i--) {
+                    base64Alphabet[i] = (byte) (i - 'A');
+                }
+                for (int i = 'z'; i >= 'a'; i--) {
+                    base64Alphabet[i] = (byte) (i - 'a' + 26);
+                }
+
+                for (int i = '9'; i >= '0'; i--) {
+                    base64Alphabet[i] = (byte) (i - '0' + 52);
+                }
+
+                base64Alphabet['+'] = 62;
+                base64Alphabet['/'] = 63;
+
+                for (int i = 0; i <= 25; i++) {
+                    lookUpBase64Alphabet[i] = (char) ('A' + i);
+                }
+
+                for (int i = 26, j = 0; i <= 51; i++, j++) {
+                    lookUpBase64Alphabet[i] = (char) ('a' + j);
+                }
+
+                for (int i = 52, j = 0; i <= 61; i++, j++) {
+                    lookUpBase64Alphabet[i] = (char) ('0' + j);
+                }
+                lookUpBase64Alphabet[62] = (char) '+';
+                lookUpBase64Alphabet[63] = (char) '/';
+
+            }
+
+            private static boolean isWhiteSpace(char octect) {
+                return (octect == 0x20 || octect == 0xd || octect == 0xa || octect == 0x9);
+            }
+
+            private static boolean isPad(char octect) {
+                return (octect == PAD);
+            }
+
+            private static boolean isData(char octect) {
+                return (octect < BASELENGTH && base64Alphabet[octect] != -1);
+            }
+
+            /**
+             * Encodes hex octects into Base64
+             *
+             * @param binaryData Array containing binaryData
+             * @return Encoded Base64 array
+             */
+            public static String encode(byte[] binaryData) {
+
+                if (binaryData == null) {
+                    return null;
+                }
+
+                int lengthDataBits = binaryData.length * EIGHTBIT;
+                if (lengthDataBits == 0) {
+                    return "";
+                }
+
+                int fewerThan24bits = lengthDataBits % TWENTYFOURBITGROUP;
+                int numberTriplets = lengthDataBits / TWENTYFOURBITGROUP;
+                int numberQuartet = fewerThan24bits != 0 ? numberTriplets + 1
+                        : numberTriplets;
+                char encodedData[] = null;
+
+                encodedData = new char[numberQuartet * 4];
+
+                byte k = 0, l = 0, b1 = 0, b2 = 0, b3 = 0;
+
+                int encodedIndex = 0;
+                int dataIndex = 0;
+
+                for (int i = 0; i < numberTriplets; i++) {
+                    b1 = binaryData[dataIndex++];
+                    b2 = binaryData[dataIndex++];
+                    b3 = binaryData[dataIndex++];
+
+                    l = (byte) (b2 & 0x0f);
+                    k = (byte) (b1 & 0x03);
+
+                    byte val1 = ((b1 & SIGN) == 0) ? (byte) (b1 >> 2)
+                            : (byte) ((b1) >> 2 ^ 0xc0);
+                    byte val2 = ((b2 & SIGN) == 0) ? (byte) (b2 >> 4)
+                            : (byte) ((b2) >> 4 ^ 0xf0);
+                    byte val3 = ((b3 & SIGN) == 0) ? (byte) (b3 >> 6)
+                            : (byte) ((b3) >> 6 ^ 0xfc);
+
+                    encodedData[encodedIndex++] = lookUpBase64Alphabet[val1];
+                    encodedData[encodedIndex++] = lookUpBase64Alphabet[val2 | (k << 4)];
+                    encodedData[encodedIndex++] = lookUpBase64Alphabet[(l << 2) | val3];
+                    encodedData[encodedIndex++] = lookUpBase64Alphabet[b3 & 0x3f];
+                }
+
+                // form integral number of 6-bit groups
+                if (fewerThan24bits == EIGHTBIT) {
+                    b1 = binaryData[dataIndex];
+                    k = (byte) (b1 & 0x03);
+
+                    byte val1 = ((b1 & SIGN) == 0) ? (byte) (b1 >> 2)
+                            : (byte) ((b1) >> 2 ^ 0xc0);
+                    encodedData[encodedIndex++] = lookUpBase64Alphabet[val1];
+                    encodedData[encodedIndex++] = lookUpBase64Alphabet[k << 4];
+                    encodedData[encodedIndex++] = PAD;
+                    encodedData[encodedIndex++] = PAD;
+                } else if (fewerThan24bits == SIXTEENBIT) {
+                    b1 = binaryData[dataIndex];
+                    b2 = binaryData[dataIndex + 1];
+                    l = (byte) (b2 & 0x0f);
+                    k = (byte) (b1 & 0x03);
+
+                    byte val1 = ((b1 & SIGN) == 0) ? (byte) (b1 >> 2)
+                            : (byte) ((b1) >> 2 ^ 0xc0);
+                    byte val2 = ((b2 & SIGN) == 0) ? (byte) (b2 >> 4)
+                            : (byte) ((b2) >> 4 ^ 0xf0);
+
+                    encodedData[encodedIndex++] = lookUpBase64Alphabet[val1];
+                    encodedData[encodedIndex++] = lookUpBase64Alphabet[val2 | (k << 4)];
+                    encodedData[encodedIndex++] = lookUpBase64Alphabet[l << 2];
+                    encodedData[encodedIndex++] = PAD;
+                }
+
+                return new String(encodedData);
+            }
+
+            /**
+             * Decodes Base64 data into octects
+             *
+             * @param encoded string containing Base64 data
+             * @return Array containind decoded data.
+             */
+            public static byte[] decode(String encoded) {
+
+                if (encoded == null) {
+                    return null;
+                }
+
+                char[] base64Data = encoded.toCharArray();
+                // remove white spaces
+                int len = removeWhiteSpace(base64Data);
+
+                if (len % FOURBYTE != 0) {
+                    return null;// should be divisible by four
+                }
+
+                int numberQuadruple = (len / FOURBYTE);
+
+                if (numberQuadruple == 0) {
+                    return new byte[0];
+                }
+
+                byte decodedData[] = null;
+                byte b1 = 0, b2 = 0, b3 = 0, b4 = 0;
+                char d1 = 0, d2 = 0, d3 = 0, d4 = 0;
+
+                int i = 0;
+                int encodedIndex = 0;
+                int dataIndex = 0;
+                decodedData = new byte[(numberQuadruple) * 3];
+
+                for (; i < numberQuadruple - 1; i++) {
+
+                    if (!isData((d1 = base64Data[dataIndex++]))
+                            || !isData((d2 = base64Data[dataIndex++]))
+                            || !isData((d3 = base64Data[dataIndex++]))
+                            || !isData((d4 = base64Data[dataIndex++]))) {
+                        return null;
+                    }// if found "no data" just return null
+
+                    b1 = base64Alphabet[d1];
+                    b2 = base64Alphabet[d2];
+                    b3 = base64Alphabet[d3];
+                    b4 = base64Alphabet[d4];
+
+                    decodedData[encodedIndex++] = (byte) (b1 << 2 | b2 >> 4);
+                    decodedData[encodedIndex++] = (byte) (((b2 & 0xf) << 4) | ((b3 >> 2) & 0xf));
+                    decodedData[encodedIndex++] = (byte) (b3 << 6 | b4);
+                }
+
+                if (!isData((d1 = base64Data[dataIndex++]))
+                        || !isData((d2 = base64Data[dataIndex++]))) {
+                    return null;// if found "no data" just return null
+                }
+
+                b1 = base64Alphabet[d1];
+                b2 = base64Alphabet[d2];
+
+                d3 = base64Data[dataIndex++];
+                d4 = base64Data[dataIndex++];
+                if (!isData((d3)) || !isData((d4))) {// Check if they are PAD characters
+                    if (isPad(d3) && isPad(d4)) {
+                        if ((b2 & 0xf) != 0)// last 4 bits should be zero
+                        {
+                            return null;
+                        }
+                        byte[] tmp = new byte[i * 3 + 1];
+                        System.arraycopy(decodedData, 0, tmp, 0, i * 3);
+                        tmp[encodedIndex] = (byte) (b1 << 2 | b2 >> 4);
+                        return tmp;
+                    } else if (!isPad(d3) && isPad(d4)) {
+                        b3 = base64Alphabet[d3];
+                        if ((b3 & 0x3) != 0)// last 2 bits should be zero
+                        {
+                            return null;
+                        }
+                        byte[] tmp = new byte[i * 3 + 2];
+                        System.arraycopy(decodedData, 0, tmp, 0, i * 3);
+                        tmp[encodedIndex++] = (byte) (b1 << 2 | b2 >> 4);
+                        tmp[encodedIndex] = (byte) (((b2 & 0xf) << 4) | ((b3 >> 2) & 0xf));
+                        return tmp;
+                    } else {
+                        return null;
+                    }
+                } else { // No PAD e.g 3cQl
+                    b3 = base64Alphabet[d3];
+                    b4 = base64Alphabet[d4];
+                    decodedData[encodedIndex++] = (byte) (b1 << 2 | b2 >> 4);
+                    decodedData[encodedIndex++] = (byte) (((b2 & 0xf) << 4) | ((b3 >> 2) & 0xf));
+                    decodedData[encodedIndex++] = (byte) (b3 << 6 | b4);
+
+                }
+
+                return decodedData;
+            }
+
+            /**
+             * remove WhiteSpace from MIME containing encoded Base64 data.
+             *
+             * @param data the byte array of base64 data (with WS)
+             * @return the new length
+             */
+            private static int removeWhiteSpace(char[] data) {
+                if (data == null) {
+                    return 0;
+                }
+
+                // count characters that's not whitespace
+                int newSize = 0;
+                int len = data.length;
+                for (int i = 0; i < len; i++) {
+                    if (!isWhiteSpace(data[i])) {
+                        data[newSize++] = data[i];
+                    }
+                }
+                return newSize;
+            }
+
+            public static String encode2(String pass) {
+                try {
+                    return encode(pass.getBytes("utf-8"));
+                } catch (UnsupportedEncodingException e) {
+
+                }
+                return pass;
+            }
+
+            public static String decode2(String pass) {
+                try {
+                    return new String(decode(pass), "utf-8");
+                } catch (UnsupportedEncodingException e) {
+
+                }
+                return pass;
+            }
+
+        }
     }
 
 //=========================================== APP权限类 =========================================
@@ -22331,12 +23217,12 @@ public class GT {
          * @param activity
          * @return 横屏返回 true 竖屏返回 false
          */
-        public static boolean isLandscapeAndPortrait(Activity activity) {
-            if (activity == null) {
-                GT.err("横竖屏失效 activity:" + activity);
+        public static boolean isLandscapeAndPortrait(Context context) {
+            if (context == null) {
+                GT.err("横竖屏失效 context:" + context);
                 return false;
             }
-            Resources resources = activity.getResources();
+            Resources resources = context.getResources();
             if (resources == null) {
                 GT.err("横竖屏失效 resources:" + resources);
                 return false;
@@ -26296,7 +27182,7 @@ public class GT {
         public abstract static class BaseAdapter<T, K extends RecyclerView.ViewHolder> extends RecyclerView.Adapter<K> {
 
             //其余普通的参数
-            protected Context context;
+            public Context context;
             private List<T> beanList = new ArrayList<>();
             private LinearLayoutManager linearLayoutManager;
             public RecyclerView rv;
@@ -26368,6 +27254,11 @@ public class GT {
 
             public void startPage() {
                 page = 1;
+            }
+
+            public void deletePage() {
+                page--;
+                if (page <= 1) page = 1;
             }
 
             public void addPage() {
@@ -26446,7 +27337,6 @@ public class GT {
                 switch (page) {
                     case -1://直接赋值，仅用于只需要加载一次的情况下
                         this.beanList = beanList;
-                        notifyDataSetChanged();
                         break;
                     case 1://第一页
                         this.beanList.clear();
@@ -26454,12 +27344,14 @@ public class GT {
                         this.beanList.addAll(beanList);
                         break;
                     default://累加分页
-                        if (beanList.size() != 0) {
+                        if (this.beanList == null) {
+                            this.beanList = beanList;
+                        } else {
                             this.beanList.addAll(this.beanList.size(), beanList);
-                            notifyDataSetChanged();
                         }
                         break;
                 }
+                notifyDataSetChanged();
 //                if(rv != null)rv.setItemViewCacheSize(getItemCount());
             }
 
@@ -26643,6 +27535,11 @@ public class GT {
             @Override
             public int getItemCount() {
                 return beanList == null ? 0 : beanList.size();
+            }
+
+            @Override
+            public long getItemId(int position) {
+                return position;
             }
 
             public abstract static class BaseHolder extends RecyclerView.ViewHolder {
@@ -27870,14 +28767,6 @@ public class GT {
                 this.height = height;
             }
 
-            protected View findViewById(String id) {
-                return findViewBy(id);
-            }
-
-            private View findViewBy(String id) {
-                return null;
-            }
-
             /**
              * 更新 WebView 宽高
              *
@@ -27916,7 +28805,7 @@ public class GT {
                 Thread.getInstance(0).execute(new Runnable() {
                     @Override
                     public void run() {
-                        while (context != null) {
+                        while (webView != null) {
                             Thread.sleep(1000);
                             if (ApplicationUtils.isFrontDesk(context)) {
                                 if (isResume) continue;
@@ -27956,6 +28845,23 @@ public class GT {
                 WebViewUtils.addListener(this, onLoadWebViewListener);
 
                 webSettings = getSettings();
+            }
+
+
+            //重写该方法进行接收数据
+            public void readData(String json) {
+
+            }
+
+            //发送安卓数据给JS
+            public void sendAndroidData(String json, OnListener<String>... onListeners) {
+                callJS("readData('" + json + "')", onListeners);
+            }
+
+            //这个方法是给网页调用的，不是给Android 调用的
+            @JavascriptInterface
+            public void sendH5Data(String json) {
+                readData(json);
             }
 
             public void loadData(Context context, WebView webView) {
@@ -28361,6 +29267,432 @@ public class GT {
 
             }
 
+            /**************************************** H5 侵入式开发 API **************************************/
+
+            private StringBuilder stringBuilder;
+
+            //清空js
+            public BaseWebView beginTransaction() {
+                if (stringBuilder == null) {
+                    stringBuilder = new StringBuilder();
+                }
+                stringBuilder.delete(0, stringBuilder.length());
+                return this;
+            }
+
+            //提交 js 并返回 js
+            public String commit() {
+                callJS(stringBuilder.toString());
+                return stringBuilder.toString();
+            }
+
+            /**
+             * 添加自定义的 JS 代码
+             *
+             * @param id
+             * @return
+             */
+            public BaseWebView addJsCode(String viewName) {
+                stringBuilder.append(viewName);
+                return this;
+            }
+
+            /**
+             * 根据自定义的 View变量名 查找
+             *
+             * @param id
+             * @return
+             */
+            public BaseWebView findViewByViewName(String viewName) {
+                stringBuilder.append(" " + viewName);
+                return this;
+            }
+
+            /**
+             * 根据元素 ID 查找
+             *
+             * @param id
+             * @return
+             */
+            public BaseWebView findViewById(String id) {
+                stringBuilder.append(" document.getElementById('" + id + "')");
+                return this;
+            }
+
+            /**
+             * 根据元素 标签 查找 实际用法： findViewByTagName("img",0);
+             *
+             * @param tag   （如，<a>a标签</a> 或 <img>图片标签</img> ）
+             * @param index 查找第多少位元素
+             * @return
+             */
+            public BaseWebView findViewByTagName(String tag, int... index) {
+                int number = 0;
+                if (index.length > 0) {
+                    number = index[0];
+                }
+                stringBuilder.append(" document.getElementsByTagName('" + tag + "')[" + number + "]");
+                return this;
+            }
+
+
+            /**
+             * 根据多个元素 标签 查找 实际用法： findViewByTagName("img",0);
+             *
+             * @param tag   （如，<a>a标签</a> 或 <img>图片标签</img> ）
+             * @param index 查找第多少位元素
+             * @return
+             */
+            public BaseWebView findViewByTagNames(String tag) {
+                stringBuilder.append(" document.getElementsByTagName('" + tag + "')");
+                return this;
+            }
+
+
+            /**
+             * 根据元素 name属性 查找
+             *
+             * @param name  （如，name="name_a"）
+             * @param index 查找第多少位元素
+             * @return
+             */
+            public BaseWebView findViewByName(String name, int... index) {
+                int number = 0;
+                if (index.length > 0) {
+                    number = index[0];
+                }
+                stringBuilder.append(" document.getElementsByName('" + name + "')[" + number + "]");
+                return this;
+            }
+
+
+            /**
+             * 根据多个元素 name属性 查找
+             *
+             * @param name  （如，name="name_a"）
+             * @param index 查找第多少位元素
+             * @return
+             */
+            public BaseWebView findViewByNames(String name) {
+                stringBuilder.append(" document.getElementsByName('" + name + "')");
+                return this;
+            }
+
+
+            /**
+             * 根据元素 className属性 查找
+             *
+             * @param className
+             * @param index     查找第多少位元素
+             * @return
+             */
+            public BaseWebView findViewByClassName(String className, int... index) {
+                int number = 0;
+                if (index.length > 0) {
+                    number = index[0];
+                }
+                stringBuilder.append(" document.getElementsByclassName('" + className + "')[" + number + "]");
+                return this;
+            }
+
+
+            /**
+             * 根据多个元素 className属性 查找
+             *
+             * @param className
+             * @param index     查找第多少位元素
+             * @return
+             */
+            public BaseWebView findViewByClassNames(String className) {
+                stringBuilder.append(" document.getElementsByclassName('" + className + "')");
+                return this;
+            }
+
+
+            //其他简便 JS API
+
+            /**
+             * 设置新文本内容
+             *
+             * @param text
+             * @return
+             */
+            public BaseWebView setText(String text) {
+                stringBuilder.append(".innerHTML='" + text + "'; ");
+                return this;
+            }
+
+            /**
+             * 设置文字大小
+             *
+             * @param dp
+             * @return
+             */
+            public BaseWebView setTextSize(int dp) {
+                stringBuilder.append(".style.fontSize='" + dp + "'; ");
+                return this;
+            }
+
+            /**
+             * 设置文字颜色
+             *
+             * @param color (例如:red)
+             * @return
+             */
+            public BaseWebView setTextColor(String color) {
+                stringBuilder.append(".style.color='" + color + "'; ");
+                return this;
+            }
+
+            /**
+             * 设置 元素 隐藏
+             *
+             * @return
+             */
+            public BaseWebView setHide() {
+                stringBuilder.append(".style.display='" + "none" + "'; ");
+                return this;
+            }
+
+            /**
+             * 设置 元素 显示
+             *
+             * @return
+             */
+            public BaseWebView setShow() {
+                stringBuilder.append(".style.display='" + "block" + "'; ");
+                return this;
+            }
+
+            /**
+             * 设置 元素 显示或隐藏
+             *
+             * @param tf
+             * @param data 设置自定义值
+             * @return
+             */
+            public BaseWebView setShowOrHide(boolean tf, String... data) {
+                if (data.length > 0) {
+                    stringBuilder.append(".style.display='" + data[0] + "';");
+                } else {
+                    stringBuilder.append(".style.display='" + (tf ? "none" : "block") + "'; ");
+                }
+                return this;
+            }
+
+            //提供给侵入式单击事件功能
+            private OnListener onClickListener;
+
+            @JavascriptInterface
+            public void onClickListener(String json) {
+                onClickListener.onListener(json);
+            }
+
+            /**
+             * 设置 监听Html按钮 单击事件
+             *
+             * @return
+             */
+            public BaseWebView setOnClickListener(OnListener onClickListener) {
+                this.onClickListener = onClickListener;
+                stringBuilder.append(".onclick = function(){ " + jsToAndroidName + ".onClickListener(''); }; ");
+                return this;
+            }
+
+            /**
+             * 设置单击后触发的方法
+             *
+             * @return
+             */
+            public BaseWebView setOnClickFunction(String functionName) {
+                stringBuilder.append(".onclick = function(){ " + functionName + " }; ");
+                return this;
+            }
+
+            /**
+             * 设置单击后触发安卓方法(切记 安卓方法需要加上 @JavascriptInterface 注解)
+             *
+             * @return
+             */
+            public BaseWebView setOnClickAndroidFunction(String functionName) {
+                stringBuilder.append(".onclick = function(){ " + jsToAndroidName + "." + functionName + " }; ");
+                return this;
+            }
+
+            /**
+             * 设置 单击跳转链接
+             *
+             * @param url       设置跳转链接
+             * @param isNewPage 设置是否新开一个页面去跳转链接
+             * @return
+             */
+            public BaseWebView setOnClickLink(String url) {
+                stringBuilder.append(".setAttribute('href', '" + url + "'); ");
+                return this;
+            }
+
+
+            /**
+             * 设置 html 标题
+             *
+             * @return
+             */
+            public BaseWebView setTitle(String title) {
+                stringBuilder.append(".document.title='" + title + "'; ");
+                return this;
+            }
+
+
+            /**
+             * 设置新图片地址
+             *
+             * @param urlImg
+             * @return
+             */
+            public BaseWebView setImgUrl(String urlImg) {
+                stringBuilder.append(".src='" + urlImg + "'; ");
+                return this;
+            }
+
+            /**
+             * 创建一个新的 元素
+             *
+             * @param view (例如: h1)
+             * @return
+             */
+            public String newView(String viewName, String view) {
+                return " var " + viewName + " = document.createElement('" + view + "'); ";
+            }
+
+            /**
+             * 创建一个新的 元素
+             *
+             * @param text 文本内容
+             * @return
+             */
+            public String newTextView(String viewName, String text) {
+                return " var " + viewName + " = document.createTextNode('" + text + "'); ";
+            }
+
+            /**
+             * 创建一个新的图片 元素
+             *
+             * @param imgUrl 设置图片资源 (可选项)
+             * @return
+             */
+            public BaseWebView newImgView(String viewName, String... imgUrl) {
+                String img = null;
+                if (imgUrl.length > 0) {
+                    img = imgUrl[0];
+                }
+                if (img == null) {
+                    stringBuilder.append(" var " + viewName + " = document.createElement('img'); ");
+                } else {
+                    stringBuilder.append(" var " + viewName + " = document.createElement('img'); " + viewName + ".src='" + img + "'; ");
+                }
+                return this;
+            }
+
+            /**
+             * 添加一个元素到 另外一个元素 中
+             *
+             * @param viewGroup
+             * @param viewName
+             * @return
+             */
+            public BaseWebView addViewToViewGroup(String viewGroupName, String viewName) {
+                stringBuilder.append(viewGroupName + ".appendChild(" + viewName + ");");
+                return this;
+            }
+
+            /**
+             * 添加一个元素到 另外一个元素 中
+             *
+             * @param viewName
+             * @return
+             */
+            public BaseWebView addView(String viewName) {
+                stringBuilder.append(".appendChild(" + viewName + "); ");
+                return this;
+            }
+
+            /**
+             * 添加一个元素到 body 中
+             *
+             * @param view (例如: newView("h1"))
+             * @return
+             */
+            public BaseWebView addBodyView(String viewName) {
+                stringBuilder.append(" document.body.appendChild(" + viewName + "); ");
+                return this;
+            }
+
+
+            /**
+
+             <html>
+             <head>
+             <meta charset="utf-8">
+             <title>交互信息</title>
+
+             <script>
+
+
+             function getView(){
+
+             //寻找元素方法
+             //document.getElementById('id_a').style.display = 'none'
+             //document.getElementsByTagName("a")[0].style.display = 'none'
+             //document.getElementsByName("name_a")[0].style.display = 'none'
+             //document.getElementsByClassName("class_a")[0].style.display = 'none'
+
+             //document.getElementsByTagName('span')[0].innerHTML="码龄99年";//设置新文本
+             //document.getElementById('id_a').style.fontSize= '100px';//设置字体大小
+             //document.getElementById('id_a').style.color= 'red';//设置字体颜色
+             //document.getElementById('id_a').style.display = 'none'//隐藏
+             //document.getElementById('id_a').style.display = 'block'//显示
+             //document.getElementById('id_a').onclick = function(){ alert("单击成功") };
+             //document.getElementsByTagName("img")[0].src="https://profile.csdnimg.cn/7/5/9/1_qq_39799899"//设置新图片
+             //document.createElement("h1")//创建新的元素点
+             //document.body.appendChild(h1);//在 body 上添加元素
+             //var t = document.createTextNode("键盘输入(JS纯净版)"); document.getElementById('id_a').appendChild(t);//添加新的文字进入
+             //document.title = '我的标题'//设置标题
+
+             //document.getElementById('id_a').onclick = function(){ alert("单击成功") };
+
+
+             <!--
+             //1.设置新文本、颜色、字体大小
+             //2.隐藏/显示
+             //3.设置单击事件
+             //4.设置新图片
+             //5.创建新的元素节点//添加
+             //6.设置元素单击新链接
+             //7.
+             -->
+
+             }
+
+             </script>
+
+             </head>
+
+             <body>
+             <div id="id_div" title="已加入 CSDN 5年" class="person-code-age" style="background-color:#C7E9FD;color:#1E68D8;" data-v-d1dbb6f8="">
+             <img src="https://img-home.csdnimg.cn/images/20210108035952.gif" alt="" data-v-d1dbb6f8="">
+             <span data-v-d1dbb6f8="">码龄100年</span>
+             </div> </br>
+
+             <a id="id_a" class="class_a" name="name_a" >A</a>
+
+             <button onclick="getView()">获取</button></br>
+             </body>
+             </html>
+
+
+             */
+
+
         }
 
         /**
@@ -28472,23 +29804,41 @@ public class GT {
             GT_Notification.notificationManagerCompat = notificationManagerCompat;
         }
 
-        //封装的第一代 通知 (非服务端开启，想在服务里启动的话自己加)
-        public static abstract class NotificationBase extends NotificationCompat.Builder {
-
-            public RemoteViews remoteViews1;
-            public RemoteViews remoteViews2;
-            private NotificationManagerCompat notificationManagerCompat;//通知管理器
+        //封装的第一代 通知 (非服务开启，想在服务里启动的话自己加)
+        public static abstract class NotificationBase implements SaveObject.SaveBean {
+            private Object tag;
             protected int layout1;
             protected int layout2;
-            private int notifyid;
             public Context context;
+            public RemoteViews remoteViews1;
+            public RemoteViews remoteViews2;
+            private NotificationCompat.Builder builder;
+            public Map<Integer, PendingIntent> mapClick = new HashMap<>();//用于记录 单击事件
+            public Map<Integer, String> mapUIText = new HashMap<>();//用于记录 所有当前最新UI
+            public Map<Integer, Object> mapUIImage = new HashMap<>();//用于记录 所有当前最新UI
+            private NotificationManagerCompat notificationManagerCompat;//通知管理器
+            //保存基础信息，用于更新UI
+            private int icon;
+            private boolean clickCancel;
+            private boolean isLockScreenShow;
+            private boolean isOngoing;
+            private Intent intent;
+            private long time;
+
+            public Object getTag() {
+                return tag;
+            }
+
+            public void setTag(Object tag) {
+                this.tag = tag;
+            }
 
             public int getNotifyid() {
-                return notifyid;
+                return NOTIFYID;
             }
 
             public void setNotifyid(int notifyid) {
-                this.notifyid = notifyid;
+                NOTIFYID = notifyid;
             }
 
             public void setLayout1(int layout1) {
@@ -28527,71 +29877,16 @@ public class GT {
             }
 
             public NotificationBase() {
-                super(getActivity());
+                this.context = getActivity();
+                builder = new NotificationCompat.Builder(context);
             }
 
-            public NotificationBase(@NonNull Context context, @NonNull Notification notification) {
-                super(context, notification);
+            public NotificationBase(Context context) {
                 this.context = context;
+                builder = new NotificationCompat.Builder(context);
                 bingData();
                 initView(context);
                 loadData(context);
-            }
-
-            public NotificationBase(@NonNull Context context, @NonNull String channelId) {
-                super(context, channelId);
-                this.context = context;
-                bingData();
-                initView(context);
-                loadData(context);
-            }
-
-            public NotificationBase(@NonNull Context context) {
-                super(context);
-                this.context = context;
-                bingData();
-                initView(context);
-                loadData(context);
-            }
-
-            public NotificationBase(Context context, int icon, boolean clickCancel, boolean isLockScreenShow, Intent intent, long time, int... notifyids) {
-                super(context, createNotificationChannel(context));
-                this.context = context;
-                bingData();
-                initView(context);
-                loadData(context);
-                setAutoCancel(clickCancel);//设置通知打开后自动消失
-
-                //如果 设置了-1，那就默认给透明的图标
-                if (icon <= 0) {
-                    icon = R.color.touMing;
-                }
-                setSmallIcon(icon);//设置左边的通知图标 且当前属性必须存在
-
-                //设置发送时间
-                if (time > 0) {
-                    if (time == 0) {
-                        time = System.currentTimeMillis();
-                    }
-                    setWhen(time);//设置发送时间
-                }
-
-                setDefaults(Notification.DEFAULT_VIBRATE | Notification.DEFAULT_SOUND | Notification.DEFAULT_LIGHTS | Notification.FLAG_SHOW_LIGHTS);//设置默认的声音与默认的振动
-                //创建一个启动详细页面的 Intent 对象
-                if (intent == null) {
-                    intent = new Intent();
-                } else {
-                    intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-                }
-                setContentIntent(PendingIntent.getActivities(context, 0, new Intent[]{intent}, PendingIntent.FLAG_IMMUTABLE));//设置通知栏 点击跳转
-
-                if (notifyids.length > 0) {
-                    notifyid = notifyids[0];
-                    NOTIFYID = notifyids[0];
-                }
-
-                if (isLockScreenShow)
-                    setVisibility(NotificationCompat.VISIBILITY_PRIVATE); // 屏幕可见性，锁屏时，显示icon和标题，内容隐藏
             }
 
             /**
@@ -28606,66 +29901,73 @@ public class GT {
              * @param notifyids        通知key
              */
             protected void setInitData(int icon, boolean clickCancel, boolean isLockScreenShow, boolean isOngoing, Intent intent, long time, int... notifyids) {
-                setAutoCancel(clickCancel);//设置通知打开后自动消失
+                this.icon = icon;
+                this.clickCancel = clickCancel;
+                this.isLockScreenShow = isLockScreenShow;
+                this.isOngoing = isOngoing;
+                this.intent = intent;
+                this.time = time;
+
+                builder.setAutoCancel(clickCancel);//设置通知打开后自动消失
 
                 //如果 设置了-1，那就默认给透明的图标
                 if (icon <= 0) {
                     icon = R.color.touMing;
                 }
-                setSmallIcon(icon);//设置左边的通知图标 且当前属性必须存在
+                builder.setSmallIcon(icon);//设置左边的通知图标 且当前属性必须存在
 
                 //设置发送时间
                 if (time > 0) {
                     if (time == 0) {
                         time = System.currentTimeMillis();
                     }
-                    setWhen(time);//设置发送时间
+                    builder.setWhen(time);//设置发送时间
                 }
 
-                setDefaults(Notification.DEFAULT_VIBRATE | Notification.DEFAULT_SOUND | Notification.DEFAULT_LIGHTS | Notification.FLAG_SHOW_LIGHTS);//设置默认的声音与默认的振动
+                builder.setDefaults(Notification.DEFAULT_VIBRATE | Notification.DEFAULT_SOUND | Notification.DEFAULT_LIGHTS | Notification.FLAG_SHOW_LIGHTS);//设置默认的声音与默认的振动
                 //创建一个启动详细页面的 Intent 对象
                 if (intent != null) {
                     intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-                    setContentIntent(PendingIntent.getActivities(context, 0, new Intent[]{intent}, PendingIntent.FLAG_IMMUTABLE));//设置通知栏 点击跳转
+                    builder.setContentIntent(PendingIntent.getActivities(context, 0, new Intent[]{intent}, PendingIntent.FLAG_IMMUTABLE));//设置通知栏 点击跳转
                 }
 
                 if (notifyids.length > 0) {
-                    notifyid = notifyids[0];
                     NOTIFYID = notifyids[0];
                 }
 
                 if (isLockScreenShow)
-                    setVisibility(NotificationCompat.VISIBILITY_PRIVATE); // 屏幕可见性，锁屏时，显示icon和标题，内容隐藏
+                    builder.setVisibility(NotificationCompat.VISIBILITY_PRIVATE); // 屏幕可见性，锁屏时，显示icon和标题，内容隐藏
 
-                setOngoing(isOngoing);//持久性的通知,用户无法删除
+                builder.setOngoing(isOngoing);//持久性的通知,用户无法删除
+
+                builder.setStyle(new NotificationCompat.DecoratedCustomViewStyle());
             }
 
             protected void initView(Context context) {
+                builder.setChannelId(createNotificationChannel(context));
                 notificationManagerCompat = GT_Notification.getNotificationManagerCompat(context);
-
                 layout1 = loadLayout1();
                 layout2 = loadLayout2();
-
                 if (layout1 > 0) {
                     remoteViews1 = new RemoteViews(context.getPackageName(), layout1);
                 }
                 if (layout2 > 0) {
                     remoteViews2 = new RemoteViews(context.getPackageName(), layout2);
                 }
-
-                setStyle(new NotificationCompat.DecoratedCustomViewStyle());
+                builder.setStyle(new NotificationCompat.DecoratedCustomViewStyle());
             }
 
             public void loadData(Context context) {
 
                 if (remoteViews1 != null) {
-                    setCustomContentView(remoteViews1);
+                    builder.setCustomContentView(remoteViews1);
                 }
                 if (remoteViews2 != null) {
-                    setCustomBigContentView(remoteViews2);
+                    builder.setCustomBigContentView(remoteViews2);
                 }
 
             }
+
 
             /**
              * 动态设置修改通知里的图片
@@ -28675,19 +29977,34 @@ public class GT {
              * @param isCommit 是否自动提交刷新UI
              * @return
              */
-            public NotificationBase setImageUrl(int imageId, Object resource, NotificationCompat.Builder... builders) {
+            public NotificationBase setImageRes(int imageId, int resource) {
+                if (imageId < 0 || resource == 0) return this;
+                remoteViews1.setImageViewResource(imageId, resource);
+                remoteViews2.setImageViewResource(imageId, resource);
+                mapUIImage.put(imageId, resource);//保存UI状态
+                return this;
+            }
+
+            private int imageId;
+            private Object resource;
+
+            /**
+             * 动态设置修改通知里的图片
+             *
+             * @param imageId  修改图片组件的ID
+             * @param resource 修改图片组件的对象
+             * @param isCommit 是否自动提交刷新UI
+             * @return
+             */
+            public NotificationBase setImageUrl(int imageId, Object resource) {
                 if (imageId < 0 || resource == null) return this;
-                Thread.runJava(new Runnable() {
+                this.imageId = imageId;
+                this.resource = resource;
+                GT.Thread.getInstance(0).execute(new Runnable() {
                     @Override
                     public void run() {
-                        NotificationCompat.Builder builder = NotificationBase.this;
                         Bitmap bitmap = ImageViewTools.ObjectToBitmap(resource);
-                        remoteViews1.setImageViewBitmap(imageId, bitmap);
-                        remoteViews2.setImageViewBitmap(imageId, bitmap);
-                        if (builders.length > 0) {
-                            builder = builders[0];
-                        }
-                        GT_Notification.startNotification(NotificationBase.this, notifyid);
+                        mapUIImage.put(imageId, bitmap);//保存UI状态
                     }
                 });
                 return this;
@@ -28701,17 +30018,16 @@ public class GT {
              * @param isCommit 是否自动提交刷新UI
              * @return
              */
-            public NotificationBase setTextViewText(int tvId, String text, boolean... isCommit) {
+            public NotificationBase setTextViewText(int tvId, String text) {
                 if (tvId < 0) return this;
                 if (text != null) {
                     remoteViews1.setTextViewText(tvId, text);
                     remoteViews2.setTextViewText(tvId, text);
-                }
-                if (isCommit.length > 0 && isCommit[0]) {
-                    GT_Notification.startNotification(NotificationBase.this, notifyid);
+                    mapUIText.put(tvId, text);//保存UI状态
                 }
                 return this;
             }
+
 
             /**
              * 提交刷新通知
@@ -28720,11 +30036,70 @@ public class GT {
              * @return
              */
             public NotificationBase commit(NotificationCompat.Builder... builders) {
-                NotificationCompat.Builder builder = NotificationBase.this;
                 if (builders.length > 0) {
                     builder = builders[0];
                 }
-                GT_Notification.startNotification(builder, notifyid);
+                if (resource != null) {
+                    GT.Observable.getDefault().execute(new Observable.RunJavaR<Bitmap>() {
+                        @Override
+                        public Bitmap run() {
+                            return ImageViewTools.ObjectToBitmap(resource);
+                        }
+                    }).execute(new Observable.RunAndroidV<Bitmap>() {
+                        @Override
+                        public void run(Bitmap bitmap) {
+                            //重新创建一个通知栏 用于更新UI
+                            builder = new NotificationCompat.Builder(context, createNotificationChannel(context));
+                            setInitData(icon, clickCancel, isLockScreenShow, isOngoing, intent, time, NOTIFYID);
+
+                            //创建新的布局对象 并设更新好UI
+                            remoteViews1 = new RemoteViews(context.getPackageName(), layout1);
+                            remoteViews2 = new RemoteViews(context.getPackageName(), layout2);
+
+                            //TODO 还需要做恢复UI的操作
+                            for (int id : mapUIImage.keySet()) {
+                                Object resObj = mapUIImage.get(id);
+                                if (resObj instanceof Integer) {
+                                    int res = Integer.parseInt(String.valueOf(resObj));
+                                    remoteViews1.setImageViewResource(id, res);
+                                    remoteViews2.setImageViewResource(id, res);
+                                } else if (resObj instanceof Bitmap) {
+                                    Bitmap resBit = (Bitmap) resObj;
+                                    remoteViews1.setImageViewBitmap(id, resBit);
+                                    remoteViews2.setImageViewBitmap(id, resBit);
+                                }
+
+                            }
+
+                            for (int id : mapUIText.keySet()) {
+                                String text = mapUIText.get(id);
+                                remoteViews1.setTextViewText(id, text);
+                                remoteViews2.setTextViewText(id, text);
+                            }
+
+                            remoteViews1.setImageViewBitmap(imageId, bitmap);
+                            remoteViews2.setImageViewBitmap(imageId, bitmap);
+
+                            //将新创建的UI 注入已存在的单击事件
+                            for (int key : mapClick.keySet()) {
+                                PendingIntent pendingIntent = mapClick.get(key);
+                                remoteViews1.setOnClickPendingIntent(key, pendingIntent);
+                                remoteViews2.setOnClickPendingIntent(key, pendingIntent);
+                            }
+
+                            //将布局UI添加通知栏里去
+                            builder.setCustomContentView(remoteViews1);
+                            builder.setCustomBigContentView(remoteViews2);
+                            resource = 0;
+                            imageId = 0;
+
+                            GT_Notification.startNotification(builder, NOTIFYID); //最终发布更新通知栏
+                            resource = null;
+                        }
+                    });
+                } else {
+                    GT_Notification.startNotification(builder, NOTIFYID); //最终发布更新通知栏
+                }
                 return this;
             }
 
@@ -28744,23 +30119,13 @@ public class GT {
         //封装的第二代 通知 (非服务端开启，想在服务里启动的话自己加)
         public static abstract class AnnotationNotification extends NotificationBase {
 
-            public AnnotationNotification(@NonNull Context context, @NonNull Notification notification) {
-                super(context, notification);
+            public AnnotationNotification() {
+                super();
                 registerNotificationReceiver(context);
             }
 
-            public AnnotationNotification(@NonNull Context context, @NonNull String channelId) {
-                super(context, channelId);
-                registerNotificationReceiver(context);
-            }
-
-            public AnnotationNotification(@NonNull Context context) {
+            public AnnotationNotification(Context context) {
                 super(context);
-                registerNotificationReceiver(context);
-            }
-
-            public AnnotationNotification(Context context, int icon, boolean clickCancel, boolean isLockScreenShow, Intent intent, long time, int... notifyids) {
-                super(context, icon, clickCancel, isLockScreenShow, intent, time, notifyids);
                 registerNotificationReceiver(context);
             }
 
@@ -28803,6 +30168,12 @@ public class GT {
                 setOnClickListener();
             }
 
+            @Override
+            public NotificationBase commit(NotificationCompat.Builder... builders) {
+                super.commit(builders);
+                return this;
+            }
+
             //设置单击事件
             private void setOnClickListener() {
                 Class<?> aClass = getClass();
@@ -28822,7 +30193,8 @@ public class GT {
                         for (int i = 0; i < clickViews.length; i++) {
                             int clickView = clickViews[i];
                             Intent intent = new Intent(getClass().getName() + ":" + clickView);
-                            PendingIntent pendingIntent = PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
+                            PendingIntent pendingIntent = PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_IMMUTABLE);
+                            mapClick.put(clickView, pendingIntent);
                             remoteViews1.setOnClickPendingIntent(clickView, pendingIntent);
                             remoteViews2.setOnClickPendingIntent(clickView, pendingIntent);
                         }
@@ -28871,26 +30243,30 @@ public class GT {
                 EventBus.getDefault().unregister(this);//取消订阅者
                 context.unregisterReceiver(mBroadcastReceiver);
             }
+
+            /**
+             * 内容由 ViewModel 层去提供数据 给到 View 层
+             *
+             * @param obj
+             */
+            public void onViewModeFeedback(Object... obj) {
+
+            }
+
         }
 
         //封装的第三代 通知 (非服务端开启，想在服务里启动的话自己加)
         public abstract static class DataBindingNotification extends AnnotationNotification {
 
-            public DataBindingNotification(@NonNull Context context, @NonNull Notification notification) {
-                super(context, notification);
+            public DataBindingNotification() {
+                super();
             }
 
-            public DataBindingNotification(@NonNull Context context, @NonNull String channelId) {
-                super(context, channelId);
-            }
-
-            public DataBindingNotification(@NonNull Context context) {
+            public DataBindingNotification(Context context) {
                 super(context);
             }
 
-            public DataBindingNotification(Context context, int icon, boolean clickCancel, boolean isLockScreenShow, Intent intent, long time, int... notifyids) {
-                super(context, icon, clickCancel, isLockScreenShow, intent, time, notifyids);
-            }
+
         }
 
         /**
@@ -29256,9 +30632,9 @@ public class GT {
          *
          * @param builder
          */
-        public static NotificationBase startNotification(NotificationBase builder) {
-            notificationManagerCompat.notify(builder.notifyid, builder.build());
-            return builder;
+        public static NotificationBase startNotification(NotificationBase notificationBase) {
+            notificationManagerCompat.notify(NOTIFYID, notificationBase.builder.build());
+            return notificationBase;
         }
 
         /**
@@ -31174,9 +32550,9 @@ public class GT {
 
     }
 
-    //============================================= 编程思想辅助 ======================================
+    //============================================= 编程思想辅助框架 ======================================
 
-    //MVC MVP MVVM 框架类
+    //MVC MVP MVVM GTM_MVVM 框架类
     public static class Frame {
 
         /**
@@ -31184,7 +32560,7 @@ public class GT {
          */
 
         /**
-         * MVC模式
+         * 标准的MVC模式
          * Model:继承自 MVC_Model (模型/数据处理):是应用程序中用于处理应用程序数据逻辑的部分。通常模型对象负责在数据库中存取数据
          * View: xml布局文件 (视图/UI描述):是应用程序中处理数据显示的部分。通常视图是依据模型数据创建的
          * Controller: Activity/Fragment (控制器/用户交互):是应用程序中处理用户交互的部分。通常控制器负责从视图读取数据，控制用户输入，并向模型发送数据
@@ -31208,8 +32584,9 @@ public class GT {
             }
         }
 
+
         /**
-         * MVP模式
+         * 标准的MVP模式
          * Model:继承自 MVP_Model (模型/数据处理):主要提供数据存取功能
          * View: Activity/Fragment (视图/UI事件):初始化View,处理用户事件和视图
          * Presenter:继承自 MVP_Presenter (展示层/衔接):负责通过Model存取数据，连接View和Model，从Model中取出数据交给View
@@ -31269,8 +32646,9 @@ public class GT {
             }
         }
 
+
         /**
-         * MVVM模式
+         * 标准的MVVM模式
          * Model:继承自 MVVM_Model (模型/数据处理):主要提供数据存取功能
          * View: Activity/Fragment (视图/UI事件):初始化View,处理用户事件和视图
          * ViewModel:继承自 MVVM_ViewModel (展示层/衔接):负责通过Model存取数据，连接View和Model，从Model中取出数据交给View
@@ -31303,8 +32681,9 @@ public class GT {
             }
         }
 
+
         /**
-         * GT模式
+         * 标准的GT_MVVM模式
          * Model:继承自 GT_Model (模型/数据处理):主要提供数据存取功能
          * View: Activity/Fragment (视图/UI事件):初始化View,处理用户事件和视图
          * ViewModel:继承自 GT_ViewModel (展示层/衔接):负责通过Model存取数据，连接View和Model，从Model中取出数据交给View
@@ -31405,21 +32784,8 @@ public class GT {
 
         }
 
-        //不推荐将 UI 处理放这里面(UI请放到 view 层处理)，这里面用于处理数据相关的，如：Http 网络请求数据、SQL 数据库数据、一次性的工具包、其他缓存等
-        public abstract static class GT_Model<T> extends MVVM_Model<T> {
-
-            public GT_Model() {
-            }
-
-            public GT_Model(T t) {
-                super(t);
-            }
-
-
-        }
-
         /**
-         * GT_Binding模式
+         * GT_BindingViewModel模式:是 GT_MVVM 的升级版
          * Model:继承自 GT_BindingModel (模型/数据处理):主要提供数据存取功能
          * View: Activity/Fragment (视图/UI事件):初始化View,处理用户事件和视图
          * ViewModel:继承自 GT_BindingViewModel (展示层/衔接):负责通过Model存取数据，连接View和Model，从Model中取出数据交给View
@@ -31453,8 +32819,21 @@ public class GT {
                 loadData();
             }
 
+
         }
 
+        //不推荐将 UI 处理放这里面(UI请放到 view 层处理)，这里面用于处理数据相关的，如：Http 网络请求数据、SQL 数据库数据、一次性的工具包、其他缓存等
+        public abstract static class GT_Model<T> extends MVVM_Model<T> {
+
+            public GT_Model() {
+            }
+
+            public GT_Model(T t) {
+                super(t);
+            }
+
+
+        }
 
     }
 
@@ -33952,7 +35331,7 @@ public class GT {
                     method.setAccessible(true);// 获取该方法的访问权限
 
                     if (value != 0 || valueHD != 0) {
-                        if (!WindowUtils.isLandscapeAndPortrait((Activity) GT.getActivity())) {//竖屏
+                        if (!WindowUtils.isLandscapeAndPortrait(GT.getActivity())) {//竖屏
                             if (value == 0) {
                                 value = valueHD;
                             }
@@ -33970,7 +35349,7 @@ public class GT {
                                 break;
                             case 2:
                                 if (GT_Fragment.valueIndex <= -1 && valueIndex <= -1) {
-                                    if (!WindowUtils.isLandscapeAndPortrait((Activity) GT.getActivity())) {//竖屏
+                                    if (!WindowUtils.isLandscapeAndPortrait(GT.getActivity())) {//竖屏
                                         method.invoke(object, values[0]);// 调用该方法的，并设置该方法参数
                                     } else {//横屏
                                         method.invoke(object, values[1]);// 调用该方法的，并设置该方法参数
@@ -34033,7 +35412,7 @@ public class GT {
                     method.setAccessible(true);// 获取该方法的访问权限
 
                     if (value != 0 || valueHD != 0) {
-                        if (!WindowUtils.isLandscapeAndPortrait((Activity) GT.getActivity())) {//竖屏
+                        if (!WindowUtils.isLandscapeAndPortrait(GT.getActivity())) {//竖屏
                             if (value == 0) {
                                 value = valueHD;
                             }
@@ -34051,7 +35430,7 @@ public class GT {
                                 break;
                             case 2:
                                 if (GT_Fragment.valueIndex <= -1 && valueIndex <= -1) {
-                                    if (!WindowUtils.isLandscapeAndPortrait((Activity) GT.getActivity())) {//竖屏
+                                    if (!WindowUtils.isLandscapeAndPortrait(GT.getActivity())) {//竖屏
                                         method.invoke(object, values[0]);// 调用该方法的，并设置该方法参数
                                     } else {//横屏
                                         method.invoke(object, values[1]);// 调用该方法的，并设置该方法参数
@@ -34111,7 +35490,7 @@ public class GT {
                     method.setAccessible(true);// 获取该方法的访问权限
 
                     if (value != 0 || valueHD != 0) {
-                        if (!WindowUtils.isLandscapeAndPortrait((Activity) GT.getActivity())) {//竖屏
+                        if (!WindowUtils.isLandscapeAndPortrait(GT.getActivity())) {//竖屏
                             if (value == 0) {
                                 value = valueHD;
                             }
@@ -34129,7 +35508,7 @@ public class GT {
                                 break;
                             case 2:
                                 if (GT_Fragment.valueIndex <= -1 && valueIndex <= -1) {
-                                    if (!WindowUtils.isLandscapeAndPortrait((Activity) GT.getActivity())) {//竖屏
+                                    if (!WindowUtils.isLandscapeAndPortrait(GT.getActivity())) {//竖屏
                                         method.invoke(object, values[0]);// 调用该方法的，并设置该方法参数
                                     } else {//横屏
                                         method.invoke(object, values[1]);// 调用该方法的，并设置该方法参数
@@ -34335,13 +35714,16 @@ public class GT {
                     GT_Socket.TCP tcp = null;
 
                     tcp = GT_Cache.getSocketTCP(iP + port);
+                    GT.logt("缓存TCP:" + tcp);
 
                     if (tcp == null && activity != null) {
                         //获取注解的值
                         GT_Socket.isLog = initBuild.isLog();
                         if (iP == null || "null".equals(iP)) {
+                            GT.logt("创建服务器");
                             tcp = new GT_Socket.TCP(port);
                         } else {
+                            GT.logt("创建客户端");
                             tcp = new GT_Socket.TCP(iP, port);
                         }
                         GT_Cache.putSocketTCP(iP + port, tcp);
@@ -34416,7 +35798,7 @@ public class GT {
                     method.setAccessible(true);// 获取该方法的访问权限
 
                     if (value != 0 || valueHD != 0) {
-                        if (!WindowUtils.isLandscapeAndPortrait((Activity) GT.getActivity())) {//竖屏
+                        if (!WindowUtils.isLandscapeAndPortrait(GT.getActivity())) {//竖屏
                             if (value == 0) {
                                 value = valueHD;
                             }
@@ -34434,7 +35816,7 @@ public class GT {
                                 break;
                             case 2:
                                 if (GT_Fragment.valueIndex <= -1 && valueIndex <= -1) {
-                                    if (!WindowUtils.isLandscapeAndPortrait((Activity) GT.getActivity())) {//竖屏
+                                    if (!WindowUtils.isLandscapeAndPortrait(GT.getActivity())) {//竖屏
                                         method.invoke(object, values[0]);// 调用该方法的，并设置该方法参数
                                     } else {//横屏
                                         method.invoke(object, values[1]);// 调用该方法的，并设置该方法参数
@@ -34491,7 +35873,7 @@ public class GT {
                     method.setAccessible(true);// 获取该方法的访问权限
 
                     if (value != 0 || valueHD != 0) {
-                        if (!WindowUtils.isLandscapeAndPortrait((Activity) GT.getActivity())) {//竖屏
+                        if (!WindowUtils.isLandscapeAndPortrait(GT.getActivity())) {//竖屏
                             if (value == 0) {
                                 value = valueHD;
                             }
@@ -34509,7 +35891,7 @@ public class GT {
                                 break;
                             case 2:
                                 if (GT_Fragment.valueIndex <= -1 && valueIndex <= -1) {
-                                    if (!WindowUtils.isLandscapeAndPortrait((Activity) GT.getActivity())) {//竖屏
+                                    if (!WindowUtils.isLandscapeAndPortrait(GT.getActivity())) {//竖屏
                                         method.invoke(object, values[0]);// 调用该方法的，并设置该方法参数
                                     } else {//横屏
                                         method.invoke(object, values[1]);// 调用该方法的，并设置该方法参数
@@ -34600,7 +35982,7 @@ public class GT {
                     method.setAccessible(true);// 获取该方法的访问权限
 
                     if (value != 0 || valueHD != 0) {
-                        if (!WindowUtils.isLandscapeAndPortrait((Activity) GT.getActivity())) {//竖屏
+                        if (!WindowUtils.isLandscapeAndPortrait(GT.getActivity())) {//竖屏
                             if (value == 0) {
                                 value = valueHD;
                             }
@@ -34618,7 +36000,7 @@ public class GT {
                                 break;
                             case 2:
                                 if (GT_Fragment.valueIndex <= -1 && valueIndex <= -1) {
-                                    if (!WindowUtils.isLandscapeAndPortrait((Activity) GT.getActivity())) {//竖屏
+                                    if (!WindowUtils.isLandscapeAndPortrait(GT.getActivity())) {//竖屏
                                         method.invoke(object, values[0]);// 调用该方法的，并设置该方法参数
                                     } else {//横屏
                                         method.invoke(object, values[1]);// 调用该方法的，并设置该方法参数
@@ -34991,7 +36373,7 @@ public class GT {
                 view = baseView.view;
             } else if (obj instanceof Adapters.BaseAdapter) {
                 Adapters.BaseAdapter baseView = (Adapters.BaseAdapter) obj;
-                view = baseView.itemView;
+                activity = baseView.context;
             } else if (obj instanceof GT_PopupWindow.BasePopupWindow) {
                 GT_PopupWindow.BasePopupWindow baseView = (GT_PopupWindow.BasePopupWindow) obj;
                 view = baseView.view;
@@ -36380,7 +37762,136 @@ public class GT {
 
     }
 
-//=============================================== 黑科技 ===================================================
+//=============================================== 接口模块 ===================================================
+
+    //专用于 传递参数返回页面
+    public static interface OnListener<T> extends SaveObject.SaveBean {
+        void onListener(T... obj);
+    }
+
+//=========================================== GT 大满贯 =========================================
+
+    public static class GTApplication extends Application {
+
+        public static Context context;//全局 Context
+        public static ExecutorService instance;//线程池
+        public static GT_SharedPreferences sp;//sp存储
+        public static final GT_Date gt_date = new GT_Date();//日期工具
+        public static final GT_Animation animation = new GT_Animation();//动画
+        public static int height, width;//屏幕宽高
+        public static boolean isOneInstall;//是否第一次安卓
+        public static boolean isTest = false;//是否为测试服 false: 正式服 true:测试服
+        public static boolean isFrontDesk = true;//是否前台
+
+        @Override
+        public void onCreate() {
+            super.onCreate();
+            context = getApplicationContext();//全局 Context
+            instance = Thread.getInstance(0);//获取唯一线程池
+            sp = new GT_SharedPreferences(context, context.getPackageName(), true);//sp存储
+            LOG.LOG_TF = ApplicationUtils.isApkInDebug(this);//设置在测试的时候才会打开日志
+            if ("0".equals(String.valueOf(sp.query("isOneInstall")))) { //判断是否第一次安装
+                isOneInstall = true;
+                sp.save("isOneInstall", 1);//去掉第一次安装的标识
+            }
+
+            //监听是否前台
+            registerActivityLifecycleCallbacks(new AppLifecycleManager(new OnListener<Boolean>() {
+                @Override
+                public void onListener(Boolean... obj) {
+                    isFrontDesk = obj[0];
+                    onFrontDesk(isFrontDesk);
+                }
+            }));
+
+            init(context);
+            loadData(context);
+
+        }
+
+        public void init(Context context) {
+
+        }
+
+        public void loadData(Context context) {
+
+        }
+
+        //是否前台
+        public void onFrontDesk(boolean isFrontDesk) {
+
+        }
+
+        //监听 前后台
+        public static class AppLifecycleManager implements Application.ActivityLifecycleCallbacks {
+
+            private int foregroundActivityCount = 0;
+
+            private GT.OnListener<Boolean> onFrontDesk;
+
+            public AppLifecycleManager(GT.OnListener<Boolean> onFrontDesk) {
+                this.onFrontDesk = onFrontDesk;
+            }
+
+            @Override
+            public void onActivityCreated(Activity activity, Bundle savedInstanceState) {
+            }
+
+            @Override
+            public void onActivityStarted(Activity activity) {
+            }
+
+            @Override
+            public void onActivityResumed(Activity activity) {
+                foregroundActivityCount++;
+                doSomething();
+            }
+
+            @Override
+            public void onActivityPaused(Activity activity) {
+            }
+
+            @Override
+            public void onActivityStopped(Activity activity) {
+                foregroundActivityCount--;
+                doSomething();
+            }
+
+            @Override
+            public void onActivitySaveInstanceState(Activity activity, Bundle outState) {
+            }
+
+            @Override
+            public void onActivityDestroyed(Activity activity) {
+            }
+
+            //当foregroundActivityCount<=0时可以断定app处于非前台状态
+            //对应前后台状态进行相应的操作
+            private void doSomething() {
+                if (foregroundActivityCount > 0) {
+                    //App处于前台时的操作
+                    onFrontDesk.onListener(true);
+                } else {
+                    //App处于后台时的操作
+                    onFrontDesk.onListener(false);
+                }
+            }
+
+        }
+
+    }
+
+    public static class GTActivity extends AppCompatActivity {
+
+        @Override
+        protected void onCreate(Bundle savedInstanceState) {
+            super.onCreate(savedInstanceState);
+            setContentView(R.layout.activity_gt);
+        }
+
+    }
+
+    //=============================================== 黑科技 ===================================================
 
     /**
      * 黑魔法类
@@ -37198,63 +38709,11 @@ public class GT {
         }
     }
 
-//=============================================== 接口模块 ===================================================
-
-    //专用于 传递参数返回页面
-    public static interface OnListener<T> extends SaveObject.SaveBean {
-        void onListener(T... obj);
-    }
-
-//=========================================== GT 大满贯 =========================================
-
-    public static class GTApplication extends Application {
-
-        public static Context context;//全局 Context
-        public static ExecutorService instance;//线程池
-        public static GT_SharedPreferences sp;//sp存储
-        public static final GT_Date gt_date = new GT_Date();//日期工具
-        public static final GT_Animation animation = new GT_Animation();//动画
-        public static int height, width;//屏幕宽高
-        public static boolean isOneInstall;//是否第一次安卓
-        public static boolean isTest = false;//是否为测试服 false: 正式服 true:测试服
-
-        @Override
-        public void onCreate() {
-            super.onCreate();
-            context = getApplicationContext();//全局 Context
-            instance = Thread.getInstance(0);//获取唯一线程池
-            sp = new GT_SharedPreferences(context, context.getPackageName(), true);//sp存储
-            LOG.LOG_TF = ApplicationUtils.isApkInDebug(this);//设置在测试的时候才会打开日志
-            if ("0".equals(String.valueOf(sp.query("isOneInstall")))) { //判断是否第一次安装
-                isOneInstall = true;
-                sp.save("isOneInstall", 1);//去掉第一次安装的标识
-            }
-
-            height = WindowUtils.getWindowUtilsHeight((AppCompatActivity) context);
-            width = WindowUtils.getWindowUtilsWidth((AppCompatActivity) context);
-
-        }
-    }
-
-    public static class GTActivity extends AppCompatActivity {
-
-        @Override
-        protected void onCreate(Bundle savedInstanceState) {
-            super.onCreate(savedInstanceState);
-            setContentView(R.layout.activity_gt);
-        }
-
-    }
 
 //=========================================== GT 库 后续开发 =========================================
 
-    /**
-     *
-     * 核心：后续GT库的开发 会向 兼容 Kotlin 语言的方向发展
-     * 1.热修复支持资源修复
-     * 2.Hibernate 会增加通过接口来进行增删查改，操作方式类似于 Retrofit 网络请求
-     *
-     *
-     */
+//    核心:后续GT库的开发 会向 兼容 Kotlin 语言的方向发展
+//    1.热修复支持资源修复
+//    2.Hibernate 会增加通过接口来进行增删查改，操作方式类似于 Retrofit 网络请求的操作方式
 
 }

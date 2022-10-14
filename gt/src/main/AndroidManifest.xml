@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:tools="http://schemas.android.com/tools"
-    xmlns:android="http://schemas.android.com/apk/res/android">
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    tools:ignore="Instantiatable"
+    >
 
     <!--&lt;!&ndash; U盘操作 &ndash;&gt;
   <uses-permission
@@ -31,6 +33,16 @@
         <service
             android:name="com.gsls.gt_toolkit.GT_Floating"
             android:exported="true" />
+
+        <service
+            android:name="com.gsls.gt.GT$EventBus$EventBusService"
+            android:enabled="true"
+            android:exported="true"
+            >
+            <intent-filter>
+                <action android:name="com.gsls.gt.EventBus" />
+            </intent-filter>
+        </service>
 
         <!-- 自动安装APK -->
         <!-- <provider

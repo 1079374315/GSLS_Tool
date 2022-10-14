@@ -17,7 +17,6 @@ public class DataBindingUtils {
     private static TypeSpec logTypeSpec;
     private static JavaFile.Builder builder;
     public static final AndroidBean androidBean = new AndroidBean();
-    public static final AndroidBean androidBean2 = new AndroidBean();
     private static final boolean isLog = false;//是否日志
     public static final String[] filtrationArray = {".git", ".gradle", ".idea", "gradle"};//过滤文件名单
 
@@ -150,9 +149,8 @@ public class DataBindingUtils {
 //                log("xmlBean:" + xmlBean);
 //                log("delete1:" + xmlData);
 
-                int i = indexOf + "android:id=\"@+id/".length();
-                int i1 = xmlData.indexOf(">", i) + 1;
-                xmlData = xmlData.substring(i1);
+                int indexOf4 = xmlData.indexOf(">", indexOf) + 1;
+                xmlData = xmlData.substring(indexOf4);
 //                log("delete2:" + xmlData);
                 analysisXml(xmlData, xmlBeanList);
             } else {

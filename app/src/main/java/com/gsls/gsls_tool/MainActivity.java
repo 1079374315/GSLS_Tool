@@ -1,17 +1,17 @@
 package com.gsls.gsls_tool;
 
-import androidx.appcompat.app.AppCompatActivity;
-
 import android.os.Bundle;
 
 import com.gsls.gt.GT;
 
-public class MainActivity extends AppCompatActivity {
+@GT.Annotations.GT_AnnotationActivity(R.layout.activity_main)
+public class MainActivity extends GT.GT_Activity.AnnotationActivity {
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-        GT.logt("迁移成功！");
+    protected void initView(Bundle savedInstanceState) {
+        super.initView(savedInstanceState);
+
     }
+
+
 }

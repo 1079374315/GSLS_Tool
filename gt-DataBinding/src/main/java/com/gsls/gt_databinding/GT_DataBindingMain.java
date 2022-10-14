@@ -185,7 +185,11 @@ public class GT_DataBindingMain extends AbstractProcessor {
                 String queryData = FileUtils.query(bindingBean.getLayoutPath(), bindingBean.getLayoutName());
 
                 List<XmlBean> xmlBeanList = DataBindingUtils.analysisXmlAll(queryData);//解析xml布局源码
-                DataBindingUtils.log("xml close:" + xmlBeanList.size());
+                /*DataBindingUtils.log("xml close:" + xmlBeanList.size());
+                for(int i = 0; i < xmlBeanList.size(); i++){
+
+                    DataBindingUtils.log("xmlBean:" +  xmlBeanList.get(i));
+                }*/
                 bindingBean.setXmlBeanList(xmlBeanList);
 
                 DataBindingUtils.log("bindingBean:" + bindingBean);
