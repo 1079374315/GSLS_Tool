@@ -336,12 +336,12 @@ import dalvik.system.PathClassLoader;
  * 2.优化 GT.Glide 框架
  * 3.增加新的应用检测 前后台切换的方法：
  * //监听是否前台
- * registerActivityLifecycleCallbacks(new GT.GTApplication.AppLifecycleManager(new GT.OnListener<Boolean>() {
- *
- * @Override public void onListener(Boolean... obj) {
- * GT.logt("是否前台:" + obj[0]);
- * }
- * }));
+ registerActivityLifecycleCallbacks(new GT.GTApplication.AppLifecycleManager(new GT.OnListener<Boolean>() {
+
+    @Override public void onListener(Boolean... obj) {
+        GT.logt("是否前台:" + obj[0]);
+    }
+}));
  *
  * <p>
  * <p>
@@ -1747,7 +1747,7 @@ public class GT {
          * TODO 注意:在自定义 evenKey 时请不要写入 "_GT_" 字符,该字符为关键字
          *
          * @param 无法返回数据
-         * @param eventData 发布的事件 (参数仅支持一个,若需要传多参数可传递 Bundle,List,Map,实体类Bean等等)
+         * @param eventData 发布的事件 (参数仅支持一个的基本类型)
          * @param eventKeys 指定发送的区域 (如果不填则默认向所有订阅者发布事件)
          * @return
          */
@@ -1757,11 +1757,12 @@ public class GT {
 
         /**
          * 发布事件 到本进程 与 跨进程
+         *
          * @param eventData 发布的事件 (参数仅支持一个)
          * @param eventKeys 指定发送的区域 (如果不填则默认向所有订阅者发布事件)
          */
         public static void postAlls(Object eventData, Object... eventKeys) {
-            GT.EventBus.getDefault().postAll(eventData,eventKeys);
+            GT.EventBus.getDefault().postAll(eventData, eventKeys);
         }
 
         /**
@@ -1775,11 +1776,12 @@ public class GT {
 
         /**
          * 注册跨进程
+         *
          * @param context
-         * @param subscriber    注册的类
+         * @param subscriber 注册的类
          */
-        public static void registerAcrossProcessess(Object subscriber,Context... mContext) {
-            GT.EventBus.getDefault().registerAcrossProcesses(subscriber,mContext);
+        public static void registerAcrossProcessess(Object subscriber, Context... mContext) {
+            GT.EventBus.getDefault().registerAcrossProcesses(subscriber, mContext);
         }
 
 
@@ -1816,8 +1818,8 @@ public class GT {
          *
          * @param subscriber
          */
-        public static void unregisterAcrossProcessess(Context context) {
-            GT.EventBus.getDefault().unregisterAcrossProcesses(context);
+        public static void unregisterAcrossProcessess(Object subscriber, Context... mContext) {
+            GT.EventBus.getDefault().unregisterAcrossProcesses(subscriber,mContext);
         }
 
         /**
@@ -2028,15 +2030,17 @@ public class GT {
 
         /**
          * 注册跨进程
+         *
          * @param subscriber
-         * @param mContext    注册的类
+         * @param mContext   注册的类
          */
-        public void registerAcrossProcesses(Object subscriber,Context... mContext) {
+        public void registerAcrossProcesses(Object subscriber, Context... mContext) {
             Context context = GT.getActivity();
-            if(mContext.length > 0){
+            if (mContext.length > 0) {
                 context = mContext[0];
             }
-            GT.EventBus.EventBusClient.registerAcrossProcesses(context,subscriber);
+            GT.EventBus.registers(subscriber);
+            GT.EventBus.EventBusClient.registerAcrossProcesses(context, subscriber);
         }
 
 
@@ -2115,7 +2119,12 @@ public class GT {
          *
          * @param subscriber
          */
-        public synchronized void unregisterAcrossProcesses(Context context) {
+        public synchronized void unregisterAcrossProcesses(Object subscriber, Context... mContext) {
+            Context context = GT.getActivity();
+            if (mContext.length > 0) {
+                context = mContext[0];
+            }
+            GT.EventBus.unregisters(subscriber);
             GT.EventBus.EventBusClient.unregisterAcrossProcesses(context);
         }
 
@@ -2214,7 +2223,7 @@ public class GT {
                 interceptList.clear();//清空拦截事件对象
 
                 //获取本次发布事件订阅者数量
-                int count = 0;
+                /*int count = 0;
                 if (eventKeys != null && eventKeys.length != 0) {
                     try {
                         for (String key : eventBusMap.keySet()) {
@@ -2234,10 +2243,11 @@ public class GT {
                     }
                 } else {
                     count = eventBusMap.keySet().size();
-                }
+                }*/
 
                 //如果只有一个发布的那就进行返回数据
-                if (count == 1) return t;
+//                if (count == 1) return t;
+                return t;
             } catch (ConcurrentModificationException e) {
                 if (LOG.GT_LOG_TF) {
                     GT.errt("e:" + e);
@@ -2286,8 +2296,10 @@ public class GT {
 
         /**
          * 发布跨进程事件 (postAcrossProcesse)
-         * @param eventData
-         * @param eventKeys
+         *
+         * @param 无法返回数据
+         * @param eventData 发布的事件 (参数仅支持一个的基本类型)
+         * @param eventKeys 指定发送的区域 (如果不填则默认向所有订阅者发布事件)
          */
         public void postAcrossProcesses(Object eventData, Object... eventKeys) {
             GT.EventBus.EventBusService.sendMsg(eventData, eventKeys);
@@ -2296,12 +2308,13 @@ public class GT {
 
         /**
          * 发布事件 到本进程 与 跨进程
+         *
          * @param eventData 发布的事件 (参数仅支持一个)
          * @param eventKeys 指定发送的区域 (如果不填则默认向所有订阅者发布事件)
          */
         public void postAll(Object eventData, Object... eventKeys) {
-            postAcrossProcesses(eventData,eventKeys);
-            posts(eventData,eventKeys);
+            postAcrossProcesses(eventData, eventKeys);
+            posts(eventData, eventKeys);
         }
 
         /**
@@ -2480,8 +2493,9 @@ public class GT {
 
             /**
              * 注册跨进程
+             *
              * @param context
-             * @param subscriber    注册的类
+             * @param subscriber 注册的类
              */
             public static void registerAcrossProcesses(Context context, Object subscriber) {
                 //第二种：Messenger 传递消息
@@ -2492,93 +2506,106 @@ public class GT {
 
             public static void sendMsg(Object eventData, Object... eventKeys) {
 //                GT.logt("servermessenger:" + servermessenger);
-                if(servermessenger == null) return;
-                Message message = Message.obtain();
-                Bundle bundle = new Bundle();
-                //解析发布事件标识
-                String keys = null;
-                if (eventKeys.length > 0) {
-                    keys = "";
 
-//                    GT.logt("eventBusMap:" + eventBusMap);
-                    //获取当前进程中 已存在的订阅者
-                    String eventBusMapStr = String.valueOf(eventBusMap);
-                    List<String> strList = new ArrayList<>();
-                    for(String str : eventBusMapStr.split(EventBus.SEPARATOR)){
-                        strList.add(str);
-                    }
-
-                    if(eventKeys.length == 1){
-                        keys = String.valueOf(eventKeys[0]);
-//                        GT.logt("keys:" + keys);
-                        if(strList.contains(keys)){//如果当前进程已存在将要发送的订阅者，那就取消跨进程发送，直接转本进程发布事件
-                            posts(eventData,eventKeys);
-                            return;
+                GT.Observable.getDefault().execute(new Observable.RunJava<Object>() {
+                    @Override
+                    public void run() {
+                        if(servermessenger != null) return;
+                        //处理 跨进程 有 0.003 毫秒 延迟的问题,挂起处理最大等待限度为 1秒
+                        for(int i = 0; i < 1000; i++){
+                            GT.Thread.sleep(1);
+                            if(servermessenger != null) break;
                         }
-                    }else{
-                        for (Object keyValue : eventKeys) {
-//                            GT.logt("key:" + keyValue);
-                            if(strList.contains(String.valueOf(keyValue))){//如果当前进程已存在将要发送的订阅者，那就取消跨进程发送，直接转本进程发布事件
-                                posts(eventData,keyValue);
-                                continue;
+                    }
+                }).execute(new Observable.RunAndroid<Object>() {
+                    @Override
+                    public void run() {
+                        if (servermessenger == null) return;
+                        Message message = Message.obtain();
+                        Bundle bundle = new Bundle();
+                        //解析发布事件标识
+                        String keys = null;
+                        if (eventKeys.length > 0) {
+                            keys = "";
+
+                            //获取当前进程中 已存在的订阅者
+                            String eventBusMapStr = String.valueOf(eventBusMap);
+                            List<String> strList = new ArrayList<>();
+                            for (String str : eventBusMapStr.split(EventBus.SEPARATOR)) {
+                                strList.add(str);
                             }
-                            keys += String.valueOf(keyValue) + EventBus.SEPARATOR;
+
+                            if (eventKeys.length == 1) {
+                                keys = String.valueOf(eventKeys[0]);
+                                if (strList.contains(keys)) {//如果当前进程已存在将要发送的订阅者，那就取消跨进程发送，直接转本进程发布事件
+                                    posts(eventData, eventKeys);
+                                    return;
+                                }
+                            } else {
+                                for (Object keyValue : eventKeys) {
+                                    if (strList.contains(String.valueOf(keyValue))) {//如果当前进程已存在将要发送的订阅者，那就取消跨进程发送，直接转本进程发布事件
+                                        posts(eventData, keyValue);
+                                        continue;
+                                    }
+                                    keys += String.valueOf(keyValue) + EventBus.SEPARATOR;
+                                }
+                                //去掉最后一个,
+                                keys = keys.substring(0, keys.length() - EventBus.SEPARATOR.length());
+                            }
+
+                            if (keys != null) {
+                                bundle.putString("key", keys);
+                            }
                         }
-                        //去掉最后一个,
-                        keys = keys.substring(0, keys.length() - EventBus.SEPARATOR.length());
+
+                        //解析发布事件值
+                        if (eventData == null) {
+                            bundle.putString("type", "null");
+                            bundle.putString("value", String.valueOf(eventData));
+                        } else if (eventData instanceof String) {
+                            bundle.putString("type", "String");
+                            bundle.putString("value", String.valueOf(eventData));
+                        } else if (eventData instanceof Integer) {
+                            bundle.putString("type", "Integer");
+                            bundle.putInt("value", Integer.parseInt(String.valueOf(eventData)));
+                        } else if (eventData instanceof Boolean) {
+                            bundle.putString("type", "Boolean");
+                            bundle.putBoolean("value", Boolean.parseBoolean(String.valueOf(eventData)));
+                        } else if (eventData instanceof Double) {
+                            bundle.putString("type", "Double");
+                            bundle.putDouble("value", Double.parseDouble(String.valueOf(eventData)));
+                        } else if (eventData instanceof Float) {
+                            bundle.putString("type", "Float");
+                            bundle.putFloat("value", Float.parseFloat(String.valueOf(eventData)));
+                        } else if (eventData instanceof Long) {
+                            bundle.putString("type", "Long");
+                            bundle.putLong("value", Long.parseLong(String.valueOf(eventData)));
+                        } else if (eventData instanceof Short) {
+                            bundle.putString("type", "Short");
+                            bundle.putShort("value", Short.parseShort(String.valueOf(eventData)));
+                        } else {//其余的类型均解析成 json
+                            String objJson = "";
+                            try {
+                                objJson = JSON.toJson2(eventData);
+                            } catch (Exception e) {
+                                objJson = String.valueOf(eventData);
+                            }
+                            bundle.putString("type", "Object");
+                            bundle.putString("valueObject", objJson);
+                        }
+                        message.setData(bundle);
+//                        GT.logt("向服务器发送一波数据:" + bundle.getString("type") + "," + bundle.getString("key") + "," + eventData);
+                        //非常重要的一句话
+                        message.replyTo = clientmesssager;
+                        try {
+                            servermessenger.send(message);
+                        } catch (RemoteException e) {
+                            e.printStackTrace();
+                        }
                     }
+                });
 
 
-
-                    if (keys != null) {
-                        bundle.putString("key", keys);
-                    }
-                }
-
-                //解析发布事件值
-                if(eventData == null){
-                    bundle.putString("type", "null");
-                    bundle.putString("value", String.valueOf(eventData));
-                }else if (eventData instanceof String) {
-                    bundle.putString("type", "String");
-                    bundle.putString("value", String.valueOf(eventData));
-                } else if (eventData instanceof Integer) {
-                    bundle.putString("type", "Integer");
-                    bundle.putInt("value", Integer.parseInt(String.valueOf(eventData)));
-                } else if (eventData instanceof Boolean) {
-                    bundle.putString("type", "Boolean");
-                    bundle.putBoolean("value", Boolean.parseBoolean(String.valueOf(eventData)));
-                } else if (eventData instanceof Double) {
-                    bundle.putString("type", "Double");
-                    bundle.putDouble("value", Double.parseDouble(String.valueOf(eventData)));
-                } else if (eventData instanceof Float) {
-                    bundle.putString("type", "Float");
-                    bundle.putFloat("value", Float.parseFloat(String.valueOf(eventData)));
-                } else if (eventData instanceof Long) {
-                    bundle.putString("type", "Long");
-                    bundle.putLong("value", Long.parseLong(String.valueOf(eventData)));
-                } else if (eventData instanceof Short) {
-                    bundle.putString("type", "Short");
-                    bundle.putShort("value", Short.parseShort(String.valueOf(eventData)));
-                }else{//其余的类型均解析成 json
-                    String objJson = "";
-                    try{
-                        objJson = JSON.toJson2(eventData);
-                    }catch (Exception e){
-                        objJson = String.valueOf(eventData);
-                    }
-                    bundle.putString("type", "Object");
-                    bundle.putString("valueObject", objJson);
-                }
-                message.setData(bundle);
-//                GT.logt("向非跨进程发送一波数据");
-                //非常重要的一句话
-                message.replyTo = clientmesssager;
-                try {
-                    servermessenger.send(message);
-                } catch (RemoteException e) {
-                    e.printStackTrace();
-                }
             }
 
 
@@ -2587,12 +2614,13 @@ public class GT {
                 @Override
                 public void dispatchMessage(@NonNull Message msg) {
                     super.handleMessage(msg);
+//                    GT.logt("接收到 服务器发来的数据");
                     Bundle bundle = msg.getData();
                     String type = bundle.getString("type");
                     String key = bundle.getString("key");
                     Object value = null;
 
-                    switch (type){
+                    switch (type) {
                         case "null":
                             value = null;
                             break;
@@ -2625,11 +2653,16 @@ public class GT {
 //                    GT.logt("type:" + type);
 //                    GT.logt("key:" + key);
 //                    GT.logt("value:" + value);
-
+//                    GT.logt("发布事件数据");
                     if (key != null) {
                         //如果存在多个发布目标，那就发分割发送多个
-                        if(key.contains(EventBus.SEPARATOR)){
-                            GT.EventBus.posts(value, key.split(EventBus.SEPARATOR));
+                        if (key.contains(EventBus.SEPARATOR)) {
+                            String[] split = key.split(EventBus.SEPARATOR);
+                            Object[] objs = new Object[split.length];
+                            for (int i = 0; i < split.length; i++) {
+                                objs[i] = split[i];
+                            }
+                            GT.EventBus.posts(value, objs);
                         }else{
                             GT.EventBus.posts(value, key);
                         }
@@ -2651,93 +2684,111 @@ public class GT {
 
             public static void sendMsg(Object eventData, Object... eventKeys) {
 //                GT.logt("clientMessager:" + clientMessager);
-                if(clientMessager == null) return;
 
-                Message messenge = Message.obtain();
-                Bundle bundle = new Bundle();
-
-                //解析发布事件标识
-                String keys = null;
-                if (eventKeys.length > 0) {
-                    keys = "";
-
-//                    GT.logt("eventBusMap:" + eventBusMap);
-
-                    //获取当前进程中 已存在的订阅者
-                    String eventBusMapStr = String.valueOf(eventBusMap);
-                    List<String> strList = new ArrayList<>();
-                    for(String str : eventBusMapStr.split(EventBus.SEPARATOR)){
-                        strList.add(str);
-                    }
-
-                    if(eventKeys.length == 1){
-                        keys = String.valueOf(eventKeys[0]);
-//                        GT.logt("keys:" + keys);
-                        if(strList.contains(keys)){//如果当前进程已存在将要发送的订阅者，那就取消跨进程发送，直接转本进程发布事件
-                            posts(eventData,eventKeys);
-                            return;
+                GT.Observable.getDefault().execute(new Observable.RunJava<Object>() {
+                    @Override
+                    public void run() {
+                        if(clientMessager != null) return;
+                        //处理 跨进程 有 0.003 毫秒 延迟的问题,挂起处理最大等待限度为 1秒
+                        for(int i = 0; i < 1000; i++){
+                            GT.Thread.sleep(1);
+                            if(clientMessager != null) break;
                         }
-                    }else{
-                        for (Object keyValue : eventKeys) {
-//                            GT.logt("key:" + keyValue);
-                            if(strList.contains(String.valueOf(keyValue))){//如果当前进程已存在将要发送的订阅者，那就取消跨进程发送，直接转本进程发布事件
-                                posts(eventData,keyValue);
-                                continue;
+
+                    }
+                }).execute(new Observable.RunAndroid<Object>() {
+                    @Override
+                    public void run() {
+                        if (clientMessager == null) return;//等待处理后还是为 null 那就过滤掉本次发送的数据
+                        Message messenge = Message.obtain();
+                        Bundle bundle = new Bundle();
+
+                        //解析发布事件标识
+                        String keys = null;
+                        if (eventKeys.length > 0) {
+                            keys = "";
+
+                            //获取当前进程中 已存在的订阅者
+                            String eventBusMapStr = String.valueOf(eventBusMap);
+                            List<String> strList = new ArrayList<>();
+                            for (String str : eventBusMapStr.split(EventBus.SEPARATOR)) {
+                                strList.add(str);
                             }
-                            keys += String.valueOf(keyValue) + EventBus.SEPARATOR;
+
+                            if (eventKeys.length == 1) {
+                                keys = String.valueOf(eventKeys[0]);
+
+                                if (strList.contains(keys)) {//如果当前进程已存在将要发送的订阅者，那就取消跨进程发送，直接转本进程发布事件
+                                    posts(eventData, eventKeys);
+                                    return;
+                                }
+                            } else {
+                                for (Object keyValue : eventKeys) {
+
+                                    if (strList.contains(String.valueOf(keyValue))) {//如果当前进程已存在将要发送的订阅者，那就取消跨进程发送，直接转本进程发布事件
+                                        posts(eventData, keyValue);
+                                        continue;
+                                    }
+                                    keys += String.valueOf(keyValue) + EventBus.SEPARATOR;
+                                }
+                                //去掉最后一个,
+                                keys = keys.substring(0, keys.length() - EventBus.SEPARATOR.length());
+                            }
+
+                            if (keys != null) {
+                                bundle.putString("key", keys);
+                            }
                         }
-                        //去掉最后一个,
-                        keys = keys.substring(0, keys.length() - EventBus.SEPARATOR.length());
-                    }
 
-                    if (keys != null) {
-                        bundle.putString("key", keys);
-                    }
-                }
+                        //解析发布事件值
+                        if (eventData == null) {
+                            bundle.putString("type", "null");
+                            bundle.putString("value", String.valueOf(eventData));
+                        } else if (eventData instanceof String) {
+                            bundle.putString("type", "String");
+                            bundle.putString("value", String.valueOf(eventData));
+                        } else if (eventData instanceof Integer) {
+                            bundle.putString("type", "Integer");
+                            bundle.putInt("value", Integer.parseInt(String.valueOf(eventData)));
+                        } else if (eventData instanceof Boolean) {
+                            bundle.putString("type", "Boolean");
+                            bundle.putBoolean("value", Boolean.parseBoolean(String.valueOf(eventData)));
+                        } else if (eventData instanceof Double) {
+                            bundle.putString("type", "Double");
+                            bundle.putDouble("value", Double.parseDouble(String.valueOf(eventData)));
+                        } else if (eventData instanceof Float) {
+                            bundle.putString("type", "Float");
+                            bundle.putFloat("value", Float.parseFloat(String.valueOf(eventData)));
+                        } else if (eventData instanceof Long) {
+                            bundle.putString("type", "Long");
+                            bundle.putLong("value", Long.parseLong(String.valueOf(eventData)));
+                        } else if (eventData instanceof Short) {
+                            bundle.putString("type", "Short");
+                            bundle.putShort("value", Short.parseShort(String.valueOf(eventData)));
+                        } else {//其余的类型均解析成 json
+                            String objJson = "";
+                            try {
+                                objJson = JSON.toJson2(eventData);
+                            } catch (Exception e) {
+                                objJson = String.valueOf(eventData);
+                            }
+                            bundle.putString("type", "Object");
+                            bundle.putString("valueObject", objJson);
+                        }
 
-                //解析发布事件值
-                if(eventData == null){
-                    bundle.putString("type", "null");
-                    bundle.putString("value", String.valueOf(eventData));
-                }else if (eventData instanceof String) {
-                    bundle.putString("type", "String");
-                    bundle.putString("value", String.valueOf(eventData));
-                } else if (eventData instanceof Integer) {
-                    bundle.putString("type", "Integer");
-                    bundle.putInt("value", Integer.parseInt(String.valueOf(eventData)));
-                } else if (eventData instanceof Boolean) {
-                    bundle.putString("type", "Boolean");
-                    bundle.putBoolean("value", Boolean.parseBoolean(String.valueOf(eventData)));
-                } else if (eventData instanceof Double) {
-                    bundle.putString("type", "Double");
-                    bundle.putDouble("value", Double.parseDouble(String.valueOf(eventData)));
-                } else if (eventData instanceof Float) {
-                    bundle.putString("type", "Float");
-                    bundle.putFloat("value", Float.parseFloat(String.valueOf(eventData)));
-                } else if (eventData instanceof Long) {
-                    bundle.putString("type", "Long");
-                    bundle.putLong("value", Long.parseLong(String.valueOf(eventData)));
-                } else if (eventData instanceof Short) {
-                    bundle.putString("type", "Short");
-                    bundle.putShort("value", Short.parseShort(String.valueOf(eventData)));
-                }else{//其余的类型均解析成 json
-                    String objJson = "";
-                    try{
-                        objJson = JSON.toJson2(eventData);
-                    }catch (Exception e){
-                        objJson = String.valueOf(eventData);
+//                        GT.logt("向客户端发送一波数据:" + bundle.getString("type") + "," + bundle.getString("key") + "," + eventData);
+                        messenge.setData(bundle);
+                        try {
+                            clientMessager.send(messenge);
+                        } catch (RemoteException e) {
+                            e.printStackTrace();
+                        }
                     }
-                    bundle.putString("type", "Object");
-                    bundle.putString("valueObject", objJson);
-                }
+                });
 
-                messenge.setData(bundle);
-//                GT.logt("向跨进程发送一波数据");
-                try {
-                    clientMessager.send(messenge);
-                } catch (RemoteException e) {
-                    e.printStackTrace();
-                }
+
+
+
             }
 
             public EventBusService() {
@@ -2749,13 +2800,14 @@ public class GT {
                 return new Messenger(new Handler(Looper.myLooper()) {
                     @Override
                     public void dispatchMessage(@NonNull Message msg) {
+//                        GT.logt("接收到客户端信息");
                         //接受客户端消息
                         Bundle bundle = msg.getData();
                         String type = bundle.getString("type");
                         String key = bundle.getString("key");
                         Object value = null;
 
-                        switch (type){
+                        switch (type) {
                             case "null":
                                 value = null;
                                 break;
@@ -2785,15 +2837,16 @@ public class GT {
                                 break;
                         }
 
-//                        GT.logt("type:" + type);
-//                        GT.logt("key:" + key);
-//                        GT.logt("value:" + value);
-
                         //如果存在多个发布目标，那就发分割发送多个
                         if (key != null) {
-                            if(key.contains(EventBus.SEPARATOR)){
-                                GT.EventBus.posts(value, key.split(EventBus.SEPARATOR));
-                            }else{
+                            if (key.contains(EventBus.SEPARATOR)) {
+                                String[] split = key.split(EventBus.SEPARATOR);
+                                Object[] objs = new Object[split.length];
+                                for (int i = 0; i < split.length; i++) {
+                                    objs[i] = split[i];
+                                }
+                                GT.EventBus.posts(value, objs);
+                            } else {
                                 GT.EventBus.posts(value, key);
                             }
                         } else {
@@ -2802,6 +2855,7 @@ public class GT {
 
                         //向客户端发送消息
                         clientMessager = msg.replyTo;//用于获取客户端的信使
+//                        GT.logt("获取客户端的信使");
 
                         super.handleMessage(msg);
                     }
@@ -37823,60 +37877,62 @@ public class GT {
         }
 
         //监听 前后台
-        public static class AppLifecycleManager implements Application.ActivityLifecycleCallbacks {
 
-            private int foregroundActivityCount = 0;
 
-            private GT.OnListener<Boolean> onFrontDesk;
+    }
 
-            public AppLifecycleManager(GT.OnListener<Boolean> onFrontDesk) {
-                this.onFrontDesk = onFrontDesk;
+    public static class AppLifecycleManager implements Application.ActivityLifecycleCallbacks {
+
+        private int foregroundActivityCount = 0;
+
+        private GT.OnListener<Boolean> onFrontDesk;
+
+        public AppLifecycleManager(GT.OnListener<Boolean> onFrontDesk) {
+            this.onFrontDesk = onFrontDesk;
+        }
+
+        @Override
+        public void onActivityCreated(Activity activity, Bundle savedInstanceState) {
+        }
+
+        @Override
+        public void onActivityStarted(Activity activity) {
+        }
+
+        @Override
+        public void onActivityResumed(Activity activity) {
+            foregroundActivityCount++;
+            doSomething();
+        }
+
+        @Override
+        public void onActivityPaused(Activity activity) {
+        }
+
+        @Override
+        public void onActivityStopped(Activity activity) {
+            foregroundActivityCount--;
+            doSomething();
+        }
+
+        @Override
+        public void onActivitySaveInstanceState(Activity activity, Bundle outState) {
+        }
+
+        @Override
+        public void onActivityDestroyed(Activity activity) {
+        }
+
+        //当foregroundActivityCount<=0时可以断定app处于非前台状态
+        //对应前后台状态进行相应的操作
+        private void doSomething() {
+            if (foregroundActivityCount > 0) {
+                //App处于前台时的操作
+                onFrontDesk.onListener(true);
+            } else {
+                //App处于后台时的操作
+                onFrontDesk.onListener(false);
             }
-
-            @Override
-            public void onActivityCreated(Activity activity, Bundle savedInstanceState) {
-            }
-
-            @Override
-            public void onActivityStarted(Activity activity) {
-            }
-
-            @Override
-            public void onActivityResumed(Activity activity) {
-                foregroundActivityCount++;
-                doSomething();
-            }
-
-            @Override
-            public void onActivityPaused(Activity activity) {
-            }
-
-            @Override
-            public void onActivityStopped(Activity activity) {
-                foregroundActivityCount--;
-                doSomething();
-            }
-
-            @Override
-            public void onActivitySaveInstanceState(Activity activity, Bundle outState) {
-            }
-
-            @Override
-            public void onActivityDestroyed(Activity activity) {
-            }
-
-            //当foregroundActivityCount<=0时可以断定app处于非前台状态
-            //对应前后台状态进行相应的操作
-            private void doSomething() {
-                if (foregroundActivityCount > 0) {
-                    //App处于前台时的操作
-                    onFrontDesk.onListener(true);
-                } else {
-                    //App处于后台时的操作
-                    onFrontDesk.onListener(false);
-                }
-            }
-
         }
 
     }
