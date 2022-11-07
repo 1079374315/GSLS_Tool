@@ -143,6 +143,7 @@ import android.view.animation.TranslateAnimation;
 import android.view.inputmethod.InputMethodManager;
 import android.webkit.ClientCertRequest;
 import android.webkit.ConsoleMessage;
+import android.webkit.DownloadListener;
 import android.webkit.GeolocationPermissions;
 import android.webkit.HttpAuthHandler;
 import android.webkit.JavascriptInterface;
@@ -317,32 +318,15 @@ import dalvik.system.PathClassLoader;
  * GSLS_Tool
  * <p>
  * <p>
- * 更新时间:2022.10.14
- * 更新内容 v1.4.2.3 版本 大爆料：
+ * 更新时间:2022.11.7
+ * 更新内容 v1.4.2.5 版本 大爆料：
  * CSDN 博客/官网教程:https://blog.csdn.net/qq_39799899
  * GitHub https://github.com/1079374315/GT
- * 新增 MVC、MVP、MVVM、GT_MVVM(辅助框架)、
- * GT.EventBus (数据传递)框架、
- * Observable (异步框架）、
- * HttpCall (网络请求框架)、
- * Glide (图片加载框架，支持三级缓存)
- * 内容如下：
- * 1.新增 GT.EventBus 取消事件分发 、跨进程功能
- * 2.新增 GT_Notification 通知封装类 (让自定义通知更加简单)
- * 3.新增 BaseWeb 封装类，让 JS 交互更轻松
- * <p>
- * 优化:
- * 1.优化 封装的适配器
- * 2.优化 GT.Glide 框架
- * 3.增加新的应用检测 前后台切换的方法：
- * //监听是否前台
- registerActivityLifecycleCallbacks(new GT.GTApplication.AppLifecycleManager(new GT.OnListener<Boolean>() {
-
-    @Override public void onListener(Boolean... obj) {
-        GT.logt("是否前台:" + obj[0]);
-    }
-}));
- *
+ * 更新内容如下：
+ * 1.优化图片加载框架，并修复部分伙伴们反馈的问题,支持动态图圆角修改
+ * 2.增强 WebViews 封装类，默认支持 H5 调用相册与拍摄功能
+ * 3.增强 ImageViewTools 工具类，增加少许API方法
+ * 4.
  * <p>
  * <p>
  * 小提示：(用于 AndroidStudio )
@@ -355,7 +339,7 @@ import dalvik.system.PathClassLoader;
 public class GT {
 
     //================================== 所有属于 GT 类的属性 =======================================
-    private volatile static GT gt = null;//定义 GT 对象
+    private static GT gt = null;//定义 GT 对象
 
     private GT() {
     }
@@ -765,7 +749,16 @@ public class GT {
         if (TOAST.TOAST_TF) {
             Context context = getActivity();
             if (context != null && context != null) {
-                Toast.makeText(context, String.valueOf(msg), Toast.LENGTH_SHORT).show();
+                if (GT.Thread.isMainThread()) {
+                    Toast.makeText(context, String.valueOf(msg), Toast.LENGTH_SHORT).show();
+                } else {
+                    GT.Thread.runAndroid(new Runnable() {
+                        @Override
+                        public void run() {
+                            Toast.makeText(context, String.valueOf(msg), Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                }
             } else {
                 if (LOG.LOG_TF)//设置为默认输出日志
                     err("GT_bug", "消息框错误日志：你没有为 Context 进行赋值 ，却引用了 Toast 导致该功能无法实现。解决措施 在调用 toast 代码之前添加：GT.getGT().setactivity(activity);");
@@ -783,7 +776,90 @@ public class GT {
     public static void toast_time(Object msg, long time) {
         if (TOAST.TOAST_TF) {
             Context context = getActivity();
-            if (context != null && context != null) {
+            if (GT.Thread.isMainThread()) {
+                if (context != null && context != null) {
+                    final Toast toast = Toast.makeText(context, String.valueOf(msg), Toast.LENGTH_LONG);
+                    final Timer timer = new Timer();
+                    timer.schedule(new TimerTask() {
+                        @Override
+                        public void run() {
+                            toast.show();
+                        }
+                    }, 0, 3000);
+                    new Timer().schedule(new TimerTask() {
+                        @Override
+                        public void run() {
+                            toast.cancel();
+                            timer.cancel();
+                        }
+                    }, time);
+                } else {
+                    if (LOG.LOG_TF)//设置为默认输出日志
+                        err("GT_bug", "消息框错误日志：你没有为 Context 进行赋值 ，却引用了 Toast 导致该功能无法实现。解决措施 在调用 toast 代码之前添加：GT.getGT().setactivity(activity);");
+                }
+            } else {
+                GT.Thread.runAndroid(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (context != null && context != null) {
+                            final Toast toast = Toast.makeText(context, String.valueOf(msg), Toast.LENGTH_LONG);
+                            final Timer timer = new Timer();
+                            timer.schedule(new TimerTask() {
+                                @Override
+                                public void run() {
+                                    toast.show();
+                                }
+                            }, 0, 3000);
+                            new Timer().schedule(new TimerTask() {
+                                @Override
+                                public void run() {
+                                    toast.cancel();
+                                    timer.cancel();
+                                }
+                            }, time);
+                        } else {
+                            if (LOG.LOG_TF)//设置为默认输出日志
+                                err("GT_bug", "消息框错误日志：你没有为 Context 进行赋值 ，却引用了 Toast 导致该功能无法实现。解决措施 在调用 toast 代码之前添加：GT.getGT().setactivity(activity);");
+                        }
+                    }
+                });
+            }
+
+
+        }
+    }/**/
+
+    /**
+     * 可多个消息框 Toast
+     *
+     * @param context 上下文
+     * @param msg     object 类型的消息
+     */
+    public static void toast_s(Context context, Object msg) {
+        if (!TOAST.TOAST_TF) return;
+        if (GT.Thread.isMainThread()) {
+            Toast.makeText(context, String.valueOf(msg), Toast.LENGTH_SHORT).show();
+        } else {
+            GT.Thread.runAndroid(new Runnable() {
+                @Override
+                public void run() {
+                    Toast.makeText(context, String.valueOf(msg), Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+
+    }
+
+    /**
+     * 可多个消息框 Toast
+     *
+     * @param context 上下文
+     * @param msg     object 类型的消息
+     */
+    public static void toast_time(Context context, Object msg, int time) {
+        if (TOAST.TOAST_TF) {
+
+            if (GT.Thread.isMainThread()) {
                 final Toast toast = Toast.makeText(context, String.valueOf(msg), Toast.LENGTH_LONG);
                 final Timer timer = new Timer();
                 timer.schedule(new TimerTask() {
@@ -800,47 +876,28 @@ public class GT {
                     }
                 }, time);
             } else {
-                if (LOG.LOG_TF)//设置为默认输出日志
-                    err("GT_bug", "消息框错误日志：你没有为 Context 进行赋值 ，却引用了 Toast 导致该功能无法实现。解决措施 在调用 toast 代码之前添加：GT.getGT().setactivity(activity);");
+                GT.Thread.runAndroid(new Runnable() {
+                    @Override
+                    public void run() {
+                        final Toast toast = Toast.makeText(context, String.valueOf(msg), Toast.LENGTH_LONG);
+                        final Timer timer = new Timer();
+                        timer.schedule(new TimerTask() {
+                            @Override
+                            public void run() {
+                                toast.show();
+                            }
+                        }, 0, 3000);
+                        new Timer().schedule(new TimerTask() {
+                            @Override
+                            public void run() {
+                                toast.cancel();
+                                timer.cancel();
+                            }
+                        }, time);
+                    }
+                });
             }
 
-        }
-    }/**/
-
-    /**
-     * 可多个消息框 Toast
-     *
-     * @param context 上下文
-     * @param msg     object 类型的消息
-     */
-    public static void toast_s(Context context, Object msg) {
-        if (TOAST.TOAST_TF)
-            Toast.makeText(context, String.valueOf(msg), Toast.LENGTH_SHORT).show();
-    }
-
-    /**
-     * 可多个消息框 Toast
-     *
-     * @param context 上下文
-     * @param msg     object 类型的消息
-     */
-    public static void toast_time(Context context, Object msg, int time) {
-        if (TOAST.TOAST_TF) {
-            final Toast toast = Toast.makeText(context, String.valueOf(msg), Toast.LENGTH_LONG);
-            final Timer timer = new Timer();
-            timer.schedule(new TimerTask() {
-                @Override
-                public void run() {
-                    toast.show();
-                }
-            }, 0, 3000);
-            new Timer().schedule(new TimerTask() {
-                @Override
-                public void run() {
-                    toast.cancel();
-                    timer.cancel();
-                }
-            }, time);
 
         }
     }
@@ -851,13 +908,24 @@ public class GT {
      */
     public static void toast(Object message) {
         if (getActivity() != null) {
-            Toast toast = null;
-            if (toast == null) {
-                toast = Toast.makeText(getActivity(), message.toString(), Toast.LENGTH_SHORT);
+            if (GT.Thread.isMainThread()) {
+                Toast toast = null;
+                if (toast == null) {
+                    toast = Toast.makeText(getActivity(), message.toString(), Toast.LENGTH_SHORT);
+                } else {
+                    toast.setText(message.toString());
+                }
+                toast.show();
             } else {
-                toast.setText(message.toString());
+                Toast toast = null;
+                if (toast == null) {
+                    toast = Toast.makeText(getActivity(), message.toString(), Toast.LENGTH_SHORT);
+                } else {
+                    toast.setText(message.toString());
+                }
+                toast.show();
             }
-            toast.show();
+
         } else {
             log(getLineInfo(1), "当前没有赋值 Context 无法显示 Toast ");
         }
@@ -865,15 +933,29 @@ public class GT {
     }
 
     public static void toast(Context context, Object content) {
-        Toast toast = null;
-        if (toast == null) {
-            toast = Toast.makeText(getActivity(), content.toString(), Toast.LENGTH_SHORT);
+        if (GT.Thread.isMainThread()) {
+            Toast toast = null;
+            if (toast == null) {
+                toast = Toast.makeText(getActivity(), content.toString(), Toast.LENGTH_SHORT);
+            } else {
+                toast.setText(content.toString());
+            }
+            toast.show();
         } else {
-            toast.setText(content.toString());
+            GT.Thread.runAndroid(new Runnable() {
+                @Override
+                public void run() {
+                    Toast toast = null;
+                    if (toast == null) {
+                        toast = Toast.makeText(getActivity(), content.toString(), Toast.LENGTH_SHORT);
+                    } else {
+                        toast.setText(content.toString());
+                    }
+                    toast.show();
+                }
+            });
         }
-        toast.show();
     }
-
 
     private static GT.TOAST.ToastView toastView;
 
@@ -885,17 +967,31 @@ public class GT {
      * @param Gravity 吐司弹出位置 默认 Gravity.BOTTOM
      */
     public static GT.TOAST.ToastView toastView(Context context, int layout, int... gravitys) {
-        int gravity = Gravity.BOTTOM;
-        if (gravitys.length > 0) {
-            gravity = gravitys[0];
-        }
-        if (toastView == null) {
-            toastView = new GT.TOAST.ToastView().initLayout(layout, gravity, context);
-        }
 
+        if (GT.Thread.isMainThread()) {
+            int gravity = Gravity.BOTTOM;
+            if (gravitys.length > 0) {
+                gravity = gravitys[0];
+            }
+            if (toastView == null) {
+                toastView = new GT.TOAST.ToastView().initLayout(layout, gravity, context);
+            }
+        } else {
+            GT.Thread.runAndroid(new Runnable() {
+                @Override
+                public void run() {
+                    int gravity = Gravity.BOTTOM;
+                    if (gravitys.length > 0) {
+                        gravity = gravitys[0];
+                    }
+                    if (toastView == null) {
+                        toastView = new GT.TOAST.ToastView().initLayout(layout, gravity, context);
+                    }
+                }
+            });
+        }
         return toastView;
     }
-
 
     public static GT_Fragment getGT_Fragment() {
         return GT_Fragment.gt_fragment;
@@ -1819,7 +1915,7 @@ public class GT {
          * @param subscriber
          */
         public static void unregisterAcrossProcessess(Object subscriber, Context... mContext) {
-            GT.EventBus.getDefault().unregisterAcrossProcesses(subscriber,mContext);
+            GT.EventBus.getDefault().unregisterAcrossProcesses(subscriber, mContext);
         }
 
         /**
@@ -2510,11 +2606,11 @@ public class GT {
                 GT.Observable.getDefault().execute(new Observable.RunJava<Object>() {
                     @Override
                     public void run() {
-                        if(servermessenger != null) return;
+                        if (servermessenger != null) return;
                         //处理 跨进程 有 0.003 毫秒 延迟的问题,挂起处理最大等待限度为 1秒
-                        for(int i = 0; i < 1000; i++){
+                        for (int i = 0; i < 1000; i++) {
                             GT.Thread.sleep(1);
-                            if(servermessenger != null) break;
+                            if (servermessenger != null) break;
                         }
                     }
                 }).execute(new Observable.RunAndroid<Object>() {
@@ -2663,7 +2759,7 @@ public class GT {
                                 objs[i] = split[i];
                             }
                             GT.EventBus.posts(value, objs);
-                        }else{
+                        } else {
                             GT.EventBus.posts(value, key);
                         }
                     } else {
@@ -2688,11 +2784,11 @@ public class GT {
                 GT.Observable.getDefault().execute(new Observable.RunJava<Object>() {
                     @Override
                     public void run() {
-                        if(clientMessager != null) return;
+                        if (clientMessager != null) return;
                         //处理 跨进程 有 0.003 毫秒 延迟的问题,挂起处理最大等待限度为 1秒
-                        for(int i = 0; i < 1000; i++){
+                        for (int i = 0; i < 1000; i++) {
                             GT.Thread.sleep(1);
-                            if(clientMessager != null) break;
+                            if (clientMessager != null) break;
                         }
 
                     }
@@ -2785,8 +2881,6 @@ public class GT {
                         }
                     }
                 });
-
-
 
 
             }
@@ -14716,7 +14810,12 @@ public class GT {
                     public GlideBean run() {
                         if (glideBean.isGIF) {
                             //GIF 处理逻辑
-                            ViewUtils.GTImageView gtIv = new ViewUtils.GTImageView(getActivity());
+                            ViewUtils.GTImageView gtIv = null;
+                            if (glideBean.roundCorner != 0) {
+                                gtIv = new ViewUtils.GTImageView(getActivity(), glideBean.roundCorner);
+                            } else {
+                                gtIv = new ViewUtils.GTImageView(getActivity(), glideBean.roundCorner_topLeft, glideBean.roundCorner_topRight, glideBean.roundCorner_bottomLeft, glideBean.roundCorner_bottomRight);
+                            }
                             gtIv.setUrl(String.valueOf(glideBean.resource));
                             glideBean.imgObjet = gtIv;
                         } else {
@@ -14750,12 +14849,12 @@ public class GT {
 //                                    GT.logl("使用 网络");
                                         //网络加载或本地加载图片
                                         if (url.contains("http")) {
-                                            glideBean.imgObjet = ImageViewTools.getImageInputStream(url);//Bitmap 网络
+                                            glideBean.imgObjet = ImageViewTools.getImageBitmap(url);//Bitmap 网络
                                             if (glideBean.imgObjet != null && LOG.GT_LOG_TF) {
                                                 GT.logl("使用 网络下载图片");
                                             }
                                         } else {
-                                            glideBean.imgObjet = ApplicationUtils.getLoacalBitmap(url);//Bitmap 本地
+                                            glideBean.imgObjet = ImageViewTools.getLoacalBitmap(url);//Bitmap 本地
                                             if (glideBean.imgObjet != null && LOG.GT_LOG_TF) {
                                                 GT.logl("使用 本地图片");
                                             }
@@ -14776,7 +14875,7 @@ public class GT {
                                     }
 
                                     if (glideBean.imgObjet == null) {
-                                        glideBean.imgObjet = ApplicationUtils.getLoacalBitmap(filePath);//Bitmap
+                                        glideBean.imgObjet = ImageViewTools.getLoacalBitmap(filePath);//Bitmap
                                         isSaveSD = true;
                                     }
                                 } else if (glideBean.resource instanceof Byte[]) {
@@ -14801,9 +14900,9 @@ public class GT {
                                     }
                                 } else if (glideBean.resource instanceof Uri) {
                                     //加载路径图片(需要加缓存)
-                                    String uri = ((Uri) glideBean.resource).getPath();
+                                    String uriKey = String.valueOf(glideBean.resource);
                                     if (key[0] == null) {
-                                        key[0] = uri;
+                                        key[0] = uriKey;
                                     }
                                     //使用缓存
                                     if (isCache && finalIsCache && keyList.containsKey(key[0])) {
@@ -14812,7 +14911,18 @@ public class GT {
                                     }
 
                                     if (glideBean.imgObjet == null) {
-                                        glideBean.imgObjet = ApplicationUtils.getLoacalBitmap(uri);//Bitmap
+                                        Uri uri = (Uri) glideBean.resource;
+
+                                        Context context = iv.getContext();
+
+                                        if (context == null) {
+                                            context = getActivity();
+                                        }
+                                        if (context == null) {
+                                            context = GT_Fragment.getGt_fragment().getActivity();
+                                        }
+
+                                        glideBean.imgObjet = ImageViewTools.uriToBitmap(context, uri);//Bitmap
                                         isSaveSD = true;
                                     }
                                 } else if (glideBean.resource instanceof Bitmap) {
@@ -14827,15 +14937,7 @@ public class GT {
                                     if (key[0] == null) {
                                         key[0] = String.valueOf(glideBean.resource);
                                     }
-
-                                    BitmapFactory.Options options = new BitmapFactory.Options();
-                                    options.inPurgeable = true;
-                                    options.inInputShareable = true;
-                                    options.inJustDecodeBounds = false;
-                                    InputStream is = getActivity().getResources().openRawResource((Integer) glideBean.resource);
-                                    Bitmap bitmap = BitmapFactory.decodeStream(is, null, options);
-
-                                    glideBean.imgObjet = bitmap;//Integer
+                                    glideBean.imgObjet = GT.ImageViewTools.getBitmap((Integer) glideBean.resource);
                                 } else if (glideBean.resource instanceof Drawable) {
                                     //加载 Drawable 资源
                                     Drawable drawable = (Drawable) glideBean.resource;
@@ -15305,10 +15407,7 @@ public class GT {
         public static WebView loadAppHtml(Context context, WebView webView, String url, boolean isCache, final OnLoadWebViewListener onLoadWebViewListener) {
             if (webView == null || context == null) return webView;
 
-            //增强 WebView
-            setWebView(context, webView, isCache);
-
-            //添加监听
+            //添加所有监听
             addListener(webView, onLoadWebViewListener);
 
             // 特别注意：5.1以上默认禁止了https和http混用，以下方式是开启
@@ -15336,143 +15435,120 @@ public class GT {
 
                 @Override
                 public boolean onConsoleMessage(ConsoleMessage consoleMessage) {
-                    onLoadWebViewListener.onConsoleMessage(consoleMessage);
-                    return super.onConsoleMessage(consoleMessage);
+                    return onLoadWebViewListener.onConsoleMessage(consoleMessage);
                 }
 
                 @Override
                 public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, Message resultMsg) {
-                    onLoadWebViewListener.onCreateWindow(view, isDialog, isUserGesture, resultMsg);
-                    return super.onCreateWindow(view, isDialog, isUserGesture, resultMsg);
+                    return onLoadWebViewListener.onCreateWindow(view, isDialog, isUserGesture, resultMsg);
 
                 }
 
                 @Override
                 public boolean onJsBeforeUnload(WebView view, String url, String message, JsResult result) {
-                    onLoadWebViewListener.onJsBeforeUnload(view, url, message, result);
-                    return super.onJsBeforeUnload(view, url, message, result);
+                    return onLoadWebViewListener.onJsBeforeUnload(view, url, message, result);
                 }
 
                 @Override
                 public boolean onJsConfirm(WebView view, String url, String message, JsResult result) {
-                    onLoadWebViewListener.onJsConfirm(view, url, message, result);
-                    return super.onJsConfirm(view, url, message, result);
+                    return onLoadWebViewListener.onJsConfirm(view, url, message, result);
                 }
 
                 @Override
                 public boolean onJsPrompt(WebView view, String url, String message, String defaultValue, JsPromptResult result) {
-                    onLoadWebViewListener.onJsPrompt(view, url, message, defaultValue, result);
-                    return super.onJsPrompt(view, url, message, defaultValue, result);
+                    return onLoadWebViewListener.onJsPrompt(view, url, message, defaultValue, result);
 
                 }
 
                 @Override
                 public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
-                    onLoadWebViewListener.onShowFileChooser(webView, filePathCallback, fileChooserParams);
-                    return super.onShowFileChooser(webView, filePathCallback, fileChooserParams);
+                    return onLoadWebViewListener.onShowFileChooser(webView, filePathCallback, fileChooserParams);
                 }
 
                 @Override
                 public void onCloseWindow(WebView window) {
-                    super.onCloseWindow(window);
                     onLoadWebViewListener.onCloseWindow(window);
                 }
 
                 @Override
                 public void onGeolocationPermissionsHidePrompt() {
-                    super.onGeolocationPermissionsHidePrompt();
                     onLoadWebViewListener.onGeolocationPermissionsHidePrompt();
                 }
 
                 @Override
                 public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
-                    super.onGeolocationPermissionsShowPrompt(origin, callback);
                     onLoadWebViewListener.onGeolocationPermissionsShowPrompt(origin, callback);
                 }
 
                 @Override
                 public void onHideCustomView() {
-                    super.onHideCustomView();
                     onLoadWebViewListener.onHideCustomView();
                 }
 
                 @Override
                 public void onPermissionRequest(PermissionRequest request) {
-                    super.onPermissionRequest(request);
                     onLoadWebViewListener.onPermissionRequest(request);
                 }
 
                 @Override
                 public void onPermissionRequestCanceled(PermissionRequest request) {
-                    super.onPermissionRequestCanceled(request);
                     onLoadWebViewListener.onPermissionRequestCanceled(request);
                 }
 
                 @Override
                 public void onReceivedIcon(WebView view, Bitmap icon) {
-                    super.onReceivedIcon(view, icon);
                     onLoadWebViewListener.onReceivedIcon(view, icon);
                 }
 
                 @Override
                 public void onReceivedTitle(WebView view, String title) {
-                    super.onReceivedTitle(view, title);
                     onLoadWebViewListener.onReceivedTitle(view, title);
                 }
 
                 @Override
                 public void onReceivedTouchIconUrl(WebView view, String url, boolean precomposed) {
-                    super.onReceivedTouchIconUrl(view, url, precomposed);
                     onLoadWebViewListener.onReceivedTouchIconUrl(view, url, precomposed);
                 }
 
                 @Override
                 public void onRequestFocus(WebView view) {
-                    super.onRequestFocus(view);
                     onLoadWebViewListener.onRequestFocus(view);
                 }
 
                 @Override
                 public void onShowCustomView(View view, CustomViewCallback callback) {
-                    super.onShowCustomView(view, callback);
                     onLoadWebViewListener.onShowCustomView(view, callback);
                 }
 
                 @Override
                 public boolean onJsTimeout() {
-                    onLoadWebViewListener.onJsTimeout();
-                    return super.onJsTimeout();
+                    return onLoadWebViewListener.onJsTimeout();
                 }
 
 
                 @Override
                 public void onShowCustomView(View view, int requestedOrientation, CustomViewCallback callback) {
-                    super.onShowCustomView(view, requestedOrientation, callback);
                     onLoadWebViewListener.onShowCustomView(view, requestedOrientation, callback);
                 }
 
                 @Override
                 public void onConsoleMessage(String message, int lineNumber, String sourceID) {
-                    super.onConsoleMessage(message, lineNumber, sourceID);
                     onLoadWebViewListener.onConsoleMessage(message, lineNumber, sourceID);
                 }
 
                 @Override
                 public void onExceededDatabaseQuota(String url, String databaseIdentifier, long quota, long estimatedDatabaseSize, long totalQuota, WebStorage.QuotaUpdater quotaUpdater) {
-                    super.onExceededDatabaseQuota(url, databaseIdentifier, quota, estimatedDatabaseSize, totalQuota, quotaUpdater);
                     onLoadWebViewListener.onExceededDatabaseQuota(url, databaseIdentifier, quota, estimatedDatabaseSize, totalQuota, quotaUpdater);
                 }
 
                 @Override
                 public boolean onJsAlert(WebView view, String url, String message, JsResult result) {
-                    onLoadWebViewListener.onJsAlert(view, url, message, result);
-                    return super.onJsAlert(view, url, message, result);
+                    return onLoadWebViewListener.onJsAlert(view, url, message, result);
                 }
 
                 @Override
                 public void onProgressChanged(WebView view, int newProgress) {
                     onLoadWebViewListener.onProgressChanged(view, newProgress);
-                    super.onProgressChanged(view, newProgress);
                     if (newProgress <= 100 && !isLoadSuccess) {
                         if (newProgress == 100) {
                             isLoadSuccess = true;
@@ -15487,129 +15563,110 @@ public class GT {
 
                 @Override
                 public void onTooManyRedirects(WebView view, Message cancelMsg, Message continueMsg) {
-                    super.onTooManyRedirects(view, cancelMsg, continueMsg);
                     onLoadWebViewListener.onTooManyRedirects(view, cancelMsg, continueMsg);
                 }
 
                 @Nullable
                 @Override
                 public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
-                    onLoadWebViewListener.shouldInterceptRequest(view, url);
-                    return super.shouldInterceptRequest(view, url);
+                    return onLoadWebViewListener.shouldInterceptRequest(view, url);
                 }
 
                 @Nullable
                 @Override
                 public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-                    onLoadWebViewListener.shouldInterceptRequest(view, request);
-                    return super.shouldInterceptRequest(view, request);
+
+                    return onLoadWebViewListener.shouldInterceptRequest(view, request);
                 }
 
                 @Override
                 public void onUnhandledKeyEvent(WebView view, KeyEvent event) {
-                    super.onUnhandledKeyEvent(view, event);
                     onLoadWebViewListener.onUnhandledKeyEvent(view, event);
 
                 }
 
                 @Override
                 public void onScaleChanged(WebView view, float oldScale, float newScale) {
-                    super.onScaleChanged(view, oldScale, newScale);
                     onLoadWebViewListener.onScaleChanged(view, oldScale, newScale);
                 }
 
                 @Override
                 public void onSafeBrowsingHit(WebView view, WebResourceRequest request, int threatType, SafeBrowsingResponse callback) {
-                    super.onSafeBrowsingHit(view, request, threatType, callback);
                     onLoadWebViewListener.onSafeBrowsingHit(view, request, threatType, callback);
                 }
 
                 @Override
                 public void onReceivedLoginRequest(WebView view, String realm, @Nullable String account, String args) {
-                    super.onReceivedLoginRequest(view, realm, account, args);
                     onLoadWebViewListener.onReceivedLoginRequest(view, realm, account, args);
                 }
 
                 @Override
                 public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse errorResponse) {
-                    super.onReceivedHttpError(view, request, errorResponse);
                     onLoadWebViewListener.onReceivedHttpError(view, request, errorResponse);
                 }
 
                 @Override
                 public void onReceivedHttpAuthRequest(WebView view, HttpAuthHandler handler, String host, String realm) {
-                    super.onReceivedHttpAuthRequest(view, handler, host, realm);
                     onLoadWebViewListener.onReceivedHttpAuthRequest(view, handler, host, realm);
                 }
 
                 @Override
                 public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
-                    super.onReceivedError(view, request, error);
                     onLoadWebViewListener.onReceivedError(view, request, error);
                 }
 
                 @Override
                 public void onPageCommitVisible(WebView view, String url) {
-                    super.onPageCommitVisible(view, url);
                     onLoadWebViewListener.onPageCommitVisible(view, url);
                 }
 
                 @Override
                 public void onLoadResource(WebView view, String url) {
-                    super.onLoadResource(view, url);
                     onLoadWebViewListener.onLoadResource(view, url);
                 }
 
                 @Override
                 public void onFormResubmission(WebView view, Message dontResend, Message resend) {
-                    super.onFormResubmission(view, dontResend, resend);
                     onLoadWebViewListener.onFormResubmission(view, dontResend, resend);
                 }
 
                 @Override
                 public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
-                    onLoadWebViewListener.onRenderProcessGone(view, detail);
-                    return super.onRenderProcessGone(view, detail);
+                    return onLoadWebViewListener.onRenderProcessGone(view, detail);
                 }
 
                 @Override
                 public void onReceivedClientCertRequest(WebView view, ClientCertRequest request) {
-                    super.onReceivedClientCertRequest(view, request);
                     onLoadWebViewListener.onReceivedClientCertRequest(view, request);
 
                 }
 
                 @Override
                 public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
-                    super.onReceivedSslError(view, handler, error);
                     onLoadWebViewListener.onReceivedSslError(view, handler, error);
                     handler.proceed();    //表示等待证书响应
                 }
 
                 @Override
                 public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                    onLoadWebViewListener.shouldOverrideUrlLoading(view, url);
-                    view.loadUrl(url);
-                    return super.shouldOverrideUrlLoading(view, url);
+                    view.loadUrl(url);//防止加载网页时调起系统浏览器
+                    return onLoadWebViewListener.shouldOverrideUrlLoading(view, url);
                 }
 
                 @Override
                 public void onPageStarted(WebView view, String url, Bitmap favicon) {
-                    super.onPageStarted(view, url, favicon);
                     onLoadWebViewListener.onPageStarted(view, url, favicon);
                     onLoadWebViewListener.onLoadStart(view, url, favicon);
                 }
 
                 @Override
                 public void onPageFinished(WebView view, String url) {
-                    super.onPageFinished(view, url);
                     onLoadWebViewListener.onPageFinished(view, url);
                     onLoadWebViewListener.onLoadClose(view, url);
                 }
 
                 @Override
                 public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
-                    super.onReceivedError(view, errorCode, description, failingUrl);
                     onLoadWebViewListener.onReceivedError(view, errorCode, description, failingUrl);
                     onLoadWebViewListener.onLoadError(view, errorCode, description, failingUrl);
                 }
@@ -15641,54 +15698,97 @@ public class GT {
          *
          * @param context
          * @param webView
-         * @param isCache 是否缓存
+         * @param isCache          是否允许Web缓存
+         * @param downloadListener 监听下载文件
          * @return
          */
-        public static WebView setWebView(Context context, WebView webView, boolean isCache) {
+        public static WebView setWebView(Context context, WebView webView, boolean isCache, DownloadListener... downloadListener) {
+            setWebViewKernel(context, webView, isCache, false, downloadListener);
+            return webView;
+        }
+
+        /**
+         * 仅仅加强 WebView
+         *
+         * @param context
+         * @param webView
+         * @param isCache          是否允许web缓存
+         * @param isZoom           是否支持web缩放
+         * @param downloadListener 监听下载文件
+         * @return
+         */
+        public static WebView setWebView(Context context, WebView webView, boolean isCache, boolean isZoom, DownloadListener... downloadListener) {
+            setWebViewKernel(context, webView, isCache, isZoom, downloadListener);
+            return webView;
+        }
+
+        /**
+         * @param context
+         * @param webView
+         * @param isCache          是否允许web缓存
+         * @param isZoom           是否支持web缩放
+         * @param downloadListener 监听下载文件
+         * @return
+         */
+        public static WebView setWebViewKernel(Context context, WebView webView, boolean isCache, boolean isZoom, DownloadListener... downloadListener) {
             if (webView == null || context == null) return webView;
 
             //声明WebSettings子类
             WebSettings webSettings = webView.getSettings();
 
-            //如果访问的页面中要与Javascript交互，则webview必须设置支持Javascript
+            //设置下载监听
+            if (downloadListener.length > 0) {
+                webView.setDownloadListener(downloadListener[0]);
+            }
+
             webSettings.setJavaScriptEnabled(true);
-            // 若加载的 html 里有JS 在执行动画等操作，会造成资源浪费（CPU、电量）
-            // 在 onStop 和 onResume 里分别把 setJavaScriptEnabled() 给设置成 false 和 true 即可
+
+            webSettings.setLayoutAlgorithm(WebSettings.LayoutAlgorithm.NARROW_COLUMNS);//设置布局算法
+            webSettings.setSupportMultipleWindows(true);//设置支持多窗口
+            webSettings.setGeolocationEnabled(true);//设置地理位置使
 
             //开启密码保存功能
             webSettings.setSavePassword(true);
 
             //支持插件
-            webSettings.setPluginState(WebSettings.PluginState.ON);
+            webSettings.setPluginState(WebSettings.PluginState.ON_DEMAND);
 
             //设置自适应屏幕，两者合用
             webSettings.setUseWideViewPort(true); //将图片调整到适合webview的大小
             webSettings.setLoadWithOverviewMode(true); // 缩放至屏幕的大小
 
+            webSettings.setRenderPriority(WebSettings.RenderPriority.HIGH);// 提高网页渲染的优先级
+
             //缩放操作
-            webSettings.setSupportZoom(true); //支持缩放，默认为true。是下面那个的前提。
-            webSettings.setBuiltInZoomControls(true); //设置内置的缩放控件。若为false，则该WebView不可缩放
-            webSettings.setDisplayZoomControls(false); //隐藏原生的缩放控件
+            webSettings.setSupportZoom(isZoom); //支持缩放，默认为true。是下面那个的前提。
+            webSettings.setBuiltInZoomControls(isZoom); //设置内置的缩放控件。若为false，则该WebView不可缩放
+            webSettings.setDisplayZoomControls(isZoom); //隐藏原生的缩放控件
 
             //其他细节操作
-            webSettings.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK); //关闭webview中缓存
             webSettings.setAllowFileAccess(true); //设置可以访问文件
             webSettings.setJavaScriptCanOpenWindowsAutomatically(true); //支持通过JS打开新窗口
             webSettings.setLoadsImagesAutomatically(true); //支持自动加载图片
             webSettings.setDefaultTextEncodingName("utf-8");//设置编码格式
             webSettings.setAllowUniversalAccessFromFileURLs(false);//不允许通过 file url 加载的 Javascript 可以访问其他的源(包括http、https等源)
+            webSettings.setDomStorageEnabled(true); //开启 DOM storage API 功能(允许 H5 使用的技术)
+            webSettings.setDatabaseEnabled(true);   //开启 database storage API 功能(允许 H5 使用的技术)
+
+            //新增
+            webSettings.setAllowContentAccess(true); // 是否可访问Content Provider的资源，默认值 true
+            webSettings.setAllowFileAccessFromFileURLs(true); // 是否允许通过file url加载的Javascript读取本地文件，默认值 false
+            webSettings.setAllowUniversalAccessFromFileURLs(false);// 是否允许通过file url加载的Javascript读取全部资源(包括文件,http,https)，默认值 false
+
 
             if (isCache) {
+//                webSettings.setAppCacheMaxSize(Long.MAX_VALUE);//设置 app缓存最大值
                 // 通过设置WebView的settings实现
                 String cacheDirPath = FileUtils.getGTPath(context) + "WebCache/";
                 webSettings.setDatabasePath(cacheDirPath);
+                webSettings.setGeolocationDatabasePath(cacheDirPath);
 
                 //使用缓存:
                 webSettings.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
-                webSettings.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);//没网，则从本地获取，即离线加载
 
-                webSettings.setDomStorageEnabled(true); // 开启 DOM storage API 功能
-                webSettings.setDatabaseEnabled(true);   //开启 database storage API 功能
             } else {
                 //不使用缓存:
                 webSettings.setCacheMode(WebSettings.LOAD_NO_CACHE);
@@ -15702,6 +15802,7 @@ public class GT {
 
             return webView;
         }
+
 
         /**
          * 加载一个网页
@@ -18197,71 +18298,6 @@ public class GT {
     }
 
     /**
-     * 手机屏幕操作
-     */
-    public static class ScreenOperation {
-
-        /**
-         * 点击屏幕 可根据 屏幕的比例 与 具体的 X,Y 坐标点击
-         */
-        public static class AutoTouch {
-            private static int width = 0;
-            private static int height = 0;
-
-            /**
-             * 传入在屏幕中的比例位置，坐标左上角为基准
-             *
-             * @param act    传入Activity对象
-             * @param ratioX 需要点击的x坐标在屏幕中的比例位置
-             * @param ratioY 需要点击的y坐标在屏幕中的比例位置
-             */
-            public static void autoClickRatio(Activity act, final double ratioX, final double ratioY) {
-                width = act.getWindowManager().getDefaultDisplay().getWidth();
-                height = act.getWindowManager().getDefaultDisplay().getHeight();
-                Thread.runJava(new Runnable() {
-                    @Override
-                    public void run() {
-                        // 线程睡眠0.3s
-                        Thread.sleep(300);
-                        // 生成点击坐标
-                        int x = (int) (width * ratioX);
-                        int y = (int) (height * ratioY);
-
-                        // 利用ProcessBuilder执行shell命令
-                        String[] order = {"input", "tap", "" + x, "" + y};
-                        try {
-                            new ProcessBuilder(order).start();
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                        }
-                    }
-                });
-            }
-
-            /**
-             * 传入在屏幕中的坐标，坐标左上角为基准
-             *
-             * @param act 传入Activity对象
-             * @param x   需要点击的x坐标
-             * @param y   需要点击的x坐标
-             */
-            public static void autoClickPos(Activity act, final double x, final double y) {
-                width = act.getWindowManager().getDefaultDisplay().getWidth();
-                height = act.getWindowManager().getDefaultDisplay().getHeight();
-                // 利用ProcessBuilder执行shell命令
-                String[] order = {"input", "tap", "" + x, "" + y};
-                try {
-                    new ProcessBuilder(order).start();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-
-        }
-
-    }
-
-    /**
      * @AppUtils 应用程序的小工具集合
      */
     public static class ApplicationUtils {
@@ -19018,22 +19054,6 @@ public class GT {
         }
 
         /**
-         * 加载本地图片
-         *
-         * @param url
-         * @return
-         */
-        public static Bitmap getLoacalBitmap(String url) {
-            try {
-                FileInputStream fis = new FileInputStream(url);
-                return BitmapFactory.decodeStream(fis);  ///把流转化为Bitmap图片
-            } catch (FileNotFoundException e) {
-                e.printStackTrace();
-                return null;
-            }
-        }
-
-        /**
          * 获取PID
          *
          * @return
@@ -19253,6 +19273,20 @@ public class GT {
         }
 
         /**
+         * 根据手机的分辨率从 px(像素) 的单位 转成为 dp
+         *
+         * @param context
+         * @param pxValue
+         * @return
+         * @author SHANHY
+         * @date 2015年10月28日
+         */
+        public static int px2dip(Context context, float pxValue) {
+            final float scale = context.getResources().getDisplayMetrics().density;
+            return (int) (pxValue / scale + 0.5f);
+        }
+
+        /**
          * 设置 日期选择器
          *
          * @param dp
@@ -19312,6 +19346,85 @@ public class GT {
                 }
             }
             return dp;
+        }
+
+        /**
+         * 数字处理单位
+         */
+        public static class NumberUtils {
+
+            private static final String MILLION_UNIT = "万";
+            private static final String BILLION_UNIT = "亿";
+            private static final BigDecimal ONE_HUNDRED_THOUSAND = new BigDecimal(100000);
+            private static final BigDecimal ONE_HUNDRED_MILLION = new BigDecimal(100000000);
+            private static final BigDecimal TEN_THOUSAND = new BigDecimal(10000);
+
+            public static String addUnit(int value) {
+                try {
+                    if (value < 100000000) {
+                        return amountConversion(new BigDecimal(value));
+                    } else {
+                        return amountConversionBillion(new BigDecimal(value)) + "亿";
+                    }
+                } catch (Exception e) {
+                    return String.valueOf(value);
+                }
+
+            }
+
+            /**
+             * 将数字转换成以万为单位或者以亿为单位，因为在前端数字太大显示有问题
+             *
+             * @param amount
+             * @return
+             */
+            @SuppressWarnings("deprecation")
+            public static String amountConversion(BigDecimal amount) {
+                if (amount == null) {
+                    return null;
+                }
+                if (amount.abs().compareTo(ONE_HUNDRED_THOUSAND) < 0) {
+                    // 如果小于10万
+                    return amount.stripTrailingZeros().toPlainString();
+                }
+                if (amount.abs().compareTo(ONE_HUNDRED_MILLION) < 0) {
+                    // 如果大于10万小于1亿
+                    return amount.divide(TEN_THOUSAND, 4, BigDecimal.ROUND_HALF_UP).stripTrailingZeros().toPlainString()
+                            + MILLION_UNIT;
+                }
+                return amount.divide(ONE_HUNDRED_MILLION, 4, BigDecimal.ROUND_HALF_UP).stripTrailingZeros().toPlainString()
+                        + BILLION_UNIT;
+            }
+
+            /**
+             * 将数字转换成以亿为单位
+             *
+             * @param amount
+             * @return
+             */
+            @SuppressWarnings("deprecation")
+            public static Double amountConversionBillion(BigDecimal amount) {
+                if (amount == null) {
+                    return null;
+                }
+                return amount.divide(ONE_HUNDRED_MILLION, 2, BigDecimal.ROUND_HALF_UP).stripTrailingZeros().doubleValue();
+            }
+
+        }
+
+        //是否为平板
+        public static boolean isPad(Context context) {
+            boolean isPad = (context.getResources().getConfiguration().screenLayout
+                    & Configuration.SCREENLAYOUT_SIZE_MASK) >= Configuration.SCREENLAYOUT_SIZE_LARGE;
+
+            WindowManager wm = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
+            Display display = wm.getDefaultDisplay();
+            DisplayMetrics dm = new DisplayMetrics();
+            display.getMetrics(dm);
+            double x = Math.pow(dm.widthPixels / dm.xdpi, 2);
+            double y = Math.pow(dm.heightPixels / dm.ydpi, 2);
+            double screenInches = Math.sqrt(x + y); // 屏幕尺寸
+            return isPad || screenInches >= 7.0;
         }
 
     }
@@ -19605,6 +19718,163 @@ public class GT {
     public static class ImageViewTools {
 
         /**
+         * 项目资源 转 Bitmap
+         *
+         * @param res
+         * @return
+         */
+        public static Bitmap getBitmap(int res) {
+            InputStream inputStream = getActivity().getResources().openRawResource(res);
+            return getBitmap(inputStream);
+        }
+
+        /**
+         * InputStream 转 Bitmap
+         *
+         * @param inputStream
+         * @return
+         */
+        public static Bitmap getBitmap(InputStream inputStream) {
+            BitmapFactory.Options bitmapOptions = new BitmapFactory.Options();
+//            bitmapOptions.inSampleSize = 1;
+            bitmapOptions.inPreferredConfig = Bitmap.Config.RGB_565;
+            bitmapOptions.inPurgeable = true;
+            bitmapOptions.inInputShareable = true;
+//            bitmapOptions.inJustDecodeBounds  = true;
+            return BitmapFactory.decodeStream(inputStream, null, bitmapOptions);
+        }
+
+        /**
+         * ImageView 转 Bitmap
+         *
+         * @param imageView
+         * @return
+         */
+        public static Bitmap getBitmap(ImageView imageView) {
+            return getBitmap(imageView.getDrawable());
+        }
+
+        /**
+         * Drawable 转 Bitmap
+         *
+         * @param drawable
+         * @return
+         */
+        public static Bitmap getBitmap(Drawable drawable) {
+            Bitmap bitmap = Bitmap.createBitmap(drawable.getIntrinsicWidth(), drawable.getIntrinsicHeight(), drawable.getOpacity() != PixelFormat.OPAQUE ? Bitmap.Config.ARGB_8888 : Bitmap.Config.RGB_565);
+            Canvas canvas = new Canvas(bitmap);
+            //canvas.setBitmap(bitmap);
+            drawable.setBounds(0, 0, drawable.getIntrinsicWidth(), drawable.getIntrinsicHeight());
+            drawable.draw(canvas);
+            return bitmap;
+        }
+
+
+        /**
+         * 获取图片路径
+         *
+         * @param uri
+         * @return
+         */
+        @SuppressLint("Range")
+        public static String getPicPath(Context context, Uri uri) {
+            String[] picPathColumns = {MediaStore.Images.Media.DATA};
+            Cursor cursor = context.getContentResolver().query(uri, picPathColumns, null, null, null);
+            cursor.moveToFirst();
+            return cursor.getString(cursor.getColumnIndex(picPathColumns[0]));
+        }
+
+        public static Uri bitmapToUri(Context context, Bitmap bitmap) {
+            return Uri.parse(MediaStore.Images.Media.insertImage(context.getContentResolver(), bitmap, null, null));
+        }
+
+        public static Bitmap uriToBitmap2(Context context, Uri uri) {
+            String[] pathColumns = {MediaStore.Images.Media.DATA};
+            Cursor c = context.getContentResolver().query(uri, pathColumns, null, null, null);
+            c.moveToFirst();
+            int columnIndex = c.getColumnIndex(MediaStore.Images.ImageColumns.DATA);
+            String picturePath = c.getString(columnIndex);
+            c.close();
+            return BitmapFactory.decodeFile(picturePath);
+        }
+
+        /**
+         * Uri 转 Bitmap
+         *
+         * @param context
+         * @param uri
+         * @return
+         */
+        public static Bitmap uriToBitmap(Context context, Uri uri) {
+            InputStream stream = null;
+            InputStream inputStream = null;
+            try {
+                //根据uri获取图片的流
+                inputStream = context.getContentResolver().openInputStream(uri);
+                BitmapFactory.Options options = new BitmapFactory.Options();
+                //options的in系列的设置了，injustdecodebouond只解析图片的大小，而不加载到内存中去
+                options.inJustDecodeBounds = true;
+                //1.如果通过options.outHeight获取图片的宽高，就必须通过decodestream解析同options赋值
+                //否则options.outheight获取不到宽高
+                BitmapFactory.decodeStream(inputStream, null, options);
+                //2.通过 btm.getHeight()获取图片的宽高就不需要1的解析，我这里采取第一张方式
+                //Bitmap btm = BitmapFactory.decodeStream(inputStream);
+                //以屏幕的宽高进行压缩
+                DisplayMetrics displayMetrics = context.getResources().getDisplayMetrics();
+                int heightPixels = displayMetrics.heightPixels;
+                int widthPixels = displayMetrics.widthPixels;
+                //获取图片的宽高
+                int outHeight = options.outHeight;
+                int outWidth = options.outWidth;
+                //heightPixels就是要压缩后的图片高度，宽度也一样
+                int a = (int) Math.ceil((outHeight / (float) heightPixels));
+                int b = (int) Math.ceil(outWidth / (float) widthPixels);
+                //比例计算,一般是图片比较大的情况下进行压缩
+                int max = Math.max(a, b);
+                if (max > 1) {
+                    options.inSampleSize = max;
+                }
+                //解析到内存中去
+                options.inJustDecodeBounds = false;
+                //根据uri重新获取流，inputstream在解析中发生改变了
+                stream = context.getContentResolver().openInputStream(uri);
+                Bitmap bitmap = BitmapFactory.decodeStream(stream, null, options);
+                return bitmap;
+            } catch (Exception e) {
+                e.printStackTrace();
+            } finally {
+                try {
+                    if (inputStream != null) {
+                        inputStream.close();
+                    }
+                    if (stream != null) {
+                        stream.close();
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+
+            }
+            return null;
+        }
+
+        /**
+         * 加载本地图片
+         *
+         * @param url
+         * @return
+         */
+        public static Bitmap getLoacalBitmap(String url) {
+            try {
+                FileInputStream fis = new FileInputStream(url);
+                return BitmapFactory.decodeStream(fis);  ///把流转化为Bitmap图片
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+                return null;
+            }
+        }
+
+        /**
          * Object 转 Bitmap
          *
          * @param resource
@@ -19625,16 +19895,16 @@ public class GT {
                     if (imgObjet == null) {
                         //网络加载或本地加载图片
                         if (url.contains("http")) {
-                            imgObjet = ImageViewTools.getImageInputStream(url);//Bitmap 网络
+                            imgObjet = ImageViewTools.getImageBitmap(url);//Bitmap 网络
                         } else {
-                            imgObjet = ApplicationUtils.getLoacalBitmap(url);//Bitmap 本地
+                            imgObjet = ImageViewTools.getLoacalBitmap(url);//Bitmap 本地
                         }
                     }
                 } else if (resource instanceof File) {
                     //加载本地图片(需要加缓存)
                     String filePath = ((File) resource).getPath();
                     if (imgObjet == null) {
-                        imgObjet = ApplicationUtils.getLoacalBitmap(filePath);//Bitmap
+                        imgObjet = ImageViewTools.getLoacalBitmap(filePath);//Bitmap
                     }
                 } else if (resource instanceof Byte[]) {
                     //流加载图片(需要加缓存)
@@ -19648,7 +19918,7 @@ public class GT {
                     //加载路径图片(需要加缓存)
                     String uri = ((Uri) resource).getPath();
                     if (imgObjet == null) {
-                        imgObjet = ApplicationUtils.getLoacalBitmap(uri);//Bitmap
+                        imgObjet = ImageViewTools.getLoacalBitmap(uri);//Bitmap
                     }
                 } else if (resource instanceof Bitmap) {
                     //加载 Bitmap 资源
@@ -19847,7 +20117,26 @@ public class GT {
          * @param imageurl 图片网络地址
          * @return Bitmap 返回位图
          */
-        public static Bitmap getImageInputStream(String imageurl) {
+        public static InputStream getImageInputStream(String imageurl) {
+            URL url;
+            HttpURLConnection connection = null;
+            InputStream inputStream = null;
+            try {
+                url = new URL(imageurl);
+                connection = (HttpURLConnection) url.openConnection();
+                connection.setConnectTimeout(6000); //超时设置
+                connection.setDoInput(true);
+                connection.setUseCaches(true); //设置使用网络缓存
+                inputStream = connection.getInputStream();
+                inputStream.close();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            return inputStream;
+        }
+
+
+        public static Bitmap getImageBitmap(String imageurl) {
             URL url;
             HttpURLConnection connection = null;
             Bitmap bitmap = null;
@@ -19858,7 +20147,7 @@ public class GT {
                 connection.setDoInput(true);
                 connection.setUseCaches(true); //设置使用网络缓存
                 InputStream inputStream = connection.getInputStream();
-                bitmap = BitmapFactory.decodeStream(inputStream);
+                bitmap = GT.ImageViewTools.getBitmap(inputStream);
                 inputStream.close();
             } catch (Exception e) {
                 e.printStackTrace();
@@ -22188,6 +22477,19 @@ public class GT {
      */
     public static class GT_Animation implements SaveObject.SaveBean {
 
+        private static GT_Animation animation;
+
+        public static GT_Animation getDefault() {
+            if (animation == null) {
+                synchronized (EventBus.class) {
+                    if (animation == null) {
+                        animation = new GT_Animation();
+                    }
+                }
+            }
+            return animation;
+        }
+
         public GT_Animation() {
         }
 
@@ -23697,6 +23999,11 @@ public class GT {
 
             }
 
+            @Override
+            protected void onDestroy() {
+                super.onDestroy();
+                Runtime.getRuntime().gc();
+            }
         }
 
         /**
@@ -25822,14 +26129,16 @@ public class GT {
                 super.onViewCreated(view, savedInstanceState);
 
                 this.fragment = this;
+                this.view = view;
 
                 //防止点击穿透
-                view.setOnClickListener(new View.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
+                view.setOnClickListener(null);
 
-                    }
-                });
+                //如果没有设置背景，那就设置默认背景
+                Drawable background = view.getBackground();
+                if (background == null) {
+                    view.setBackgroundColor(Color.parseColor("#F7F7F7"));
+                }
 
                 if (this.gt_fragment == null) {
                     this.gt_fragment = GT_Fragment.gt_fragment;
@@ -25855,7 +26164,7 @@ public class GT {
                 //是否解决EditText bug
                 if (isSolveEditTextBug) {
                     //给EditText 组件设置返回事件
-                    Thread.runJava(new Runnable() {
+                    GT.Thread.getInstance(0).execute(new Runnable() {
                         @Override
                         public void run() {
                             setViewBackListener(view);
@@ -26018,6 +26327,7 @@ public class GT {
             @Override
             public void onDestroy() {
                 super.onDestroy();
+                Runtime.getRuntime().gc();
                 EventBus.getDefault().unregister(this);//取消订阅者
             }
         }
@@ -27118,6 +27428,11 @@ public class GT {
                 return false;
             }
 
+            @Override
+            public void onDestroy() {
+                super.onDestroy();
+                Runtime.getRuntime().gc();
+            }
         }
 
         /**
@@ -27248,6 +27563,29 @@ public class GT {
             private boolean isFalls = false;
             private int width = 15;
             private int random = 0;
+
+
+            //释放资源
+            public void close() {
+                if (beanList != null) {
+                    beanList.clear();
+                    beanList = null;
+                }
+                if (itemView != null) {
+                    itemView = null;
+                }
+                if (linearLayoutManager != null) {
+                    linearLayoutManager = null;
+                }
+                if (rv != null) {
+                    rv.setAdapter(null);
+                    rv = null;
+                }
+                if (itemView != null) {
+                    itemView = null;
+                }
+                Runtime.getRuntime().gc();
+            }
 
             public BaseAdapter() {
                 if (this.beanList == null) this.beanList = new ArrayList<>();
@@ -28199,6 +28537,7 @@ public class GT {
                     timer.cancel();
                     timer = null;
                 }
+                Runtime.getRuntime().gc();
             }
 
             /**
@@ -28312,8 +28651,6 @@ public class GT {
 
             protected void buildData() {
             }
-
-            ;
 
             protected View findViewById(int id) {
                 if (view == null) return null;
@@ -28457,6 +28794,7 @@ public class GT {
                     popWindow = null;
                     view = null;
                 }
+                Runtime.getRuntime().gc();
             }
 
         }
@@ -28607,7 +28945,12 @@ public class GT {
             }
 
             public Object startView(ViewGroup viewGroup) {
-                viewGroup.addView(view);
+                GT.Thread.runAndroid(new Runnable() {
+                    @Override
+                    public void run() {
+                        viewGroup.addView(view);
+                    }
+                });
                 return this;
             }
 
@@ -28623,6 +28966,7 @@ public class GT {
                         ((ViewGroup) view.getParent()).removeView(view);
                         view = null;
                     }
+                    Runtime.getRuntime().gc();
                 } catch (Exception e) {
 
                 }
@@ -28716,8 +29060,6 @@ public class GT {
      */
     public static class GT_WebView implements SaveObject.SaveBean {
 
-        private static GT_SharedPreferences sp;
-
         /**
          * 封装第一代 WebView 实例 WebView 有两种方法，2种构造方法
          * <p>
@@ -28744,17 +29086,22 @@ public class GT {
 
             public Context context;
             protected float width, height;
-            protected boolean isCache = true;//是否缓存
+            protected boolean isCache = false;//是否缓存 (默认不缓存)
+            protected boolean isZoom = false;//是否缩放
             protected boolean isPC = false;//是否以PC端方式加载
             protected String url = "";//当前加载成功的 URL
             private boolean isResume = false;//激活WebView为活跃状态，能正常执行网页的响应
             private String title = "";//标题
             protected String jsToAndroidName = "";//js调用Android 名称
             public WebSettings webSettings;
+            public ViewGroup viewGroup;
+            public WebView webView;
+            public GT.GT_WebView.PhotoView photoView;
 
             public BaseWebView(@NonNull Context context) {
                 super(context);
                 this.context = context;
+                webView = this;
                 initView(context, this);
                 loadData(context, this);
             }
@@ -28763,6 +29110,8 @@ public class GT {
                 super(context);
                 if (viewGroup == null) return;
                 this.context = context;
+                webView = this;
+                this.viewGroup = viewGroup;
                 initView(context, this);
                 loadData(context, this);
                 viewGroup.addView(this);
@@ -28771,6 +29120,7 @@ public class GT {
             public BaseWebView(@NonNull Context context, @Nullable AttributeSet attrs) {
                 super(context, attrs);
                 this.context = context;
+                webView = this;
                 initView(context, this);
                 loadData(context, this);
             }
@@ -28778,6 +29128,7 @@ public class GT {
             public BaseWebView(@NonNull Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
                 super(context, attrs, defStyleAttr);
                 this.context = context;
+                webView = this;
                 initView(context, this);
                 loadData(context, this);
             }
@@ -28785,6 +29136,7 @@ public class GT {
             public BaseWebView(@NonNull Context context, @Nullable AttributeSet attrs, int defStyleAttr, int defStyleRes) {
                 super(context, attrs, defStyleAttr, defStyleRes);
                 this.context = context;
+                webView = this;
                 initView(context, this);
                 loadData(context, this);
             }
@@ -28795,6 +29147,14 @@ public class GT {
 
             public void setOnLoadWebViewListener(WebViewUtils.OnLoadWebViewListener onLoadWebViewListener) {
                 this.onLoadWebViewListener = onLoadWebViewListener;
+            }
+
+            public boolean isZoom() {
+                return isZoom;
+            }
+
+            public void setZoom(boolean zoom) {
+                isZoom = zoom;
             }
 
             public boolean isCache() {
@@ -28845,8 +29205,6 @@ public class GT {
 
             protected void initView(Context context, WebView webView) {
 
-                if (sp == null) sp = new GT_SharedPreferences(context, "GT_WebView", true);
-
                 // 特别注意：5.1以上默认禁止了https和http混用，以下方式是开启
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                     webView.getSettings().setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
@@ -28889,45 +29247,20 @@ public class GT {
                     }
                 });
 
+
                 jsToAndroidName = getClass().getName();
                 jsToAndroidName = jsToAndroidName.replaceAll("\\.", "_");
 
                 //建立 Java 与 JS 通讯桥梁
                 addJavascriptInterface(this, jsToAndroidName);//AndroidtoJS类对象映射到js的test对象
 
-                //添加监听
-                WebViewUtils.addListener(this, onLoadWebViewListener);
+                //设置背景颜色
+                setBackgroundColor(85621);
 
                 webSettings = getSettings();
             }
 
-
-            //重写该方法进行接收数据
-            public void readData(String json) {
-
-            }
-
-            //发送安卓数据给JS
-            public void sendAndroidData(String json, OnListener<String>... onListeners) {
-                callJS("readData('" + json + "')", onListeners);
-            }
-
-            //这个方法是给网页调用的，不是给Android 调用的
-            @JavascriptInterface
-            public void sendH5Data(String json) {
-                readData(json);
-            }
-
             public void loadData(Context context, WebView webView) {
-
-                //查询上次的数据
-                Boolean pc = sp.query(url + isPC, boolean.class);//是否PC
-                Boolean cache = sp.query(url + isCache, boolean.class);//是否缓存
-
-                //如果上次是 PC 但这次又不是 PC 那就需要不缓存
-                if (!(pc != null && pc == isPC)) {
-                    isCache = false;
-                }
 
                 if (isPC) {
                     //设置PC网
@@ -28937,8 +29270,218 @@ public class GT {
                 }
 
                 //设置WebView强化功能
-//                GT.WebViewUtils.setWebView(context, webView, isCache);
+                GT.WebViewUtils.setWebView(context, webView, isCache, isZoom, new DownloadListener() {
+                    @Override
+                    public void onDownloadStart(String url, String userAgent, String contentDisposition, String mimetype, long contentLength) {
+                        //设置 浏览器下载文件
+                        onDownloadFile(url, userAgent, contentDisposition, mimetype, FileUtils.formetFileSize(contentLength), contentLength);
+                    }
+                });
 
+                //添加监听
+                WebViewUtils.addListener(this, onLoadWebViewListener);
+
+            }
+
+            public boolean isDefaultDialog = false;
+            public static ValueCallback<Uri[]> valueCallback2;//安卓5.0之上适配
+
+            //网页加载
+            WebViewUtils.OnLoadWebViewListener onLoadWebViewListener = new WebViewUtils.OnLoadWebViewListener() {
+
+                @Override
+                public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
+                    //设置 H5 调用原生 相册与拍照
+                    if (photoView == null) {
+                        photoView = new GT.GT_WebView.PhotoView(context, (ViewGroup) webView.getParent());
+                    }
+                    valueCallback2 = filePathCallback;
+                    String[] acceptTypes = fileChooserParams.getAcceptTypes();
+                    if (acceptTypes.length > 0) {
+                        if (onShowFileChoosers(acceptTypes[0])) {
+                            if (!photoView.isShow) {
+                                photoView.show();
+                            }
+                        } else {//如果返回的是 false 那就让自定义处理
+
+                            return true;
+                        }
+                    } else {
+                        filePathCallback.onReceiveValue(null);
+                    }
+                    return true;
+                }
+
+                @Override
+                public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                    super.shouldOverrideUrlLoading(view, url);
+                    return shouldOverrideUrlLoad(view, url);
+
+                }
+
+                @Override
+                public boolean onJsPrompt(WebView view, String url, String message, String defaultValue, JsPromptResult result) {
+                    jsPrompt(view, url, message, defaultValue, result);
+                    return super.onJsPrompt(view, url, message, defaultValue, result);
+                }
+
+                @Override
+                public boolean onJsConfirm(WebView view, String url, String message, JsResult result) {
+                    jsConfirm(view, url, message, result);
+                    return super.onJsConfirm(view, url, message, result);
+                }
+
+                @Override
+                public boolean onJsAlert(WebView view, String url, String message, JsResult result) {
+                    jsAlert(view, url, message, result);
+                    return super.onJsAlert(view, url, message, result);
+                }
+
+                private String loadUrl = "";//仅仅用来记录是否需要重新获取网页源码
+
+                @Override
+                protected void onLoadingProgress(WebView view, int progress) {
+                    super.onLoadingProgress(view, progress);
+                    if (view == null) return;
+
+                    String url = view.getUrl();
+                    if (!url.equals(loadUrl)) {
+                        loadUrl = url;
+                        WebViewUtils.isRun = false;
+                        WebViewUtils.getHtmlData(url, new WebViewUtils.OnGetHtmlCodeListener() {
+                            @Override
+                            public void onGetStart(String url) {
+                                onFeedbackHtmlCode(0, "GetStart:" + url);
+                            }
+
+                            @Override
+                            public void onGetProgress(int progress) {
+                                if (progress < 100)
+                                    onFeedbackHtmlCode(progress, "GetProgress:" + url);
+                            }
+
+                            @Override
+                            public void onGetClose(String url, String htmlCode, long htmlSize) {
+                                onFeedbackHtmlCode(100, htmlCode);
+                            }
+
+                            @Override
+                            public void onGetError(String url, Object errorMessage) {
+                                onFeedbackHtmlCode(0, "GetError:" + errorMessage);
+                            }
+                        });
+                    }
+
+
+                    loadProgress(progress);
+                    if (progress >= 100) {
+                        isResume = true;
+                        if (photoView == null) {
+                            photoView = new GT.GT_WebView.PhotoView(context, (ViewGroup) webView.getParent());
+                        }
+                        onStart();
+                    }
+                }
+
+                @Override
+                public void onPageStarted(WebView view, String url, Bitmap favicon) {
+                    super.onPageStarted(view, url, favicon);
+                    pageStarted(view, url, favicon);
+                }
+
+                @Override
+                public void onPageFinished(WebView view, String url) {
+                    super.onPageFinished(view, url);
+                    pageFinished(view, url);
+
+                }
+
+                @Override
+                public void onLoadResource(WebView view, String url) {
+                    super.onLoadResource(view, url);
+                    loadResource(view, url);
+                }
+
+                @Override
+                public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                    super.onReceivedError(view, request, error);
+                    receivedError(view, request, error);
+                }
+
+                @Override
+                public void onReceivedTitle(WebView view, String title) {
+                    super.onReceivedTitle(view, title);
+                    receivedTitle(view, title);
+                }
+            };
+
+            //回调
+            public boolean onShowFileChoosers(String acceptType) {
+
+                return true;
+            }
+
+            //返回相册资源
+            public void onFeedbackPhoto(Object photo) {
+            }
+
+            public void onFeedbackPhoto(Intent photo) {
+            }
+
+            public void onFeedbackPhoto(Uri photo) {
+            }
+
+            public void onFeedbackPhoto(Bitmap photo) {
+            }
+
+
+            //返回 H5 相片资源
+            public static void initShowFileChoosers(Object data, Context... contexts) {
+                Context context = null;
+                if (contexts.length > 0) {
+                    context = contexts[0];
+                }
+                if (context == null) {
+                    context = GT.getActivity();
+                }
+                Uri uri = null;
+
+                if (data instanceof Intent) {
+                    Intent intent = (Intent) data;
+                    uri = intent.getData();
+                } else if (data instanceof Bitmap) {
+                    Bitmap bitmap = (Bitmap) data;
+                    uri = GT.ImageViewTools.bitmapToUri(context, bitmap);
+                } else if (data instanceof Uri) {
+                    uri = (Uri) data;
+                }
+
+                if (valueCallback2 != null) {
+                    if (data != null) {
+                        Uri[] results = new Uri[]{uri};
+                        valueCallback2.onReceiveValue(results);
+                    } else {
+                        valueCallback2.onReceiveValue(null);
+                    }
+                    valueCallback2 = null;
+                }
+            }
+
+
+            //重写该方法进行接收数据
+            public void readData(String json) {
+
+            }
+            //发送安卓数据给JS
+
+            public void sendAndroidData(String json, OnListener<String>... onListeners) {
+                callJS("readData('" + json + "')", onListeners);
+            }
+            //这个方法是给网页调用的，不是给Android 调用的
+
+            @JavascriptInterface
+            public void sendH5Data(String json) {
+                readData(json);
             }
 
             //直接退出
@@ -28996,7 +29539,6 @@ public class GT {
                 clearFormData();
             }
 
-
             //App可用时或 切换到前台时调用
             public void onStart() {
 
@@ -29011,30 +29553,28 @@ public class GT {
             public void onResume() {
                 super.onResume();
                 isResume = true;
-                if (webSettings != null) {
-                    webSettings.setJavaScriptEnabled(true);
-                }
-
             }
 
             @Override
             public void onPause() {
                 super.onPause();
                 isResume = false;
-                if (webSettings != null) {
-                    webSettings.setJavaScriptEnabled(false);
-                }
             }
 
             public void startWebView(ViewGroup viewGroup) {
                 viewGroup.addView(this);
             }
 
-            public void loadWeb(String url) {
+            @Override
+            public void loadUrl(@NonNull String url) {
                 if (url == null) return;
+                super.loadUrl(url);
                 this.url = url;
-                loadUrl(url);
                 loadDataSave();
+            }
+
+            public void loadWeb(String url) {
+                loadUrl(url);
             }
 
             /**
@@ -29116,6 +29656,11 @@ public class GT {
             public void loadProgress(int progress) {
             }
 
+            public void onDownloadFile(String downloadUrl, String userAgent, String contentDisposition, String mimetype, String fileSize, long contentLength) {
+
+
+            }
+
             //反馈Html源码
             public void onFeedbackHtmlCode(int progress, String code) {
             }
@@ -29173,121 +29718,13 @@ public class GT {
                 return false;
             }
 
-            //网页加载
-            WebViewUtils.OnLoadWebViewListener onLoadWebViewListener = new WebViewUtils.OnLoadWebViewListener() {
-
-                @Override
-                public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                    super.shouldOverrideUrlLoading(view, url);
-                    return shouldOverrideUrlLoad(view, url);
-
-                }
-
-                @Override
-                public boolean onJsPrompt(WebView view, String url, String message, String defaultValue, JsPromptResult result) {
-                    jsPrompt(view, url, message, defaultValue, result);
-                    return super.onJsPrompt(view, url, message, defaultValue, result);
-                }
-
-                @Override
-                public boolean onJsConfirm(WebView view, String url, String message, JsResult result) {
-                    jsConfirm(view, url, message, result);
-                    return super.onJsConfirm(view, url, message, result);
-                }
-
-                @Override
-                public boolean onJsAlert(WebView view, String url, String message, JsResult result) {
-                    jsAlert(view, url, message, result);
-                    return super.onJsAlert(view, url, message, result);
-                }
-
-                private String loadUrl = "";//仅仅用来记录是否需要重新获取网页源码
-
-                @Override
-                protected void onLoadingProgress(WebView view, int progress) {
-                    super.onLoadingProgress(view, progress);
-                    if (view == null) return;
-
-                    String url = view.getUrl();
-                    if (!url.equals(loadUrl)) {
-                        loadUrl = url;
-                        WebViewUtils.isRun = false;
-                        WebViewUtils.getHtmlData(url, new WebViewUtils.OnGetHtmlCodeListener() {
-                            @Override
-                            public void onGetStart(String url) {
-                                onFeedbackHtmlCode(0, "GetStart:" + url);
-                            }
-
-                            @Override
-                            public void onGetProgress(int progress) {
-                                if (progress < 100)
-                                    onFeedbackHtmlCode(progress, "GetProgress:" + url);
-                            }
-
-                            @Override
-                            public void onGetClose(String url, String htmlCode, long htmlSize) {
-                                onFeedbackHtmlCode(100, htmlCode);
-                            }
-
-                            @Override
-                            public void onGetError(String url, Object errorMessage) {
-                                onFeedbackHtmlCode(0, "GetError:" + errorMessage);
-                            }
-                        });
-                    }
-
-
-                    loadProgress(progress);
-                    if (progress >= 100) {
-                        isResume = true;
-                        onStart();
-                    }
-                }
-
-                @Override
-                public void onPageStarted(WebView view, String url, Bitmap favicon) {
-                    super.onPageStarted(view, url, favicon);
-                    pageStarted(view, url, favicon);
-                }
-
-                @Override
-                public void onPageFinished(WebView view, String url) {
-                    super.onPageFinished(view, url);
-                    pageFinished(view, url);
-
-                }
-
-                @Override
-                public void onLoadResource(WebView view, String url) {
-                    super.onLoadResource(view, url);
-                    loadResource(view, url);
-                }
-
-                @Override
-                public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
-                    super.onReceivedError(view, request, error);
-                    receivedError(view, request, error);
-                }
-
-                @Override
-                public void onReceivedTitle(WebView view, String title) {
-                    super.onReceivedTitle(view, title);
-                    receivedTitle(view, title);
-                }
-            };
-
             //加载数据信息保存的本地
             private void loadDataSave() {
-                //保存该数据是否缓存
-                sp.save(url + "isCache", isCache);//存储 是否缓存
-                sp.save(url + "isPC", isPC);//存储 是否PC
-
                 //防止泄露隐私
                 if (url.startsWith("file://") && webSettings != null) {
                     webSettings.setAllowFileAccess(true);
                     webSettings.setAllowFileAccessFromFileURLs(false);
                     webSettings.setAllowUniversalAccessFromFileURLs(false);
-                    webSettings.setJavaScriptEnabled(false);
                 } else {
                     webSettings.setJavaScriptEnabled(true);
                 }
@@ -29318,7 +29755,7 @@ public class GT {
 
             //已销毁了WebView
             public void onDestroy() {
-
+                Runtime.getRuntime().gc();
             }
 
             /**************************************** H5 侵入式开发 API **************************************/
@@ -29445,7 +29882,7 @@ public class GT {
                 if (index.length > 0) {
                     number = index[0];
                 }
-                stringBuilder.append(" document.getElementsByclassName('" + className + "')[" + number + "]");
+                stringBuilder.append(" document.getElementsByClassName('" + className + "')[" + number + "]");
                 return this;
             }
 
@@ -29458,7 +29895,7 @@ public class GT {
              * @return
              */
             public BaseWebView findViewByClassNames(String className) {
-                stringBuilder.append(" document.getElementsByclassName('" + className + "')");
+                stringBuilder.append(" document.getElementsByClassName('" + className + "')");
                 return this;
             }
 
@@ -29585,6 +30022,15 @@ public class GT {
                 return this;
             }
 
+            /**
+             * 设置 自动点击 元素
+             *
+             * @return
+             */
+            public BaseWebView setOnPerformClick() {
+                stringBuilder.append(".click(); ");
+                return this;
+            }
 
             /**
              * 设置 html 标题
@@ -29827,6 +30273,130 @@ public class GT {
                 super(context, attrs, defStyleAttr, defStyleRes);
             }
         }
+
+
+        /************************ Web拍摄相册工具类 ******************************/
+
+        public static class PhotoView extends GT.GT_View.AnnotationView implements View.OnClickListener {
+            private int height;
+
+            private View ll_bottom1;
+            private View view_bg;
+            private View btn_cancel;
+            private boolean isShow = false;
+
+            private String feedbackMethodName = "onFeedbackPhoto";//反馈方法名称
+
+            public String getFeedbackMethodName() {
+                return feedbackMethodName;
+            }
+
+            public void setFeedbackMethodName(String feedbackMethodName) {
+                this.feedbackMethodName = feedbackMethodName;
+            }
+
+            @Override
+            protected int loadLayout() {
+                return R.layout.view_photo;
+            }
+
+            public PhotoView(Context context, ViewGroup viewGroup, String... feedbackMethodNames) {
+                super(context, viewGroup);
+                if (feedbackMethodNames.length > 0) {
+                    feedbackMethodName = feedbackMethodNames[0];
+                }
+            }
+
+            @Override
+            protected void initView(View view) {
+                super.initView(view);
+                ll_bottom1 = findViewById(R.id.ll_bottom1);
+                ll_bottom1.setOnClickListener(null);
+                view_bg = findViewById(R.id.view_bg);
+                btn_cancel = findViewById(R.id.btn_cancel);
+
+                findViewById(R.id.tv_photo).setOnClickListener(this);
+                findViewById(R.id.tv_img).setOnClickListener(this);
+                findViewById(R.id.btn_cancel).setOnClickListener(this);
+
+                hide();
+            }
+
+            @Override
+            public void onClick(View view) {
+                if (view.getId() == R.id.tv_photo) {//拍摄
+                    GT.GTActivity.startActivity(context, GT.GTActivity.CODE_PHOTOGRAPH, feedbackMethodName);
+                    hide();
+                } else if (view.getId() == R.id.tv_img) {//从相册里选择
+                    GT.GTActivity.startActivity(context, GT.GTActivity.CODE_PHOTO, feedbackMethodName);
+                    hide();
+                } else if (view.getId() == R.id.btn_cancel) {//取消
+                    BaseWebView.valueCallback2.onReceiveValue(null);
+                    hide();
+                } else {
+
+                }
+            }
+
+            //显示动画
+            public void show(String... feedbackMethodNames) {
+                isShow = true;
+                if (feedbackMethodNames.length > 0) {
+                    feedbackMethodName = feedbackMethodNames[0];
+                }
+                height = view_bg.getHeight();
+                view_bg.setVisibility(View.VISIBLE);
+                GT.GT_Animation.getDefault().translateY_T(height, 0, 300, 0, false, ll_bottom1);
+                GT.GT_Animation.getDefault().translateY_T(height, 0, 300, 0, false, btn_cancel);
+                GT.Thread.getInstance(0).execute(() -> {
+                    for (float a = 0; a < 1; ) {
+                        if (view_bg == null) break;
+                        a += 0.01;
+                        GT.Thread.sleep(1);
+                        float finalA = a;
+                        GT.Thread.runAndroid(() -> {
+                            if (view_bg != null) {
+                                view_bg.setAlpha(finalA);
+                            }
+                        });
+                    }
+                });
+
+
+            }
+
+            //隐藏动画
+            private void hide() {
+                isShow = false;
+                height = view_bg.getHeight();
+                if (height == 0) {
+                    GT.GT_Animation.getDefault().translateY_T(0, 3000, 1, 0, false, ll_bottom1);
+                    GT.GT_Animation.getDefault().translateY_T(0, 3000, 1, 0, false, btn_cancel);
+                    view_bg.setAlpha(0);
+                    view_bg.setVisibility(View.INVISIBLE);
+                } else {
+                    GT.GT_Animation.getDefault().translateY_T(0, height, 300, 0, false, ll_bottom1);
+                    GT.GT_Animation.getDefault().translateY_T(0, height, 300, 0, false, btn_cancel);
+                    GT.Thread.getInstance(0).execute(() -> {
+                        for (float a = 1; a > 0; ) {
+                            a -= 0.01;
+                            GT.Thread.sleep(1);
+                            float finalA = a;
+                            GT.Thread.runAndroid(() -> {
+                                if (view_bg != null) {
+                                    view_bg.setAlpha(finalA);
+                                    view_bg.setVisibility(View.INVISIBLE);
+                                }
+                            });
+
+                        }
+                    });
+                }
+
+            }
+
+        }
+
 
     }
 
@@ -30165,6 +30735,7 @@ public class GT {
             protected void onDestroy() {
                 if (notificationManagerCompat != null)
                     notificationManagerCompat.cancel(NOTIFYID);//清除当前 id 为 NOTIFYID 的通知
+                Runtime.getRuntime().gc();
             }
 
 
@@ -32311,6 +32882,7 @@ public class GT {
          * app:layout_constraintEnd_toEndOf="parent"
          * app:layout_constraintStart_toStartOf="parent"
          * app:layout_constraintTop_toTopOf="parent"
+         * android:src="@mipmap/gif_logo"
          * app:radius_top_left="30dp"
          * app:radius_top_right="30dp" />
          */
@@ -32335,6 +32907,46 @@ public class GT {
 
             private String url;
 
+            public int getRadius() {
+                return radius;
+            }
+
+            public void setRadius(int radius) {
+                this.radius = radius;
+            }
+
+            public int getLeftTopRadius() {
+                return leftTopRadius;
+            }
+
+            public void setLeftTopRadius(int leftTopRadius) {
+                this.leftTopRadius = leftTopRadius;
+            }
+
+            public int getRightTopRadius() {
+                return rightTopRadius;
+            }
+
+            public void setRightTopRadius(int rightTopRadius) {
+                this.rightTopRadius = rightTopRadius;
+            }
+
+            public int getRightBottomRadius() {
+                return rightBottomRadius;
+            }
+
+            public void setRightBottomRadius(int rightBottomRadius) {
+                this.rightBottomRadius = rightBottomRadius;
+            }
+
+            public int getLeftBottomRadius() {
+                return leftBottomRadius;
+            }
+
+            public void setLeftBottomRadius(int leftBottomRadius) {
+                this.leftBottomRadius = leftBottomRadius;
+            }
+
             public String getUrl() {
                 return url;
             }
@@ -32348,6 +32960,21 @@ public class GT {
                 init(context, null);
             }
 
+            public GTImageView(Context context, int radiusAll) {
+                this(context, null);
+                this.radius = radiusAll;
+                init(context, null);
+            }
+
+            public GTImageView(Context context, int topLeft, int topRight, int bottomLeft, int bottomRight) {
+                this(context, null);
+                this.leftTopRadius = topLeft;
+                this.rightTopRadius = topRight;
+                this.leftBottomRadius = bottomLeft;
+                this.rightBottomRadius = bottomRight;
+                init(context, null);
+            }
+
             public GTImageView(Context context, AttributeSet attrs) {
                 this(context, attrs, 0);
                 init(context, attrs);
@@ -32356,8 +32983,6 @@ public class GT {
             public GTImageView(Context context, AttributeSet attrs, int defStyleAttr) {
                 super(context, attrs, defStyleAttr);
                 init(context, attrs);
-
-
             }
 
             private void init(Context context, AttributeSet attrs) {
@@ -32379,11 +33004,16 @@ public class GT {
              * @param array
              */
             private void load(TypedArray array) {
-                radius = array.getDimensionPixelOffset(R.styleable.GTImageView_radius, defaultRadius);
-                leftTopRadius = array.getDimensionPixelOffset(R.styleable.GTImageView_radius_top_left, defaultRadius);
-                rightTopRadius = array.getDimensionPixelOffset(R.styleable.GTImageView_radius_top_right, defaultRadius);
-                rightBottomRadius = array.getDimensionPixelOffset(R.styleable.GTImageView_radius_bottom_right, defaultRadius);
-                leftBottomRadius = array.getDimensionPixelOffset(R.styleable.GTImageView_radius_bottom_left, defaultRadius);
+                if (radius == 0)
+                    radius = array.getDimensionPixelOffset(R.styleable.GTImageView_radius, defaultRadius);
+                if (leftTopRadius == 0)
+                    leftTopRadius = array.getDimensionPixelOffset(R.styleable.GTImageView_radius_top_left, defaultRadius);
+                if (rightTopRadius == 0)
+                    rightTopRadius = array.getDimensionPixelOffset(R.styleable.GTImageView_radius_top_right, defaultRadius);
+                if (rightBottomRadius == 0)
+                    rightBottomRadius = array.getDimensionPixelOffset(R.styleable.GTImageView_radius_bottom_right, defaultRadius);
+                if (leftBottomRadius == 0)
+                    leftBottomRadius = array.getDimensionPixelOffset(R.styleable.GTImageView_radius_bottom_left, defaultRadius);
 
                 //如果四个角的值没有设置，那么就使用通用的radius的值。
                 if (defaultRadius == leftTopRadius) {
@@ -32398,6 +33028,7 @@ public class GT {
                 if (defaultRadius == leftBottomRadius) {
                     leftBottomRadius = radius;
                 }
+
             }
 
             public void setGifResource(Context... contexts) {
@@ -32435,7 +33066,12 @@ public class GT {
                             InputStream inputStream1 = (InputStream) resource;
                             return inputStream1;
                         } else if (resource instanceof String) {
-                            com.bumptech.glide.Glide.with(context).asGif().load(String.valueOf(resource)).into(GTImageView.this);
+                            GT.Thread.runAndroid(new Runnable() {
+                                @Override
+                                public void run() {
+                                    com.bumptech.glide.Glide.with(context).asGif().load(String.valueOf(resource)).into(GTImageView.this);
+                                }
+                            });
                             return null;
                     /*String imgResource = (String) resource;
                     if (imgResource.contains("http")) {
@@ -32496,7 +33132,6 @@ public class GT {
             private Observable.RunAndroidV<InputStream> runAndroidV = new Observable.RunAndroidV<InputStream>() {
                 @Override
                 public void run(InputStream inputStream) {
-//            GT.logt("inputStream:" + inputStream);
                     if (inputStream == null) return;
                     mMovie = Movie.decodeStream(inputStream);
                     if (mMovie != null) {
@@ -32568,6 +33203,7 @@ public class GT {
                 }
             }
 
+
             @SuppressLint("WrongCall")
             private void initDraw(Canvas canvas) {
                 //这里做下判断，只有图片的宽高大于设置的圆角距离的时候才进行裁剪
@@ -32577,26 +33213,28 @@ public class GT {
                 int maxTop = Math.max(leftTopRadius, rightTopRadius);
                 int maxBottom = Math.max(leftBottomRadius, rightBottomRadius);
                 int minHeight = maxTop + maxBottom;
-                if (width >= minWidth && height > minHeight) {
-                    @SuppressLint("DrawAllocation")
-                    Path path = new Path();
-                    //四个角：右上，右下，左下，左上
-                    path.moveTo(leftTopRadius, 0);
-                    path.lineTo(width - rightTopRadius, 0);
-                    path.quadTo(width, 0, width, rightTopRadius);
 
-                    path.lineTo(width, height - rightBottomRadius);
-                    path.quadTo(width, height, width - rightBottomRadius, height);
+//                if (width >= minWidth && height > minHeight) {
+                Path path = new Path();
+                //四个角：右上，右下，左下，左上
+                path.moveTo(leftTopRadius, 0);
+                path.lineTo(width - rightTopRadius, 0);
+                path.quadTo(width, 0, width, rightTopRadius);
 
-                    path.lineTo(leftBottomRadius, height);
-                    path.quadTo(0, height, 0, height - leftBottomRadius);
+                path.lineTo(width, height - rightBottomRadius);
+                path.quadTo(width, height, width - rightBottomRadius, height);
 
-                    path.lineTo(0, leftTopRadius);
-                    path.quadTo(0, 0, leftTopRadius, 0);
+                path.lineTo(leftBottomRadius, height);
+                path.quadTo(0, height, 0, height - leftBottomRadius);
 
-                    canvas.clipPath(path);
-                    super.onDraw(canvas);
-                }
+                path.lineTo(0, leftTopRadius);
+                path.quadTo(0, 0, leftTopRadius, 0);
+
+                canvas.clipPath(path);
+                super.onDraw(canvas);
+                /*}else{
+                    GT.logt("进入 else");
+                }*/
             }
 
         }
@@ -34387,7 +35025,6 @@ public class GT {
         //主要用于注解 Activity 与 Fragment 共有的
         public static void initAll(Object object, boolean... isInitUI) {
             if (isInitUI.length != 0) {
-
                 if (isInitUI[0]) {
                     //仅仅初始化UI
                     initAllUI(object);
@@ -34398,7 +35035,6 @@ public class GT {
                     return;
                 }
             }
-
             //初始化所有
             initAllUI(object);
             initAllTool(object);
@@ -35927,7 +36563,7 @@ public class GT {
                     method.setAccessible(true);// 获取该方法的访问权限
 
                     if (value != 0 || valueHD != 0) {
-                        if (!WindowUtils.isLandscapeAndPortrait(GT.getActivity())) {//竖屏
+                        if (!ApplicationUtils.isPad(GT.getActivity())) {//竖屏
                             if (value == 0) {
                                 value = valueHD;
                             }
@@ -35945,7 +36581,7 @@ public class GT {
                                 break;
                             case 2:
                                 if (GT_Fragment.valueIndex <= -1 && valueIndex <= -1) {
-                                    if (!WindowUtils.isLandscapeAndPortrait(GT.getActivity())) {//竖屏
+                                    if (!ApplicationUtils.isPad(GT.getActivity())) {//竖屏
                                         method.invoke(object, values[0]);// 调用该方法的，并设置该方法参数
                                     } else {//横屏
                                         method.invoke(object, values[1]);// 调用该方法的，并设置该方法参数
@@ -37939,11 +38575,178 @@ public class GT {
 
     public static class GTActivity extends AppCompatActivity {
 
+        //所有请求码
+        public static final int CODE_PHOTO = 1; //相册
+        public static final int CODE_PHOTOGRAPH = 2; //拍照
+        public static final int CODE_VIDEO = 3; //视频
+        private static int CODE = 0; //默认请求码
+
+        private String feedBack;
+        private int videoDuration;
+
+        private Uri imageUri;
+
+        /**
+         * 跳转页面
+         *
+         * @param context
+         * @param type               跳转页面功能的 类型
+         * @param returnFunctionName 接收数据的方法名称
+         * @param classz             返回数据类型
+         */
+        public static void startActivity(Context context, int type, String returnFunctionName) {
+            Intent intent = new Intent(context, GT.GTActivity.class);
+            intent.putExtra("type", type);
+            intent.putExtra("feedBack", returnFunctionName);
+            context.startActivity(intent);
+        }
+
         @Override
         protected void onCreate(Bundle savedInstanceState) {
             super.onCreate(savedInstanceState);
-            setContentView(R.layout.activity_gt);
+//            setContentView(R.layout.activity_gt);
+            Intent intent = getIntent();
+            if (intent == null) return;
+            CODE = intent.getIntExtra("type", 0);
+            feedBack = intent.getStringExtra("feedBack");
+            videoDuration = intent.getIntExtra("videoDuration", 10);//默认10秒
+            if (feedBack == null) {
+                feedBack = "onActivityResult";
+            }
+
+            switch (CODE) {
+                case CODE_PHOTO://相册
+                    getPermissionCamera();
+                    Intent openAlbumIntent = new Intent(Intent.ACTION_PICK); //打开相册
+                    openAlbumIntent.setType("image/*");     //选择全部照片
+                    startActivityForResult(openAlbumIntent, CODE_PHOTO); //发送请求
+                    break;
+                case CODE_PHOTOGRAPH://拍照
+                    getPermissionCamera();
+                    Intent intentPhoto = new Intent(Intent.ACTION_PICK);
+                    intentPhoto.setDataAndType(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, "image/*");
+                    intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+                    startActivityForResult(intent, CODE_PHOTOGRAPH);
+                    break;
+                case CODE_VIDEO://视频
+                    getPermissionCamera();
+                    Intent intentVideo = new Intent(MediaStore.ACTION_VIDEO_CAPTURE);
+                    intentVideo.putExtra(MediaStore.EXTRA_VIDEO_QUALITY, 1);
+                    intentVideo.putExtra(MediaStore.EXTRA_DURATION_LIMIT, videoDuration);//限制时长
+                    startActivityForResult(intentVideo, CODE_VIDEO);//开启摄像机
+                    break;
+                default:
+                    GT.logt("非法参数！");
+                    GT.EventBus.posts(new Intent(), feedBack);
+                    GT.EventBus.posts(Uri.parse(""), feedBack);
+                    GT.EventBus.posts(Bitmap.createBitmap(1, 1, Bitmap.Config.ALPHA_8), feedBack);
+                    finish();
+                    break;
+            }
+
+
         }
+
+
+        //权限检查
+        private void getPermissionCamera() {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                if (ContextCompat.checkSelfPermission(GTActivity.this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                    ActivityCompat.requestPermissions(GTActivity.this, new String[]{Manifest.permission.CAMERA}, 1001);
+                }
+            }
+        }
+
+
+        /**
+         * 处理打开相册请求
+         *
+         * @param requestCode
+         * @param resultCode
+         * @param data
+         */
+        @Override
+        protected void onActivityResult(int requestCode, int resultCode, Intent intent) {
+            super.onActivityResult(requestCode, resultCode, intent);
+        /*    GT.logt("requestCode:" + requestCode);
+            GT.logt("resultCode:" + resultCode);
+            GT.logt("RESULT_OK:" + RESULT_OK);
+            GT.logt("intent:" + intent);*/
+
+            if (intent == null) {
+                intent = new Intent();
+            }
+
+            Bitmap bitmap = null;
+            Uri uri = null;
+
+
+            switch (CODE) {
+                case CODE_PHOTO://相册
+                    uri = intent.getData();
+                    if (uri != null) {
+                        Bitmap data = ImageViewTools.uriToBitmap2(this, uri);
+                        if (data != null) {
+                            bitmap = data;
+                        }
+                    }
+                    break;
+                case CODE_PHOTOGRAPH://拍照
+                    Bitmap data = (Bitmap) intent.getExtras().get("data");
+                    if (data != null) {
+                        uri = GT.ImageViewTools.bitmapToUri(this, data);
+                        bitmap = data;
+                    }
+                    break;
+                case CODE_VIDEO://视频
+                    uri = intent.getData();
+                    if (uri != null) {
+                        data = ImageViewTools.uriToBitmap2(this, uri);
+                        if (data != null) {
+                            bitmap = data;
+                        }
+                    }
+                    break;
+                default:
+                    GT.logt("非法参数！");
+                    finish();
+                    break;
+            }
+
+
+            //逻辑分别处理
+            switch (CODE) {
+                case CODE_PHOTO://相册
+                case CODE_PHOTOGRAPH://拍照
+                case CODE_VIDEO://视频
+                    //初始化必要参数
+                    if (uri == null) {
+                        uri = Uri.parse("");
+                    }
+                    if (bitmap == null) {
+                        bitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ALPHA_8);
+                    }
+
+                    intent.putExtra("requestCode", requestCode);
+                    intent.putExtra("resultCode", resultCode);
+
+                    //目前支持的返回类型
+                    GT.EventBus.posts(intent, feedBack);
+                    GT.EventBus.posts(uri, feedBack);
+                    GT.EventBus.posts(bitmap, feedBack);
+
+                    //返回 H5 相片资源
+                    GT_WebView.BaseWebView.initShowFileChoosers(uri, this);
+                    break;
+                default:
+                    GT.logt("非法参数！");
+                    break;
+            }
+
+
+            finish();
+        }
+
 
     }
 
@@ -38753,6 +39556,61 @@ public class GT {
                 return list == null || list.length == 0;
             }
 
+
+        }
+
+        /**
+         * 点击屏幕 可根据 屏幕的比例 与 具体的 X,Y 坐标点击
+         */
+        public static class AutoTouch {
+            private static int width = 0;
+            private static int height = 0;
+
+            /**
+             * 传入在屏幕中的比例位置，坐标左上角为基准
+             *
+             * @param act    传入Activity对象
+             * @param ratioX 需要点击的x坐标在屏幕中的比例位置  0.4375~1
+             * @param ratioY 需要点击的y坐标在屏幕中的比例位置  0.537~1
+             */
+            public static void autoClickRatio(Activity act, final double ratioX, final double ratioY) {
+                width = act.getWindowManager().getDefaultDisplay().getWidth();
+                height = act.getWindowManager().getDefaultDisplay().getHeight();
+                GT.Thread.getInstance(0).execute(new Runnable() {
+                    @Override
+                    public void run() {
+                        // 线程睡眠0.3s
+                        Thread.sleep(300);
+                        // 生成点击坐标
+                        int x = (int) (width * ratioX);
+                        int y = (int) (height * ratioY);
+                        // 利用ProcessBuilder执行shell命令
+                        String[] order = {"input", "tap", "" + x, "" + y};
+                        try {
+                            new ProcessBuilder(order).start();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                });
+            }
+
+            /**
+             * 传入在屏幕中的坐标，坐标左上角为基准
+             *
+             * @param act 传入Activity对象
+             * @param x   需要点击的x坐标
+             * @param y   需要点击的x坐标
+             */
+            public static void autoClickPos(Activity act, final double ratioX, final double ratioY) {
+                // 利用ProcessBuilder执行shell命令
+                String[] order = {"input", "tap", "" + ratioX, "" + ratioY};
+                try {
+                    new ProcessBuilder(order).start();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
 
         }
 
