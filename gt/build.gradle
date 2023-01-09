@@ -44,9 +44,7 @@ dependencies {
 
     //GT全部功能 需要添加的包
     implementation 'me.jahnen:libaums:0.8.0'//U盘操作
-    implementation 'com.blankj:utilcodex:1.30.6'//集成 AndroidUtilCode 工具包
     implementation 'com.google.code.gson:gson:2.9.0'// json解析
-    implementation 'com.github.bumptech.glide:glide:4.13.2'//加载图片
 
     //注册本地库 gt-DataBinding
     implementation project(':gt-DataBinding')

@@ -217,6 +217,7 @@ public class GT_DataBindingMain extends AbstractProcessor {
                         break;
                     case GT_DataBinding.PopupWindow:
                     case GT_DataBinding.View:
+                    case GT_DataBinding.Notification:
                         builder.append("import android.content.Context;\n");
                         break;
                     case GT_DataBinding.FloatingWindow:
@@ -261,6 +262,10 @@ public class GT_DataBindingMain extends AbstractProcessor {
                         break;
                     case GT_DataBinding.View:
                         builder.append("\npublic class " + bindingBean.getClassName() + "Binding<VM> extends GT.GT_View.DataBindingView {\n\n");
+                        break;
+
+                    case GT_DataBinding.Notification:
+                        builder.append("\npublic class " + bindingBean.getClassName() + "Binding<VM> extends GT.GT_Notification.DataBindingNotification {\n\n");
                         break;
 
                 }
@@ -364,6 +369,12 @@ public class GT_DataBindingMain extends AbstractProcessor {
                         builder.append("\tprotected void initView(View view, Bundle savedInstanceState) {\n" +
                                 "\t\tsuper.initView(view, savedInstanceState);\n" +
                                 "\t\t" + DataBindingUtils.getLowercaseLetter(bindingBean.getClassName()) + "Binding = GT.DataBindingUtil.setContentView(this, view, activity);\n");
+                        break;
+
+                    case GT_DataBinding.Notification:
+                        builder.append("\tprotected void initView(Context context) {\n" +
+                                "\t\t super.initView(context);\n" +
+                                "\t\t" + DataBindingUtils.getLowercaseLetter(bindingBean.getClassName()) + "Binding = GT.DataBindingUtil.setContentView(this, null, context);\n");
                         break;
                 }
 

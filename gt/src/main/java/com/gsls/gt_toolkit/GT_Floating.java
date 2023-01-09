@@ -1,8 +1,6 @@
 package com.gsls.gt_toolkit;
 
 
-import static android.app.PendingIntent.FLAG_IMMUTABLE;
-
 import android.annotation.SuppressLint;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -13,6 +11,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -34,8 +33,6 @@ import androidx.core.app.NotificationManagerCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.blankj.utilcode.util.AppUtils;
-import com.blankj.utilcode.util.DeviceUtils;
 import com.gsls.gt.GT;
 import com.gsls.gt.R;
 
@@ -100,13 +97,30 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
     };
 
     //外置设置的app key = app名称  value = 单击后发布事件的方法
-    public final static List<AppBean> listApp = new ArrayList<>();
+    private final static List<AppBean> listApp = new ArrayList<>();
+
+    /**
+     * 添加app
+     *
+     * @param appBean
+     */
+    public static void addApp(AppBean appBean) {
+        for (int i = 0; i < listApp.size(); i++) {
+            AppBean appBean1 = listApp.get(i);
+            if (appBean1.name.equals(appBean.name)) {
+                return;
+            }
+        }
+        listApp.add(appBean);
+    }
 
     //用于存储本次加载的APP
     private final Map<String, View> viewMap = new HashMap<>();
     //记录原始的宽高,用于重置初始化
     private int originalWidth = 0;
     private int originalHeight = 0;
+
+    public static boolean isLog = false;
 
     @GT.EventBus.Subscribe(threadMode = GT.EventBus.ThreadMode.MAIN)
     public void logAllData(String msg) {
@@ -122,6 +136,8 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
     protected void initView(View view) {
         setDrag(true);//设置可拖动
         GT.EventBus.getDefault().register(this);//绑定订阅者
+
+        isLog = true;
 
         //组件初始化
         tv_shutdown = view.findViewById(R.id.tv_shutdown);
@@ -204,10 +220,27 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
             View item_app_ico = LayoutInflater.from(this).inflate(R.layout.item_app_ico, null);
             TextView tv_appName = item_app_ico.findViewById(R.id.tv_appName);
             ImageView iv_icon = item_app_ico.findViewById(R.id.iv_icon);
-//            GT.Glide.with(this).load(appBean.appIcon != null ? appBean.appIcon : R.mipmap.gt_logo).into(iv_icon);
+            GT.Glide.with(this).load(appBean.appIcon != null ? appBean.appIcon : R.mipmap.gt_logo).into(iv_icon);
             tv_appName.setText(appBean.name);
             flowLayout.addView(item_app_ico);//添加APP
-            item_app_ico.setOnClickListener(view1 -> GT.EventBus.getDefault().post(null, appBean.function));
+            if (appBean.function != null) {
+                item_app_ico.setOnClickListener(view1 -> {
+                    GT.EventBus.getDefault().post(null, appBean.function);
+                    if(appBean.onListener != null){
+                        appBean.onListener.onListener(appBean.function);
+                    }
+                });
+            }
+            if (appBean.longFunction != null) {
+                item_app_ico.setOnLongClickListener(view12 -> {
+                    GT.EventBus.getDefault().post(null, appBean.longFunction);
+                    if(appBean.onListener != null){
+                        appBean.onListener.onListener(appBean.longFunction);
+                    }
+                    return true;
+                });
+            }
+
             //将APP存储到容器中
             viewMap.put(tv_appName.getText().toString(), item_app_ico);
         }
@@ -841,21 +874,19 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
                 public void run() {
                     cl_close.setVisibility(View.VISIBLE);//显示开关机组件
                     tv_shutdown.setText("开机");
-                    String manufacturer = DeviceUtils.getManufacturer().toLowerCase();
-                    List<AppUtils.AppInfo> appsInfo = AppUtils.getAppsInfo();//获取手机所有APP信息
-                    for (int i = 0; i < appsInfo.size(); i++) {
-                        AppUtils.AppInfo appInfo = appsInfo.get(i);
-                        String name = appInfo.getName();
-                        String packageName = appInfo.getPackageName().toLowerCase();//获取当前遍历的包名
-                        if (packageName.contains("google") || packageName.contains("android") || packageName.contains(manufacturer)) {
+                    List<GT.ApplicationUtils.AppBean> appBeanList = GT.ApplicationUtils.getAllAppData2(context);
+                    for (int i = 0; i < appBeanList.size(); i++) {
+                        GT.ApplicationUtils.AppBean appBean = appBeanList.get(i);
+                        String name = appBean.name;
+                        String packageName = appBean.packName;//获取当前遍历的包名
+                        if (packageName.contains("google") || packageName.contains("android")) {
                             continue;//过滤掉系统自带应用
                         }
-//                        GT.log("packageName:" + packageName);
                         View item_app_ico = LayoutInflater.from(context).inflate(R.layout.item_app_ico, null);
                         TextView tv_appName = item_app_ico.findViewById(R.id.tv_appName);
                         ImageView iv_icon = item_app_ico.findViewById(R.id.iv_icon);
                         tv_appName.setText(name);//设置APP名称
-                        iv_icon.setImageDrawable(appInfo.getIcon());
+                        iv_icon.setImageDrawable((Drawable) appBean.appIcon);
                         GT.Thread.runAndroid(() -> {
                             flowLayout.addView(item_app_ico);//添加APP
                         });
@@ -1392,6 +1423,10 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
             GT.Thread.getInstance(0).execute(() -> {
                 while (ll_fragmentStack != null) {
                     List<String> stackFragmentNames = GT.GT_Fragment.getGt_fragment().getStackFragmentNames();
+
+                    if (stackFragmentNames == null || stackFragmentNames.size() == 0)
+                        continue;
+
                     //判断是否需要更新UI
                     if (fragmentMsg.equals(stackFragmentNames.toString())) {
                         GT.Thread.sleep(300);

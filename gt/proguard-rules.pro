@@ -142,6 +142,19 @@
     java.lang.Object readResolve();
 }
 
+#---------------------------------webview------------------------------------
+-keepclassmembers class android.webkit.WebView {
+   public *;
+}
+-keepclassmembers class * extends android.webkit.WebViewClient {
+    public void *(android.webkit.WebView, java.lang.String, android.graphics.Bitmap);
+    public boolean *(android.webkit.WebView, java.lang.String);
+}
+-keepclassmembers class * extends android.webkit.WebViewClient {
+    public void *(android.webkit.WebView, java.lang.String);
+}
+
+
 -keepattributes JavascriptInterface
 
 #--------(实体Model不能混淆，否则找不到对应的属性获取不到值)-----#

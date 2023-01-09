@@ -1,7 +1,7 @@
 package com.gsls.gt_databinding;
 
 import com.google.auto.service.AutoService;
-import com.gsls.gt_databinding.annotation.GT_HttpCallBuild;
+import com.gsls.gt_databinding.annotation.GT_Dao;
 import com.gsls.gt_databinding.bean.BindingBean;
 import com.gsls.gt_databinding.utils.DataBindingUtils;
 import com.gsls.gt_databinding.utils.FileUtils;
@@ -23,7 +23,7 @@ import javax.tools.JavaFileObject;
 
 
 @AutoService(Processor.class)//编译时运行这个类
-public class GT_HttpCallBuildMain extends AbstractProcessor {
+public class GT_DaoMain extends AbstractProcessor {
 
     private List<String> filtrationList;
 
@@ -34,7 +34,7 @@ public class GT_HttpCallBuildMain extends AbstractProcessor {
      */
     public Set<String> getSupportedAnnotationTypes() {
         Set<String> types = new HashSet<>();
-        types.add(GT_HttpCallBuild.class.getCanonicalName());
+        types.add(GT_Dao.class.getCanonicalName());
         return types;
     }
 
@@ -46,7 +46,7 @@ public class GT_HttpCallBuildMain extends AbstractProcessor {
         DataBindingUtils.log("filtrationList:" + filtrationList);
         DataBindingUtils.log("filtrationListSize:" + filtrationList.size());
 
-        for (Element element : roundEnv.getElementsAnnotatedWith(GT_HttpCallBuild.class)) {
+        for (Element element : roundEnv.getElementsAnnotatedWith(GT_Dao.class)) {
             DataBindingUtils.log("element:" + element);
             DataBindingUtils.log("elementGet1:" + element.getEnclosedElements());
             DataBindingUtils.log("elementGet2:" + element.getSimpleName());
@@ -54,7 +54,7 @@ public class GT_HttpCallBuildMain extends AbstractProcessor {
             DataBindingUtils.log("elementGet4:" + element.getModifiers());
             DataBindingUtils.log("elementGet6:" + element.getEnclosingElement());
 
-            GT_HttpCallBuild annotation = element.getAnnotation(GT_HttpCallBuild.class);
+            GT_Dao annotation = element.getAnnotation(GT_Dao.class);
 
             BindingBean bindingBean = new BindingBean();
             bindingBean.setPackClassPath(element.toString());
@@ -151,12 +151,12 @@ public class GT_HttpCallBuildMain extends AbstractProcessor {
             String classCode = bindingBean.getClassCode();
 
             //开始解析代码
-            int indexOf = classCode.indexOf("@" + GT_HttpCallBuild.class.getSimpleName());
+            int indexOf = classCode.indexOf("@" + GT_Dao.class.getSimpleName());
             classCode = classCode.substring(indexOf);
             DataBindingUtils.log("classCode2:" + classCode);
             DataBindingUtils.log("Pack:" + bindingBean.getPackClassPath());
 
-            String code = analysisHttpCallJavaCode(classCode, bindingBean.getPackClassPath());
+            String code = analysisDaoCallJavaCode(classCode, bindingBean.getPackClassPath());
             DataBindingUtils.log("DATA:" + code);
 
             if(code.contains("@GT.HttpCall.Query(")){
@@ -198,69 +198,76 @@ public class GT_HttpCallBuildMain extends AbstractProcessor {
         return true;
     }
 
-    private static String analysisHttpCallJavaCode(String javaCode, String classPackName) {
+
+    private static String analysisDaoCallJavaCode(String javaCode, String classPackName) {
         List<String> list = new ArrayList<>();
-        try{
-            while (javaCode.contains("GT.HttpCall.Call")) {
+        try {
+            while (javaCode.contains("GT.Hibernate")) {
                 // 获取方法的信息
-                int indexOf = javaCode.indexOf("GT.HttpCall.Call");
+                int indexOf = javaCode.indexOf("GT.Hibernate");
                 int indexOf2 = javaCode.indexOf(");", indexOf) + 1;
                 String substring = javaCode.substring(indexOf, indexOf2);
-                substring = substring.substring(substring.indexOf(" ") + 1);
+                substring = substring.split("\n")[1];
+                int lastIndexOf = substring.lastIndexOf("(");
+                int lastIndexOf2 = substring.lastIndexOf(" ", lastIndexOf);
+                substring = substring.substring(lastIndexOf2 + 1, substring.indexOf(")") + 1);
                 list.add(substring);
-
                 javaCode = javaCode.substring(indexOf2);
             }
-        }catch (Exception e){
+        } catch (Exception e) {
 
         }
 
-        // 添加绝对接口
-        String apiUrl = "";
-        String returnValue = "";// 返回值
-        for (String str : list) {
-            // 获取方法名称
-            String methodName = "";
-            methodName = str.substring(0, str.indexOf("(")) + "-";
+        String returnValue2 = "";
+
+        for (int i = 0; i < list.size(); i++) {
+            String code = list.get(i);
+
+            String returnValue = "";
+
+            if(i != 0){
+                returnValue = "\t\t\t\t\"" + classPackName + "+" + code.substring(0, code.indexOf("(")) + "-";
+            }else{
+                returnValue = "" + classPackName + "+" + code.substring(0, code.indexOf("(")) + "-";
+            }
 
             // 解析方法形参
-            String parameters = str.substring(str.indexOf("(") + 1, str.length() - 1);
-            String[] split = parameters.split(", ");
-            String parameterTypes = "";
-            String parameterNames = "[";
-            // 遍历赋值方法形参名称与类型
-            for (int i = 0; i < split.length; i++) {
-                String parameter = split[i];
-                String[] split2 = parameter.split(" ");
-                String parameterType = split2[0];
-                String parameterName = split2[1];
-                if (i == split.length - 1) {
-                    parameterTypes += parameterType;
-                    parameterNames += parameterName;
+            String parameters = code.substring(code.indexOf("(") + 1, code.length() - 1);
+            String value = "";
+            if (parameters.contains(",")) {
+                parameters = parameters.replaceAll(", ", ",");
+                String[] split = parameters.split(",");
+                for (String str : split) {
+                    String[] split2 = str.split(" ");
+                    String type = split2[0];
+                    value += split2[1] + ",";
+                    returnValue += type + "-";
+                }
+                returnValue = returnValue.substring(0, returnValue.length() - 1) + "[";
+                value = value.substring(0, value.length() - 1) + "] \"+";
+            } else {
+                String[] split = parameters.split(" ");
+                String type = split[0];
+                if (type.length() == 0) {
+                    type = "null";
                 } else {
-                    parameterTypes += parameterType + "-";
-                    parameterNames += parameterName + ",";
+                    value = split[1] + "] \"+";
+                }
+                if (type.equals("null")) {
+                    returnValue += type + "[] \"+";
+                } else {
+                    returnValue += type + "[";
                 }
             }
-            parameterNames += "] \"+";
-            returnValue += classPackName + "+";
-            returnValue += methodName + parameterTypes + parameterNames + " \n \t\t\t\t\"";
-
+            returnValue2 += returnValue + value + " \n";
         }
 
-        DataBindingUtils.log("returnValue:" + returnValue);
-        if(returnValue.replaceAll("\\s*","").length() == 0){
-            DataBindingUtils.log("返回了:" + returnValue);
-            return returnValue;
-        }
-        returnValue = returnValue.substring(0, returnValue.length() - 1);
+        int lastIndexOf = returnValue2.lastIndexOf("\"+");
 
-        returnValue = apiUrl + returnValue;
+        returnValue2 = returnValue2.substring(0,lastIndexOf);
 
-        //去除多余的格式
-        returnValue = returnValue.substring(0, returnValue.length() - 9);
-
-        return returnValue;
+        return returnValue2;
     }
+
 
 }
