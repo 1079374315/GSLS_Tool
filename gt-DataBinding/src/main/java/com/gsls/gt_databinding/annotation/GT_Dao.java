@@ -11,5 +11,7 @@ import java.lang.annotation.Target;
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface GT_Dao {
+
     //如果你的项目无法支持 method.getParameters(); 方法 (通过 JDK1.8 获取方法形参的名称)，那就需要使用该注解并加入 gt-DataBinding.jar 包
+    Class<?> value() ;
 }
