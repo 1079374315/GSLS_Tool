@@ -346,6 +346,7 @@ import dalvik.system.PathClassLoader;
  * (3)防止空数据的方法	notyNull()
  * (4)获取 字符串中的 电话号码	checkCellphone()
  * (5)获取当前手机所有app信息 getAllAppData2()
+ * 14.优化整体性能
  * <p>
  * <p>
  * 小提示：(用于 AndroidStudio )
