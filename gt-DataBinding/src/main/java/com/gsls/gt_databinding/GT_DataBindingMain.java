@@ -112,10 +112,10 @@ public class GT_DataBindingMain extends AbstractProcessor {
                         DataBindingUtils.log("query1:" + query);
                         int R_Index = query.indexOf(".R;");
                         DataBindingUtils.log("R_Index1:" + R_Index);
-                        if(R_Index != -1){
-                            int lastIndexOf = query.lastIndexOf("import ",R_Index);
-                            query = query.substring(lastIndexOf + "import ".length(),R_Index);
-                        }else{
+                        if (R_Index != -1) {
+                            int lastIndexOf = query.lastIndexOf("import ", R_Index);
+                            query = query.substring(lastIndexOf + "import ".length(), R_Index);
+                        } else {
                             query = query.substring(0, query.indexOf(";") + 1);
                             query = query.replaceAll("package", "");
                             query = query.replaceAll(" ", "");
@@ -136,10 +136,10 @@ public class GT_DataBindingMain extends AbstractProcessor {
                         DataBindingUtils.log("query1:" + query);
                         int R_Index = query.indexOf(".R;");
                         DataBindingUtils.log("R_Index2:" + R_Index);
-                        if(R_Index != -1){
-                            int lastIndexOf = query.lastIndexOf("import ",R_Index);
-                            query = query.substring(lastIndexOf + "import ".length(),R_Index);
-                        }else{
+                        if (R_Index != -1) {
+                            int lastIndexOf = query.lastIndexOf("import ", R_Index);
+                            query = query.substring(lastIndexOf + "import ".length(), R_Index);
+                        } else {
                             query = query.substring(0, query.indexOf(";") + 1);
                             query = query.replaceAll("package", "");
                             query = query.replaceAll(" ", "");
@@ -152,7 +152,6 @@ public class GT_DataBindingMain extends AbstractProcessor {
 
 
                 }
-
 
                 bindingBean.setLayoutPath(projectName + "\\" + bindingBean.getJavaLibraryName() + "\\src\\main\\res\\layout\\");//存储布局路径
                 bindingBean.setLayoutAbsolutePath(bindingBean.getLayoutPath() + bindingBean.getLayoutName());
@@ -280,12 +279,11 @@ public class GT_DataBindingMain extends AbstractProcessor {
                     }
                 }
 
-                if (!GT_DataBinding.Adapter.equals(bindingBean.getBingingType())){
+                if (!GT_DataBinding.Adapter.equals(bindingBean.getBingingType())) {
                     builder.append("\tprotected VM viewModel;\n");//添加 ViewModel
                     //生成GT DataBinding 类
                     builder.append("\n\tprivate " + bindingBean.getClassName() + "Binding " + DataBindingUtils.getLowercaseLetter(bindingBean.getClassName()) + "Binding;\n\n");
                 }
-
 
 
                 //根据不同的绑定类型 进行类组件的初始化
@@ -425,9 +423,53 @@ public class GT_DataBindingMain extends AbstractProcessor {
 
                     builder.append("\n\tpublic void onViewModeFeedback(Object... obj) {\n\n" +
                             "\t}\n");
-
                 }
 
+                //TODO 需要检查， 其他类型的怎么进行内存释放清空操作
+
+                //释放View资源
+                switch (bindingBean.getBingingType()) {
+                    case GT_DataBinding.Fragment:
+                    case GT_DataBinding.DialogFragment:
+                        builder.append("\n\tpublic void onDestroyView() {\n" +
+                                "\t\tsuper.onDestroyView();\n");
+                        for (int i = 0; i < xmlBeanList.size(); i++){
+                            builder.append("\t\t\t" + xmlBeanList.get(i).getIdName() + " = null;\n");
+                        }
+                        builder.append("\t\t\t" + DataBindingUtils.getLowercaseLetter(bindingBean.getClassName()) + "Binding = null;\n");
+                        builder.append("\t}\n");
+
+                        builder.append("\n\tpublic void onDestroy() {\n" + "\t\tsuper.onDestroy();\n");
+                        builder.append("\t\t\tviewModel = null;\n");
+                        builder.append("\t}\n");
+
+                        break;
+                }
+
+                //释放 Activity资源
+                if(bindingBean.getBingingType().equals(GT_DataBinding.Activity) ){
+                    builder.append("\n\tprotected void onDestroy() {\n" + "\t\tsuper.onDestroy();\n");
+                    for (int i = 0; i < xmlBeanList.size(); i++){
+                        builder.append("\t\t\t" + xmlBeanList.get(i).getIdName() + " = null;\n");
+                    }
+                    builder.append("\t\t\t" + DataBindingUtils.getLowercaseLetter(bindingBean.getClassName()) + "Binding = null;\n");
+                    builder.append("\t\t\tviewModel = null;\n");
+                    builder.append("\t}\n");
+                }
+
+                //释放 资源 View,FloatingWindow,PopupWindow
+                switch (bindingBean.getBingingType()) {
+                    case GT_DataBinding.View:
+                    case GT_DataBinding.FloatingWindow:
+                    case GT_DataBinding.PopupWindow:
+                        builder.append("\n\tpublic void finish() {\n" + "\t\tsuper.finish();\n");
+                        for (int i = 0; i < xmlBeanList.size(); i++){
+                            builder.append("\t\t\t" + xmlBeanList.get(i).getIdName() + " = null;\n");
+                        }
+                        builder.append("\t\t\t" + DataBindingUtils.getLowercaseLetter(bindingBean.getClassName()) + "Binding = null;\n");
+                        builder.append("\t\t\tviewModel = null;\n");
+                        builder.append("\t}\n");
+                }
 
                 builder.append("\n}\n"); // close class
 

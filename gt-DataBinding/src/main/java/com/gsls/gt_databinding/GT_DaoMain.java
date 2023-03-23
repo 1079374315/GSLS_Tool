@@ -1,7 +1,7 @@
 package com.gsls.gt_databinding;
 
 import com.google.auto.service.AutoService;
-import com.gsls.gt_databinding.annotation.GT_Dao;
+import com.gsls.gt_databinding.annotation.GT_DaoBuild;
 import com.gsls.gt_databinding.bean.BindingBean;
 import com.gsls.gt_databinding.utils.DataBindingUtils;
 import com.gsls.gt_databinding.utils.FileUtils;
@@ -34,7 +34,7 @@ public class GT_DaoMain extends AbstractProcessor {
      */
     public Set<String> getSupportedAnnotationTypes() {
         Set<String> types = new HashSet<>();
-        types.add(GT_Dao.class.getCanonicalName());
+        types.add(GT_DaoBuild.class.getCanonicalName());
         return types;
     }
 
@@ -46,7 +46,7 @@ public class GT_DaoMain extends AbstractProcessor {
         DataBindingUtils.log("filtrationList:" + filtrationList);
         DataBindingUtils.log("filtrationListSize:" + filtrationList.size());
 
-        for (Element element : roundEnv.getElementsAnnotatedWith(GT_Dao.class)) {
+        for (Element element : roundEnv.getElementsAnnotatedWith(GT_DaoBuild.class)) {
             DataBindingUtils.log("element:" + element);
             DataBindingUtils.log("elementGet1:" + element.getEnclosedElements());
             DataBindingUtils.log("elementGet2:" + element.getSimpleName());
@@ -54,7 +54,7 @@ public class GT_DaoMain extends AbstractProcessor {
             DataBindingUtils.log("elementGet4:" + element.getModifiers());
             DataBindingUtils.log("elementGet6:" + element.getEnclosingElement());
 
-            GT_Dao annotation = element.getAnnotation(GT_Dao.class);
+            GT_DaoBuild annotation = element.getAnnotation(GT_DaoBuild.class);
 
             BindingBean bindingBean = new BindingBean();
             bindingBean.setPackClassPath(element.toString());
@@ -151,7 +151,7 @@ public class GT_DaoMain extends AbstractProcessor {
             String classCode = bindingBean.getClassCode();
 
             //开始解析代码
-            int indexOf = classCode.indexOf("@" + GT_Dao.class.getSimpleName());
+            int indexOf = classCode.indexOf("@" + GT_DaoBuild.class.getSimpleName());
             classCode = classCode.substring(indexOf);
             DataBindingUtils.log("classCode2:" + classCode);
             DataBindingUtils.log("Pack:" + bindingBean.getPackClassPath());

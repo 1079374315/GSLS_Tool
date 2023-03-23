@@ -1,4 +1,4 @@
-package com.gsls.gsls_tool;
+package com.gsls.gsls_tool.bean;
 
 import com.gsls.gt.GT;
 

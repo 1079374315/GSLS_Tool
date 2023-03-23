@@ -193,6 +193,7 @@ import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
+import androidx.lifecycle.ViewModel;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.recyclerview.widget.StaggeredGridLayoutManager;
@@ -205,7 +206,7 @@ import com.github.mjdev.libaums.fs.UsbFileInputStream;
 import com.github.mjdev.libaums.fs.UsbFileOutputStream;
 import com.github.mjdev.libaums.partition.Partition;
 import com.google.gson.Gson;
-import com.gsls.gt_databinding.annotation.GT_Dao;
+import com.gsls.gt_databinding.annotation.GT_DaoBuild;
 import com.gsls.gt_databinding.annotation.GT_HttpCallBuild;
 import com.gsls.gt_toolkit.GT_Floating;
 
@@ -323,8 +324,8 @@ import dalvik.system.PathClassLoader;
  * GSLS_Tool
  * <p>
  * <p>
- * 更新时间:2023.2.26
- * 更新内容 v1.4.2.7 版本 大爆料：
+ * 更新时间:2023.3.2
+ * 更新内容 v1.4.2.6 版本 大爆料：
  * CSDN 博客/官网教程:https://blog.csdn.net/qq_39799899
  * GitHub https://github.com/1079374315/GT
  * 更新内容如下：
@@ -346,7 +347,6 @@ import dalvik.system.PathClassLoader;
  * (3)防止空数据的方法	notyNull()
  * (4)获取 字符串中的 电话号码	checkCellphone()
  * (5)获取当前手机所有app信息 getAllAppData2()
- * 14.优化整体性能
  * <p>
  * <p>
  * 小提示：(用于 AndroidStudio )
@@ -465,10 +465,10 @@ public class GT {
      *
      * @param msg object 类型的消息
      */
-    public static void log(Object msg) {
+    public static void log(Object msg, String... tag) {
         if (LOG.LOG_TF) {
             LOG.setLogData(String.valueOf(msg));
-            Log.i(LOG.LOG_TAG + "i", String.valueOf(msg));
+            Log.d(tag.length != 0 ? tag[0] : LOG.LOG_TAG, String.valueOf(msg));
         }
     }
 
@@ -476,12 +476,12 @@ public class GT {
      * @param mg
      * @详细提示消息
      */
-    public static void logs(Object mg) {
+    public static void logs(Object mg, String... tag) {
         if (LOG.LOG_TF) {
             String prefix = "";
             prefix = LOG.getPrefix(LOG.lineInfoIndex);
             LOG.setLogData(prefix + mg);
-            Log.i("GT_i", prefix + mg);
+            Log.d(tag.length != 0 ? tag[0] : LOG.LOG_TAG, prefix + mg);
             if (LOG.LOG_FILE_TF) {// 打印到sd卡
                 if (TextUtils.isEmpty(prefix)) {
                     prefix = LOG.getPrefix(LOG.lineInfoIndex);
@@ -495,12 +495,12 @@ public class GT {
      * @param mg
      * @标记日志
      */
-    public static void logt(Object mg) {
+    public static void logt(Object mg, String... tag) {
         if (LOG.LOG_TF) {
             String prefix = "";
             prefix = LOG.getPrefixT(LOG.lineInfoIndex);
             LOG.setLogData(prefix + mg);
-            Log.i("GT_i", prefix + mg);
+            Log.d(tag.length != 0 ? tag[0] : LOG.LOG_TAG, prefix + mg);
             if (LOG.LOG_FILE_TF) {// 打印到sd卡
                 if (TextUtils.isEmpty(prefix)) {
                     prefix = LOG.getPrefix(LOG.lineInfoIndex);
@@ -514,16 +514,16 @@ public class GT {
      * @param mg
      * @标记日志
      */
-    public static void logt(Object mg, int... lineInfoIndex) {
+    public static void logt(Object mg, int lineInfoIndex, String... tag) {
         if (LOG.LOG_TF) {
             String prefix = "";
-            if (lineInfoIndex.length <= 0) {
+            if (lineInfoIndex >= 0) {
                 prefix = LOG.getPrefixT(LOG.lineInfoIndex);
             } else {
-                prefix = LOG.getPrefixT(lineInfoIndex[0]);
+                prefix = LOG.getPrefixT(lineInfoIndex);
             }
             LOG.setLogData(prefix + mg);
-            Log.i("GT_i", prefix + mg);
+            Log.d(tag.length != 0 ? tag[0] : LOG.LOG_TAG, prefix + mg);
             if (LOG.LOG_FILE_TF) {// 打印到sd卡
                 if (TextUtils.isEmpty(prefix)) {
                     prefix = LOG.getPrefix(LOG.lineInfoIndex);
@@ -533,12 +533,12 @@ public class GT {
         }
     }
 
-    public static void logl(Object mg) {
+    public static void logl(Object mg, String... tag) {
         if (LOG.LOG_TF) {
             String prefix = "";
             prefix = LOG.getPrefixT(LOG.lineInfoIndex);
             LOG.setLogData(prefix + mg);
-            Log.i("GT_i", prefix + mg);
+            Log.d(tag.length != 0 ? tag[0] : LOG.LOG_TAG, prefix + mg);
             if (LOG.LOG_FILE_TF) {// 打印到sd卡
                 if (TextUtils.isEmpty(prefix)) {
                     prefix = LOG.getPrefix(LOG.lineInfoIndex);
@@ -553,24 +553,24 @@ public class GT {
      *
      * @param msg object 类型的消息
      */
-    public static void logAll(Object msg) {
+    public static void logAll(Object msg, String... tag) {
         if (LOG.LOG_TF) {
             String strMsg = msg.toString();
             if (strMsg.length() > LOG.logMaxLength) {
                 while (true) {
                     String substring = strMsg.substring(0, LOG.logMaxLength);
                     LOG.setLogData("--- " + substring);
-                    Log.i(LOG.LOG_TAG + "i", "--- " + substring);
+                    Log.d(tag.length != 0 ? tag[0] : LOG.LOG_TAG, "--- " + substring);
                     strMsg = strMsg.substring(LOG.logMaxLength);
                     if (strMsg.length() <= LOG.logMaxLength) {
                         LOG.setLogData(strMsg);
-                        Log.i(LOG.LOG_TAG + "i", strMsg);
+                        Log.d(tag.length != 0 ? tag[0] : LOG.LOG_TAG, strMsg);
                         break;
                     }
                 }
             } else {
                 LOG.setLogData(String.valueOf(msg));
-                Log.i(LOG.LOG_TAG + "i", String.valueOf(msg));
+                Log.d(tag.length != 0 ? tag[0] : LOG.LOG_TAG, String.valueOf(msg));
             }
         }
     }
@@ -653,7 +653,7 @@ public class GT {
      * @param title 日志标题
      * @param msg   日志消息
      */
-    public static void log(Object title, Object msg) {
+    public static void log(Object title, Object msg, String... tag) {
         if (LOG.LOG_TF) {
 
             LOG.setLogData("--- Run" +
@@ -661,7 +661,7 @@ public class GT {
                     "" + msg + "\n" +
                     "---------------------" + title + "------------------------\n\n" +
                     "--- Close");
-            Log.i(LOG.LOG_TAG + "i",
+            Log.d(tag.length != 0 ? tag[0] : LOG.LOG_TAG,
                     "--- Run" +
                             "\n\n---------------------" + title + "------------------------\n" +
                             "" + msg + "\n" +
@@ -677,30 +677,30 @@ public class GT {
      *
      * @param msg object 类型的消息
      */
-    public static void logAll(Object title, Object msg) {
+    public static void logAll(Object title, Object msg, String... tag) {
         if (LOG.LOG_TF) {
             LOG.setLogData("Run ----- " + title + " ---------");
-            Log.i(LOG.LOG_TAG + "i", "Run ----- " + title + " ---------");
+            Log.d(tag.length != 0 ? tag[0] : LOG.LOG_TAG, "Run ----- " + title + " ---------");
             String strMsg = msg.toString();
             if (strMsg.length() > LOG.logMaxLength) {
                 while (true) {
                     String substring = strMsg.substring(0, LOG.logMaxLength);
                     LOG.setLogData("--- " + substring);
-                    Log.i(LOG.LOG_TAG + "i", "--- " + substring);
+                    Log.d(tag.length != 0 ? tag[0] : LOG.LOG_TAG, "--- " + substring);
                     strMsg = strMsg.substring(LOG.logMaxLength);
                     if (strMsg.length() <= LOG.logMaxLength) {
                         LOG.setLogData(strMsg);
-                        Log.i(LOG.LOG_TAG + "i", strMsg);
+                        Log.d(tag.length != 0 ? tag[0] : LOG.LOG_TAG, strMsg);
                         break;
                     }
                 }
             } else {
                 LOG.setLogData(String.valueOf(msg));
-                Log.i(LOG.LOG_TAG + "i", String.valueOf(msg));
+                Log.d(tag.length != 0 ? tag[0] : LOG.LOG_TAG, String.valueOf(msg));
             }
 
             LOG.setLogData("----- " + title + " ----- Close");
-            Log.i(LOG.LOG_TAG + "i", "----- " + title + " ----- Close");
+            Log.d(tag.length != 0 ? tag[0] : LOG.LOG_TAG, "----- " + title + " ----- Close");
 
         }
     }
@@ -1380,7 +1380,7 @@ public class GT {
         private static String prefix; // 占位符
 
         // 获取log打印前缀(行数、类名、方法名)
-        private static String getPrefix(int number) {
+        public static String getPrefix(int number) {
             if (number < 0) {
                 return "log Hierarchy error ";
             }
@@ -1399,7 +1399,7 @@ public class GT {
             return prefix;
         }
 
-        private static String getPrefixT(int number) {
+        public static String getPrefixT(int number) {
             if (number < 0) {
                 return "log Hierarchy error ";
             }
@@ -1442,7 +1442,6 @@ public class GT {
                 }
             }
             String time = dfs.format(new Date());
-//            Log.i("GT_i", "path:" + path);
             File file = createPathFile(path);
             BufferedWriter out = null;
             try {
@@ -1683,9 +1682,9 @@ public class GT {
                 view = null;
             }
 
-            public void finish(){
-                if(view != null) view = null;
-                if(toast != null) toast = null;
+            public void finish() {
+                if (view != null) view = null;
+                if (toast != null) toast = null;
             }
 
 
@@ -1824,16 +1823,16 @@ public class GT {
         //用于注销订阅者
         private List<String> deleteList = new ArrayList<>();
         //用于订阅者优先级
-        private CopyOnWriteArrayList<EventBusBean> priorityList = new CopyOnWriteArrayList<>();
+        private final CopyOnWriteArrayList<EventBusBean> priorityList = new CopyOnWriteArrayList<>();
         //用于事件分发拦截
-        private CopyOnWriteArrayList<Object> interceptList = new CopyOnWriteArrayList<>();
+        private final CopyOnWriteArrayList<Object> interceptList = new CopyOnWriteArrayList<>();
 
         //用于发布指定key的
-        private List<String> keyStringList = new ArrayList<>();
-        private List<Class<?>> keyClassList = new ArrayList<>();
+        private final List<String> keyStringList = new ArrayList<>();
+        private final List<Class<?>> keyClassList = new ArrayList<>();
 
         public static final String SEPARATOR = "_GT_";//分隔符
-        private static EventBus defaultInstance;
+        private static volatile EventBus defaultInstance;
 
         public static EventBus getDefault() {
             if (defaultInstance == null) {
@@ -1956,9 +1955,9 @@ public class GT {
          * 查看普通事件
          */
         public Map<String, EventBusBean> showEventBusMap() {
-            GT.logl("eventBusSize:" + eventBusMap.keySet().size());
+            GT.logt("eventBusSize:" + eventBusMap.keySet().size());
             for (String s : eventBusMap.keySet()) {
-                GT.logl("eventBus:" + eventBusMap.get(s));
+                GT.logt("eventBus:" + eventBusMap.get(s));
             }
             return eventBusMap;
         }
@@ -1988,9 +1987,9 @@ public class GT {
          * 查看粘性事件
          */
         public void showEventBusStickyMap() {
-            GT.logl("eventBusStickySize:" + eventBusStickyMap.keySet().size());
+            GT.logt("eventBusStickySize:" + eventBusStickyMap.keySet().size());
             for (String key : eventBusStickyMap.keySet()) {
-                GT.logl(key + ":" + eventBusStickyMap.get(key));
+                GT.logt(key + ":" + eventBusStickyMap.get(key));
             }
         }
 
@@ -2062,7 +2061,6 @@ public class GT {
                     String methodName = method.getName();//获取方法名称
 
                     //如果参数不是一个,那就进行精准提示并跳过操作
-                    GT.logl("存入时的parameterTypes.length:" + parameterTypes.length);
                     if (parameterTypes.length > 1) {
                         String str = "";
                         try {
@@ -2086,24 +2084,18 @@ public class GT {
                     }
 
                     Class<?> returnType = method.getReturnType();//获取方法返回类型
-                    GT.logl("returnType:" + returnType);
                     //订阅者唯一名称,若没有填订阅者名称那就默认使用当前方法名
                     String eventKey = subscribeAnnotation.eventKey().length() == 0 ? methodName : subscribeAnnotation.eventKey();//订阅者唯一名称
-                    GT.logl("eventKey:" + eventKey);
                     String threadMode = subscribeAnnotation.threadMode();//线程类型
                     int priority = subscribeAnnotation.priority();//优先级
                     boolean sticky = subscribeAnnotation.sticky();//是否支持粘性事件
 
                     //class + 唯一标识(方法名) + 参数类型 生成订阅者唯一标识
                     eventKey = aClass + SEPARATOR + eventKey + (parameterTypes.length == 1 ? (SEPARATOR + parameterTypes[0]) : "");
-//                    GT.logl("parameterTypes[0]:" + parameterTypes[0]);
-                    GT.logl("订阅者唯一标识:" + eventKey);
 
                     //如果订阅者没有被注册,那就进行注册
                     if (!eventBusMap.containsKey(eventKey)) {
-                        GT.logl("存入 实体类:" + eventKey + ":" + subscriber);
                         EventBusBean eventBusBean = new EventBusBean(subscriber, aClass, parameterTypes, returnType, eventKey, methodName, threadMode, priority, sticky);
-                        GT.logl("存入新建的实体类:" + eventBusBean);
                         eventBusMap.put(eventKey, eventBusBean);
                     }
 
@@ -2159,7 +2151,6 @@ public class GT {
                     }
                 }
             } catch (Exception e) {
-                GT.logl("出现存储异常:" + e);
                 if (LOG.GT_LOG_TF) {
                     GT.errt("e:" + e);
                 }
@@ -2189,9 +2180,7 @@ public class GT {
          * @param subscriber
          */
         public synchronized void unregister(Object subscriber) {
-            GT.logl("-------------------------------进入到 取消方法中-------------------------------");
             try {
-                GT.logl("1号");
                 Class<?> aClass = subscriber.getClass();
                 Method[] methods;
                 try {
@@ -2200,7 +2189,6 @@ public class GT {
                     methods = aClass.getMethods();
                 }
 
-                GT.logl("2号");
 
                 for (Method method : methods) {
 
@@ -2209,20 +2197,14 @@ public class GT {
                     if (subscribeAnnotation == null) {
                         continue;
                     }
-                    GT.logl("for循环：" + method.getName());
                     Class<?>[] parameterTypes = method.getParameterTypes();
-                    GT.logl("parameterTypes：" + parameterTypes.length);
                     String methodName = method.getName();
-                    GT.logl("methodName：" + methodName);
-                    GT.logl("parameterTypesLength：" + parameterTypes.length);
                     //如果参数不是一个,那就进行精准提示
                     if (parameterTypes.length > 1) {
                         String str = "";
                         try {
-                            GT.logl("进入 if");
                             for (Class<?> parameterType : parameterTypes) {
                                 String parameterStr = parameterType.toString();
-                                GT.logl("parameterStr:" + parameterStr);
                                 if (parameterStr.contains(".")) {
                                     str += parameterStr.substring(parameterStr.lastIndexOf(".") + 1) + " xxx,";
                                 } else {
@@ -2234,9 +2216,7 @@ public class GT {
                                     str = str.substring(0, str.length() - 1);
                                 }
                             }
-                            GT.logl("str:" + str);
                         } catch (Exception e) {
-                            GT.logl("出现异常:" + e);
                             GT.err("GT.EventBus 参数仅支持一个,若需要传多参数可传递 Bundle,List,Map,实体类Bean等等:  " + methodName + "(" + str + ")" + GT.getLineInfo(2));
                         }
                         continue;
@@ -2244,28 +2224,20 @@ public class GT {
 
                     //获取方法名
                     String eventKey = subscribeAnnotation.eventKey().length() == 0 ? methodName : subscribeAnnotation.eventKey();//订阅者唯一名称,若没有填订阅者名称那就默认使用当前方法名
-                    GT.logl("eventKey1:" + eventKey);
                     eventKey = aClass + SEPARATOR + eventKey + (parameterTypes.length == 1 ? (SEPARATOR + parameterTypes[0]) : "");
-                    GT.logl("eventKey2:" + eventKey);
 
-
-                    GT.logl("准备进行取消事件:" + eventKey);
                     deleteList.clear();
                     for (String key : eventBusMap.keySet()) {
                         if (!key.equals(eventKey)) {
-                            GT.logl("过滤掉");
                             continue;
                         }
-                        GT.logl("当前取消的key:" + key);
                         EventBusBean eventBusBean = eventBusMap.get(key);
                         if (eventBusBean.object == subscriber) {
-                            GT.logl("加入取消的:" + subscriber);
                             deleteList.add(eventBusBean.eventKey);
                         }
                     }
 
                     for (String key : deleteList) {
-                        GT.logl("成功删除取消的事件:" + key);
                         EventBusBean eventBusBean = eventBusMap.get(key);
                         if (eventBusBean != null) {
                             eventBusBean.object = null;
@@ -2274,9 +2246,7 @@ public class GT {
                     }
                 }
 
-                GT.logl("3号");
             } catch (Exception e) {
-                GT.logl("取消出现异常:" + e);
                 if (LOG.GT_LOG_TF) {
                     GT.errt("e:" + e);
                 }
@@ -2307,94 +2277,95 @@ public class GT {
          * @return
          */
         public <T> T post(Object eventData, Object... eventKeys) {
+            synchronized (eventBusMap) {
+                try {
+                    T t = null;
 
-            try {
-                T t = null;
+                    priorityList.clear();
+                    interceptList.clear();
 
-                priorityList.clear();
-                interceptList.clear();
+                    //订阅方法的优先级
+                    for (String key : eventBusMap.keySet()) {
+                        priorityList.add(eventBusMap.get(key));
+                    }
 
-                //订阅方法的优先级
-                for (String key : eventBusMap.keySet()) {
-                    priorityList.add(eventBusMap.get(key));
-                }
+                    //按照订阅者实体类中的线程大小进行从小到大排序
+                    priorityList.sort(Comparator.comparing(EventBusBean::getPriority));
 
-                //按照订阅者实体类中的线程大小进行从小到大排序
-                priorityList.sort(Comparator.comparing(EventBusBean::getPriority));
+                    //如果有指定订阅者类型,那就进行分类
+                    if (eventKeys != null && eventKeys.length != 0) {
+                        //给指定或筛选后的订阅者发布该事件
+                        keyClassList.clear();
+                        keyStringList.clear();
+                        //分别用 集合装入 String 与 class
 
-                //如果有指定订阅者类型,那就进行分类
-                if (eventKeys != null && eventKeys.length != 0) {
-                    //给指定或筛选后的订阅者发布该事件
-                    keyClassList.clear();
-                    keyStringList.clear();
-                    //分别用 集合装入 String 与 class
-
-                    for (Object eventKey : eventKeys) {
-                        if (eventKey instanceof Class<?>) {
-                            Class<?> aClass = (Class<?>) eventKey;
-                            keyClassList.add(aClass);
-                        } else {
-                            keyStringList.add(eventKey.toString());
+                        for (Object eventKey : eventKeys) {
+                            if (eventKey instanceof Class<?>) {
+                                Class<?> aClass = (Class<?>) eventKey;
+                                keyClassList.add(aClass);
+                            } else {
+                                keyStringList.add(eventKey.toString());
+                            }
                         }
                     }
-                }
 
 //                GT.logt("keyClassList:" + keyClassList);
 //                GT.logt("keyStringList:" + keyStringList);
 
-                //类型匹配后进行向订阅者按照线程优先级进行遍历 发布事件
-                for (EventBusBean eventBusBean : priorityList) {
+                    //类型匹配后进行向订阅者按照线程优先级进行遍历 发布事件
+                    for (EventBusBean eventBusBean : priorityList) {
 
-                    //如果有指定订阅者类型,那就进行过滤筛选
-                    if (eventKeys != null && eventKeys.length != 0) {
-                        if (!eventBusBean.eventKey.contains(SEPARATOR)) continue;
-                        String[] split = eventBusBean.eventKey.split(SEPARATOR);
-                        if (split.length < 2) continue;//如果少于两个分隔符，那就有问题，过滤掉
-                        String keyStr = split[1];
+                        //如果有指定订阅者类型,那就进行过滤筛选
+                        if (eventKeys != null && eventKeys.length != 0) {
+                            if (!eventBusBean.eventKey.contains(SEPARATOR)) continue;
+                            String[] split = eventBusBean.eventKey.split(SEPARATOR);
+                            if (split.length < 2) continue;//如果少于两个分隔符，那就有问题，过滤掉
+                            String keyStr = split[1];
 
-                        //事件分发拦截
-                        if (interceptList.size() != 0 && (interceptList.contains(keyStr) || interceptList.contains(eventBusBean.aClass)))
-                            continue;
-                        //字符串拦截
-                        if (keyStringList.size() != 0 && !keyStringList.contains(keyStr)) continue;
-                        //class 拦截
-                        if (keyClassList.size() != 0 && !keyClassList.contains(eventBusBean.aClass))
-                            continue;
-                    }
+                            //事件分发拦截
+                            if (interceptList.size() != 0 && (interceptList.contains(keyStr) || interceptList.contains(eventBusBean.aClass)))
+                                continue;
+                            //字符串拦截
+                            if (keyStringList.size() != 0 && !keyStringList.contains(keyStr))
+                                continue;
+                            //class 拦截
+                            if (keyClassList.size() != 0 && !keyClassList.contains(eventBusBean.aClass))
+                                continue;
+                        }
 
-                    //按照订阅者的线程类型进行处理
+                        //按照订阅者的线程类型进行处理
 //                    GT.logt("eventBusBean.threadMode:" + eventBusBean.threadMode);
-                    switch (eventBusBean.threadMode) {
-                        case ThreadMode.POSTING://默认使用发布事件的当前线程
-                            t = setMethodValue(eventBusBean, eventData);
-                            break;
-                        case ThreadMode.MAIN://使用UI主线程
-                            if (Thread.isMainThread()) { //主线程
+                        switch (eventBusBean.threadMode) {
+                            case ThreadMode.POSTING://默认使用发布事件的当前线程
                                 t = setMethodValue(eventBusBean, eventData);
-                            } else {//子线程
+                                break;
+                            case ThreadMode.MAIN://使用UI主线程
+                                if (Thread.isMainThread()) { //主线程
+                                    t = setMethodValue(eventBusBean, eventData);
+                                } else {//子线程
+                                    Thread.getUiThread().post(() -> setMethodValue(eventBusBean, eventData));
+                                }
+                                break;
+                            case ThreadMode.MAIN_ORDERED://new一个主线程处理
                                 Thread.getUiThread().post(() -> setMethodValue(eventBusBean, eventData));
-                            }
-                            break;
-                        case ThreadMode.MAIN_ORDERED://new一个主线程处理
-                            Thread.getUiThread().post(() -> setMethodValue(eventBusBean, eventData));
-                            break;
-                        case ThreadMode.BACKGROUND://在本子线程或新new子线程处理
-                            if (!Thread.isMainThread()) {//子线程
-                                t = setMethodValue(eventBusBean, eventData);
-                            } else {//主线程
+                                break;
+                            case ThreadMode.BACKGROUND://在本子线程或新new子线程处理
+                                if (!Thread.isMainThread()) {//子线程
+                                    t = setMethodValue(eventBusBean, eventData);
+                                } else {//主线程
+                                    Thread.getInstance(0).execute(() -> setMethodValue(eventBusBean, eventData));
+                                }
+                                break;
+                            case ThreadMode.ASYNC://在新new子线程处理
                                 Thread.getInstance(0).execute(() -> setMethodValue(eventBusBean, eventData));
-                            }
-                            break;
-                        case ThreadMode.ASYNC://在新new子线程处理
-                            Thread.getInstance(0).execute(() -> setMethodValue(eventBusBean, eventData));
-                            break;
+                                break;
+                        }
+
                     }
 
-                }
+                    interceptList.clear();//清空拦截事件对象
 
-                interceptList.clear();//清空拦截事件对象
-
-                //获取本次发布事件订阅者数量
+                    //获取本次发布事件订阅者数量
                 /*int count = 0;
                 if (eventKeys != null && eventKeys.length != 0) {
                     try {
@@ -2417,12 +2388,13 @@ public class GT {
                     count = eventBusMap.keySet().size();
                 }*/
 
-                //如果只有一个发布的那就进行返回数据
+                    //如果只有一个发布的那就进行返回数据
 //                if (count == 1) return t;
-                return t;
-            } catch (ConcurrentModificationException e) {
-                if (LOG.GT_LOG_TF) {
-                    GT.errt("e:" + e);
+                    return t;
+                } catch (ConcurrentModificationException e) {
+                    if (LOG.GT_LOG_TF) {
+                        GT.errt("e:" + e);
+                    }
                 }
             }
             return null;
@@ -2438,28 +2410,31 @@ public class GT {
          * @return
          */
         public <T> T postSticky(Object eventData, Object... eventKeys) {
-            try {
-                String key = "";
-                if (eventKeys.length != 0) {
-                    for (Object obj : eventKeys) {
-                        if (obj instanceof Class<?>) {
-                            Class<?> aclass = (Class<?>) obj;
-                            key += aclass.getName() + SEPARATOR;
-                        } else {
-                            key += obj.toString() + SEPARATOR;
+
+            synchronized (eventBusStickyMap) {
+                try {
+                    String key = "";
+                    if (eventKeys.length != 0) {
+                        for (Object obj : eventKeys) {
+                            if (obj instanceof Class<?>) {
+                                Class<?> aclass = (Class<?>) obj;
+                                key += aclass.getName() + SEPARATOR;
+                            } else {
+                                key += obj.toString() + SEPARATOR;
+                            }
+                        }
+                        if (key.contains(SEPARATOR)) {
+                            if (SEPARATOR.equals(key.substring(key.length() - 1))) {
+                                key = key.substring(0, key.length() - 1);
+                            }
                         }
                     }
-                    if (key.contains(SEPARATOR)) {
-                        if (SEPARATOR.equals(key.substring(key.length() - 1))) {
-                            key = key.substring(0, key.length() - 1);
-                        }
+                    //记录粘性事件
+                    eventBusStickyMap.put(key, eventData);
+                } catch (ConcurrentModificationException e) {
+                    if (LOG.GT_LOG_TF) {
+                        GT.errt("e:" + e);
                     }
-                }
-                //记录粘性事件
-                eventBusStickyMap.put(key, eventData);
-            } catch (ConcurrentModificationException e) {
-                if (LOG.GT_LOG_TF) {
-                    GT.errt("e:" + e);
                 }
             }
             //正常发布事件
@@ -5057,28 +5032,57 @@ public class GT {
         @Target(ElementType.METHOD)
         @Retention(RetentionPolicy.RUNTIME)
         public @interface GT_Insert {
-            String value() default "";
+            String[] value() default "";
+
+            String[] where() default "";
+
+            String code() default "";
         }
 
         //删除数据
         @Target(ElementType.METHOD)
         @Retention(RetentionPolicy.RUNTIME)
         public @interface GT_Delete {
-            String value() default "";
+            String[] value() default "";
+
+            String[] where() default "";
+
+            String code() default "";
         }
 
         //查询数据
         @Target(ElementType.METHOD)
         @Retention(RetentionPolicy.RUNTIME)
         public @interface GT_Query {
-            String value() default "";
+            String[] select() default {};   //返回字段类型
+
+            String[] where() default {};      //查询条件
+
+            String[] value() default {};    //查询条件值
+
+            String code() default "";       //执行手写代码
+
+            String flashback() default "";  //排序
+
+            int[] limit() default {};    //限量
+
+            String groupBy() default "";//相当于select语句group by关键字后面的部分
+
+            String having() default "";//相当于select语句having关键字后面的部分
+
+            boolean isLast() default false;//是否倒序
+
         }
 
         //更新数据
         @Target(ElementType.METHOD)
         @Retention(RetentionPolicy.RUNTIME)
         public @interface GT_Update {
-            String value() default "";
+            String[] value() default "";
+
+            String[] where() default "";
+
+            String code() default "";
         }
 
         //万能sql语句
@@ -5086,6 +5090,13 @@ public class GT {
         @Retention(RetentionPolicy.RUNTIME)
         public @interface GT_Code {
             String value() default "";
+        }
+
+        @Documented
+        @Target(PARAMETER)
+        @Retention(RUNTIME)
+        public @interface Where {
+            String value();
         }
 
 
@@ -6194,6 +6205,8 @@ public class GT {
 
         // SQL 操作属性
         private String conditions = null;           //条件
+        private String groupBy = null;
+        private String having = null;
         private String[] values = null;             //条件值
         private String[] returnValues = null;       //返回字段
         private String orderByStr = null;           //排序
@@ -6215,8 +6228,9 @@ public class GT {
         private void closeSqlParameter() {
             values = null;
             conditions = null;
-            conditions = null;
             returnValues = null;
+            groupBy = null;
+            having = null;
             orderByStr = null;
             limitStr = null;
         }
@@ -6227,25 +6241,9 @@ public class GT {
          * @param returnValues
          * @return
          */
-        public Hibernate select(Object returnValues) {
-
-            String returnValueType = returnValues.getClass().getSimpleName();
-
-            if (!returnValueType.equals("String") && !returnValueType.equals("String[]")) {
-                err(getLineInfo(LOG.lineInfoIndex), "返回的数据 returnValue 类型仅支持String 与 String[]，操作失败");
-                status = false;
-                return null;
-            }
-
-            //解析查询条件值
-            String[] returnValues1 = new String[1];//解析筛选值
-            if (returnValueType.equals("String[]")) {
-                returnValues1 = (String[]) returnValues;
-            } else if (returnValueType.equals("String")) {
-                returnValues1[0] = (String) returnValues;
-            }
-
-            this.returnValues = returnValues1;
+        public Hibernate select(String... returnValues) {
+            if (returnValues != null && returnValues.length == 0) returnValues = null;
+            this.returnValues = returnValues;
             return this;
         }
 
@@ -6256,17 +6254,19 @@ public class GT {
          * @param values     值
          * @return
          */
-        public Hibernate where(Object conditions, Object values) {
+        public Hibernate where(Object conditions, String... values) {
 
-            if (conditions == null || values == null) {
-                err(getLineInfo(LOG.lineInfoIndex), "条件参数 为 null，操作失败");
-                status = false;
+            if (conditions == null || values == null || values.length == 0) {
                 return this;
+            }
+
+            if (conditions != null && conditions instanceof String[]) {
+                String[] strArray = (String[]) conditions;
+                if (strArray.length == 0) return this;
             }
 
             //监测条件
             String conditionsType = conditions.getClass().getSimpleName();
-            String valuesType = values.getClass().getSimpleName();
 
             if (!conditionsType.equals("String") && !conditionsType.equals("String[]")) {
                 err(getLineInfo(LOG.lineInfoIndex), "条件参数 conditionsType 类型仅支持String 与 String[]，操作失败");
@@ -6278,7 +6278,12 @@ public class GT {
             String condition = "";//解析筛选条件
             if (conditionsType.equals("String[]")) {
                 for (String str : (String[]) conditions) {
-                    condition += (str + " = ? and ");
+                    if (str.contains("?")) {
+                        condition += (str + " and");
+                    } else {
+                        condition += (str + " = ? and ");
+                    }
+
                 }
 
                 //去掉最后一个多余 and
@@ -6287,16 +6292,16 @@ public class GT {
                 condition = (String) conditions;
             }
 
-            //解析查询条件值
-            String[] valuesArray = new String[1];//解析筛选值
-            if (valuesType.equals("String[]")) {
-                valuesArray = (String[]) values;
-            } else {
-                valuesArray[0] = String.valueOf(values);
+            this.conditions = condition;
+            this.values = values;
+
+            GT.logt("最后的查询条件:" + this.conditions);
+            GT.log("最后的查询条件:" + this.conditions);
+            GT.logt("最后的查询值:" + this.values);
+            for (String value : this.values) {
+                GT.logt("value:" + value);
             }
 
-            this.conditions = condition;
-            this.values = valuesArray;
             return this;
         }
 
@@ -6309,7 +6314,20 @@ public class GT {
          * @return
          */
         public Hibernate flashback(String orderByStr) {
+            if (orderByStr == null || orderByStr.length() == 0) return this;
             this.orderByStr = orderByStr + " desc";
+            return this;
+        }
+
+        public Hibernate groupBy(String groupBy) {
+            if (groupBy == null || groupBy.length() == 0) return this;
+            this.groupBy = groupBy;
+            return this;
+        }
+
+        public Hibernate having(String having) {
+            if (having == null || having.length() == 0) return this;
+            this.having = having;
             return this;
         }
 
@@ -7061,7 +7079,7 @@ public class GT {
             }
 
             //获取查询该表的返回字段
-            if (returnValues == null) {
+            if (returnValues == null || returnValues.length == 0) {
                 List<String> tableAllValue = getTableAllValue(tableName);
                 if (tableAllValue != null && tableAllValue.size() > 0) {
                     returnValues = new String[tableAllValue.size()];
@@ -7077,7 +7095,8 @@ public class GT {
 
             //反射生成对象并注入
             if (sqLiteDatabase2 == null) return null;
-            Cursor cursor = sqLiteDatabase2.query(tableName, returnValues, conditions, values, null, null, orderByStr, limitStr);//ok
+
+            Cursor cursor = sqLiteDatabase2.query(tableName, returnValues, conditions, values, groupBy, having, orderByStr, limitStr);//ok
             if (cursor != null && cursor.getCount() > 0) {
                 if (isLast()) {
                     cursor.moveToLast();//移动到最后一位
@@ -7594,7 +7613,7 @@ public class GT {
                     return this;
                 }
                 initSqlParameter();
-                long insert = sqLiteDatabase2.replace(tableName, null, contentValues);//ok
+                long insert = sqLiteDatabase2.insert(tableName, null, contentValues);//ok
                 statusNumber = (int) insert;
                 //设置状态码
                 if (insert == -1) {
@@ -7635,7 +7654,7 @@ public class GT {
                         }
                         initSqlParameter();
 
-                        long insert = sqLiteDatabase2.replace(tableName, null, contentValues);//ok
+                        long insert = sqLiteDatabase2.insert(tableName, null, contentValues);//ok
                         statusNumber = (int) insert;
                         //设置状态码
                         if (insert == -1) {
@@ -7770,7 +7789,7 @@ public class GT {
                 }
                 initSqlParameter();
 
-                cursor = sqLiteDatabase2.query(tableName, returnValues, conditions, values, null, null, orderByStr, limitStr);//ok
+                cursor = sqLiteDatabase2.query(tableName, returnValues, conditions, values, groupBy, having, orderByStr, limitStr);//ok
                 statusNumber = cursor.getCount();
                 orderByStr = "";
                 limitStr = "";
@@ -7987,7 +8006,7 @@ public class GT {
                 saveAddUpdateOperation(bean, contentValues);
 
                 //开始插入
-                long insert = sqLiteDatabase2.replace(bean.getClass().getSimpleName(), null, contentValues);//ok
+                long insert = sqLiteDatabase2.insert(bean.getClass().getSimpleName(), null, contentValues);//ok
                 statusNumber = (int) insert;
                 //设置状态码
                 if (insert == -1) {
@@ -8045,7 +8064,7 @@ public class GT {
                         saveAddUpdateOperation(bean, contentValues);
 
                         //开始插入
-                        long insert = sqLiteDatabase2.replace(bean.getClass().getSimpleName(), null, contentValues);//ok
+                        long insert = sqLiteDatabase2.insert(bean.getClass().getSimpleName(), null, contentValues);//ok
                         statusNumber = (int) insert;
                         //设置状态码
                         if (insert == -1) {
@@ -8108,7 +8127,7 @@ public class GT {
                     saveAddUpdateOperation(bean, contentValues);//保存全部
                     //数据库操作
                     if (sqLiteDatabase2 == null) return this;
-                    insert = sqLiteDatabase2.replace(tableName, null, contentValues);//ok
+                    insert = sqLiteDatabase2.insert(tableName, null, contentValues);//ok
                     contentValues.clear();
                 }
                 if (isTransaction)
@@ -8176,7 +8195,7 @@ public class GT {
                             saveAddUpdateOperation(bean, contentValues);//保存全部
                             //数据库操作
                             if (sqLiteDatabase2 == null) return;
-                            insert = sqLiteDatabase2.replace(tableName, null, contentValues);//ok
+                            insert = sqLiteDatabase2.insert(tableName, null, contentValues);//ok
                             contentValues.clear();
                         }
                         if (isTransaction)
@@ -8342,12 +8361,12 @@ public class GT {
          * @return
          * @更具ID删除
          */
-        public synchronized Hibernate delete(Class<?> beanClass, Object keyValue) {
+        public synchronized Hibernate delete(Class<?> beanClass, int key) {
             if (sqLiteDatabase2 == null) return this;
             if (isTransaction)
                 sqLiteDatabase2.beginTransaction();
             try {
-                if (beanClass == null || keyValue == null) {
+                if (beanClass == null || key <= 0) {
                     err(getLineInfo(LOG.lineInfoIndex), "删除的 beanClass 数据为null，操作失败");
                     return this;
                 }
@@ -8370,7 +8389,7 @@ public class GT {
                 }
 
                 //进行更新
-                int update = sqLiteDatabase2.delete(simpleName, tableAllValue.get(0) + "= ?", new String[]{keyValue.toString()});//ok
+                int update = sqLiteDatabase2.delete(simpleName, tableAllValue.get(0) + "= ?", new String[]{String.valueOf(key)});//ok
 
                 if (update == 0) {
                     status = false;
@@ -8575,14 +8594,12 @@ public class GT {
          * @return
          * @根据表ID查询数据
          */
-        public synchronized <T> T query(Class<T> tableNameClass, Object values) {
+        public synchronized <T> T query(Class<T> tableNameClass, int key) {
 
             List<T> list = null;
             if (sqLiteDatabase2 == null) return null;
-            if (isTransaction)
-                sqLiteDatabase2.beginTransaction();
             try {
-                if (tableNameClass == null || values == null) {
+                if (tableNameClass == null || key <= 0) {
                     err(getLineInfo(LOG.lineInfoIndex), "查询的数据为 null，操作失败");
                     status = false;
                     return null;
@@ -8597,16 +8614,23 @@ public class GT {
                     return null;
                 }
 
+                if (isTransaction)
+                    sqLiteDatabase2.beginTransaction();
+
                 //获取表名
                 List<String> tableAllValue = getTableAllValue(tableName);
+                if (tableAllValue != null && tableAllValue.size() > 0) {
+                    //条件参数
+                    where(tableAllValue.get(0) + " = ?", String.valueOf(key));
+                    //反射生成对象并注入
+                    list = queryCoreAlgorithm(tableNameClass, false);
+                    if (isTransaction)
+                        sqLiteDatabase2.setTransactionSuccessful();
+                } else {
+                    err(getLineInfo(LOG.lineInfoIndex), "查询的数据表不存在,操作失败");
+                    status = false;
+                }
 
-                //条件参数
-                where(tableAllValue.get(0) + " = ?", new String[]{values.toString()});
-
-                //反射生成对象并注入
-                list = queryCoreAlgorithm(tableNameClass, false);
-                if (isTransaction)
-                    sqLiteDatabase2.setTransactionSuccessful();
             } catch (Exception e) {
                 e.printStackTrace();
             } finally {
@@ -9643,12 +9667,11 @@ public class GT {
         public static <T> T create(Class<T> classz, GT.Hibernate... hibernates) {
             //设置并发请求个数
             ExecutorService executor = null;
-            GT_Dao gt_dao = classz.getAnnotation(GT_Dao.class);
+            GT_DaoBuild gt_dao = classz.getAnnotation(GT_DaoBuild.class);
             executor = Thread.getInstance(0, true);
 
             //如果该类被 GT_Dao 所标识，那就进行反射获取绑定对象进行解析
             if (gt_dao != null) {
-//                GT.logl(classz.getName() + "Binding");
                 Object object = new AnnotationAssist().classToObject(classz.getName() + "Binding");
 //                GT.logt("object:" + object);
                 if (object != null) {
@@ -9683,6 +9706,9 @@ public class GT {
                     if (hibernates != null && hibernates.length > 0) {
                         call.hibernate = hibernates[0];
                     }
+                    if (call.hibernate == null) {
+                        call.hibernate = new GT.Hibernate().initialize(null, 1, "123456", null);
+                    }
 
                     //获取所有注解
                     List<Annotation> methodAllAnnotation = AnnotationAssist.getMethodParameterAnnotation(method);
@@ -9700,8 +9726,11 @@ public class GT {
 //                            GT.logt("typeName2:" + typeName);
                         }
 //                        GT.logt("反射 数据:" + typeName);
-                        //如果不是下载夜班不是上传文件，那就根据 class 反射出实体类
-                        call.t = (T) new AnnotationAssist().classToObject(typeName);//TODO 这里会报错
+                        call.t = (T) AnnotationAssist.classToObject(typeName);
+                        if (typeName.contains("java.util.List")) {
+                            call.tClass = AnnotationAssist.stringListToClass(typeName);
+                        }
+
                     } catch (Exception e) {
                         call.exception = e;
                     }
@@ -9713,49 +9742,51 @@ public class GT {
                     GT_Update update = method.getAnnotation(GT_Update.class);
                     GT_Code code = method.getAnnotation(GT_Code.class);
 
+                    WhereBean whereBean = new WhereBean();
+
                     //请求第二段地址
                     //请求类型
                     if (insert != null) {
-                        call.type = GT_Insert.class;
-                        call.sqlCode = insert.value();
+                        whereBean.setType(GT_Insert.class);
+                        whereBean.setSqlWhere(insert.where());
+                        whereBean.setSqlValue(insert.value());
+                        whereBean.setSqlCode(insert.code());
                     } else if (delete != null) {
-                        call.type = GT_Delete.class;
-                        call.sqlCode = delete.value();
+                        whereBean.setType(GT_Delete.class);
+                        whereBean.setSqlWhere(delete.where());
+                        whereBean.setSqlValue(delete.value());
+                        whereBean.setSqlCode(delete.code());
                     } else if (query != null) {
-                        call.type = GT_Query.class;
-                        call.sqlCode = query.value();
+                        whereBean.setType(GT_Query.class);
+                        whereBean.setSqlSelect(query.select());
+                        whereBean.setSqlWhere(query.where());
+                        whereBean.setSqlValue(query.value());
+                        whereBean.setFlashback(query.flashback());
+                        whereBean.setLimit(query.limit());
+                        whereBean.setGroupBy(query.groupBy());
+                        whereBean.setHaving(query.having());
+                        whereBean.setList(query.isLast());
+                        whereBean.setSqlCode(query.code());
                     } else if (update != null) {
-                        call.type = GT_Query.class;
-                        call.sqlCode = update.value();
+                        whereBean.setType(GT_Update.class);
+                        whereBean.setSqlWhere(update.where());
+                        whereBean.setSqlValue(update.value());
+                        whereBean.setSqlCode(update.code());
                     } else if (code != null) {
-                        call.type = GT_Code.class;
-                        call.sqlCode = code.value();
+                        whereBean.setType(GT_Code.class);
+                        whereBean.setSqlCode(code.value());
                     }
 
-//                    GT.logt("sqlCode:" + call.sqlCode);
+                    call.whereBean = whereBean;
 
                     //获取方法形参的类型
                     Class<?>[] parameterTypes = method.getParameterTypes();
 
                     String[] parameterArray = null;
 
-                    //第一种方法：通过 JDK1.8 获取方法形参的名称
-                    try {
-                        GT.logt("第一种方法");
-                        Parameter[] parameters = method.getParameters();
-                        parameterArray = new String[parameters.length];
-                        for (int i = 0; i < parameters.length; i++) {
-                            parameterArray[i] = parameters[i].getName();
-                        }
-                    } catch (NoSuchMethodError e) {
-                        if (LOG.GT_LOG_TF) {
-                            GT.errt("method.getParameters 方法无效:" + e);
-                        }
-                    }
-
-                    //第二种方法：使用 GT_DataBinding 进行获取方法形参
-                    if (parameterArray == null || parameterArray.length == 0 && parameterNameMap.size() >= 1) {
-                        GT.logt("第二种方法 if");
+                    //第一种方法：使用 GT_DataBinding 进行获取方法形参
+                    if (parameterArray == null || parameterArray.length == 0 || parameterNameMap.size() >= 1) {
+//                        GT.logt("第一种方法 if");
                         try {
                             String GT_KEY = classz.getName() + "+" + methodName + "-";
                             for (Class<?> cla : parameterTypes) {
@@ -9772,47 +9803,56 @@ public class GT {
                         } catch (Exception e) {
                             GT.errt("通过注解请求方式异常:" + e);
                         }
-                    } else {
-                        GT.logt("第二种方法 else");
                     }
 
-                    //第三种方法：使用注解的方式获取方法形参名
+                    //第二种方法：使用注解的方式获取方法形参名
                     if (parameterArray == null || parameterArray.length == 0) {
-                        GT.logt("第三种方法 if");
+//                        GT.logt("第二种方法 if");
                         Annotation[][] declaredAnnotations = method.getParameterAnnotations();
                         List<String> list = new ArrayList<>();
                         //获取 注解上的方法名称
                         for (Annotation[] annotation1 : declaredAnnotations) {
                             for (Annotation annotation2 : annotation1) {
-                                /*
-                                if (annotation2 instanceof HttpCall.Query) {
-                                    HttpCall.Query query = (HttpCall.Query) annotation2;
-                                    list.add(query.value());
-                                } else if (annotation2 instanceof HttpCall.FileDownload) {
-                                    HttpCall.FileDownload query = (HttpCall.FileDownload) annotation2;
-                                    list.add(query.value());
-                                } else if (annotation2 instanceof HttpCall.FileUploading) {
-                                    HttpCall.FileUploading query = (HttpCall.FileUploading) annotation2;
-                                    list.add(query.value());
-                                }*/
-
+                                if (annotation2 instanceof Hibernate.Where) {
+                                    Hibernate.Where where = (Hibernate.Where) annotation2;
+                                    list.add(where.value());
+                                }
                             }
                         }
-
                         if (list.size() >= 1) {
                             parameterArray = new String[list.size()];
                             for (int i = 0; i < list.size(); i++) {
                                 parameterArray[i] = list.get(i);
                             }
                         }
-                    } else {
-                        GT.logt("第三种方法 else");
                     }
+
+
+                    //第三种方法：通过 JDK1.8 获取方法形参的名称
+                    if (parameterArray == null || parameterArray.length == 0) {
+                        try {
+//                        GT.logt("第三种方法");
+                            Parameter[] parameters = method.getParameters();
+                            parameterArray = new String[parameters.length];
+                            for (int i = 0; i < parameters.length; i++) {
+                                parameterArray[i] = parameters[i].getName();
+                            }
+                        } catch (NoSuchMethodError e) {
+                            if (LOG.GT_LOG_TF) {
+                                GT.errt("method.getParameters 方法无效:" + e);
+                            }
+                        }
+                    }
+
 
                     //三种方法还为 null 那就无能为力，只能提示错误
                     if (parameterArray == null) {
-                        GT.errt("获取 GT.HttpCall 方法种的形参出错，无法进行请求操作，正确使用教程请参考官网教程：https://blog.csdn.net/qq_39799899");
-                        return call;
+                        GT.errt("获取 GT.Hibernate.Call 方法种的形参出错，无法进行请求操作，正确使用教程请参考官网教程：https://blog.csdn.net/qq_39799899");
+                        if (args == null || args.length == 0) return call;
+                        parameterArray = new String[args.length];
+                        for (int i = 0; i < args.length; i++) {
+                            parameterArray[i] = "" + i;
+                        }
                     }
 
 
@@ -9820,59 +9860,28 @@ public class GT {
                         for (int i = 0; i < args.length; i++) {
                             if (args[i] == null) continue;//跳过为 null 的参数
                             String aClass = AnnotationAssist.returnType(parameterTypes[i]).toString();
-                            GT.logt("aClass:" + aClass);
+//                            GT.logt("aClass:" + aClass);
                             if (aClass.contains("Map")) {
                                 if (args[i] instanceof Map) {
                                     Map<String, Object> map = (Map<String, Object>) args[i];
                                     for (String key : map.keySet()) {
 //                                        GT.logt("key:" + key);
-                                        /*if (!call.getParamMap().containsKey(key)) {
+                                        if (!call.getParamMap().containsKey(key)) {
                                             call.addParam(key, map.get(key));
 
-                                        }*/
+                                        }
                                     }
                                 }
                             } else if (aClass.contains("Object")) {
-                                /*if (!call.getParamMap().containsKey(parameterArray[i])) {
+                                if (!call.getParamMap().containsKey(parameterArray[i])) {
                                     call.addParam(parameterArray[i], args[i].toString());
 
-                                }*/
+                                }
                             } else {
-//                                GT.logt("parameterArray:" + parameterArray[i]);
-//                                GT.logt("fileDownload.value:" + fileDownload.value());
-                               /* if (fileDownload != null && parameterArray[i].equals(fileDownload.value())) {
-                                    //下载
-                                    call.uploadingOrDownload = false;
-                                    if (aClass.contains("String")) {
-                                        call.fileState = true;
-                                        call.filePath = String.valueOf(args[i]);
-                                        call.file = new File(call.filePath);
-//                                        GT.logt("String");
-                                    } else if (aClass.contains("File")) {
-                                        call.fileState = true;
-                                        File file = (File) args[i];
-                                        call.file = file;
-                                        call.filePath = file.getPath();
-//                                        GT.logt("File");
-                                    }
-                                } else if (fileUploading != null && parameterArray[i].equals(fileUploading.value())) {
-                                    //上传
-                                    call.uploadingOrDownload = true;
-                                    if (aClass.contains("String")) {
-                                        call.fileState = true;
-                                        call.filePath = String.valueOf(args[i]);
-                                        call.file = new File(call.filePath);
-                                    } else if (aClass.contains("File")) {
-                                        call.fileState = true;
-                                        File file = (File) args[i];
-                                        call.file = file;
-                                        call.filePath = file.getPath();
-                                    }
-                                } else {
-                                    if (!call.getParamMap().containsKey(parameterArray[i])) {
-                                        call.addParam(parameterArray[i], args[i]);
-                                    }
-                                }*/
+                                GT.logt("parameterArray:" + parameterArray[i]);
+                                if (!call.getParamMap().containsKey(parameterArray[i])) {
+                                    call.addParam(parameterArray[i], args[i]);
+                                }
                             }
 
                         }
@@ -9884,6 +9893,8 @@ public class GT {
                     }
 
                     call.method = method;
+
+                    GT.logt("call 核心检测:" + call);
                     return call;
                 }
             });
@@ -9901,9 +9912,22 @@ public class GT {
             private T t;
             private Class<T> tClass;
             private Exception exception;//异常
-            private Class<?> type;//SQL操作类型
-            private String sqlCode;//SQL代码
+
+            private GT.Hibernate.WhereBean whereBean;
+
             private GT.Hibernate hibernate;//SQL管理器
+
+            public Map<String, Object> getParamMap() {
+                return paramMap;
+            }
+
+            public Hibernate.Call<T> addParam(String key, Object obj) {
+                if (paramMap != null) {
+                    paramMap.put(key, obj);
+                    keyList.add(key);
+                }
+                return this;
+            }
 
             /**
              * 经典的请求方式 ：
@@ -9912,9 +9936,11 @@ public class GT {
              * @param tClass
              */
             public Call(Class<T>... tClass) {
+//                GT.logt("进入 Call:" + tClass.length);
                 executor = Thread.getInstance(0);
                 if (tClass.length > 0) {
                     Class tClass1 = tClass[0];
+//                    GT.logt("tClass1:" + tClass1);
                     this.tClass = tClass1;
 
                 }
@@ -9933,6 +9959,8 @@ public class GT {
                         ", t=" + t +
                         ", tClass=" + tClass +
                         ", exception=" + exception +
+                        ", whereBean=" + whereBean +
+                        ", hibernate=" + hibernate +
                         '}';
             }
 
@@ -9957,6 +9985,132 @@ public class GT {
 
         }
 
+        public static class WhereBean {
+
+            private Class<?> type;
+            private String[] sqlSelect;//SQL 返回字段类型
+            private String[] sqlWhere;//SQL 条件类型代码
+            private String[] sqlValue;//SQL 条件代码
+            private String sqlCode;//SQL代码
+            private String flashback;
+            private int[] limit;
+            private String groupBy;
+            private String having;
+            private boolean isList;
+
+            public WhereBean(Class<?> type, String[] sqlSelect, String[] sqlWhere, String[] sqlValue, String sqlCode, String flashback, int[] limit, String groupBy, String having, boolean isList) {
+                this.type = type;
+                this.sqlSelect = sqlSelect;
+                this.sqlWhere = sqlWhere;
+                this.sqlValue = sqlValue;
+                this.sqlCode = sqlCode;
+                this.flashback = flashback;
+                this.limit = limit;
+                this.groupBy = groupBy;
+                this.having = having;
+                this.isList = isList;
+            }
+
+            public WhereBean() {
+            }
+
+            public String[] getSqlSelect() {
+                return sqlSelect;
+            }
+
+            public void setSqlSelect(String... sqlSelect) {
+                this.sqlSelect = sqlSelect;
+            }
+
+            public String[] getSqlWhere() {
+                return sqlWhere;
+            }
+
+            public void setSqlWhere(String... sqlWhere) {
+                this.sqlWhere = sqlWhere;
+            }
+
+            public String[] getSqlValue() {
+                return sqlValue;
+            }
+
+            public void setSqlValue(String... sqlValue) {
+                this.sqlValue = sqlValue;
+            }
+
+            public String getSqlCode() {
+                return sqlCode;
+            }
+
+            public void setSqlCode(String sqlCode) {
+                this.sqlCode = sqlCode;
+            }
+
+            public String getFlashback() {
+                return flashback;
+            }
+
+            public void setFlashback(String flashback) {
+                this.flashback = flashback;
+            }
+
+            public int[] getLimit() {
+                return limit;
+            }
+
+            public void setLimit(int... limit) {
+                this.limit = limit;
+            }
+
+            public String getGroupBy() {
+                return groupBy;
+            }
+
+            public void setGroupBy(String groupBy) {
+                this.groupBy = groupBy;
+            }
+
+            public String getHaving() {
+                return having;
+            }
+
+            public void setHaving(String having) {
+                this.having = having;
+            }
+
+            public boolean isList() {
+                return isList;
+            }
+
+            public void setList(boolean list) {
+                isList = list;
+            }
+
+            public Class<?> getType() {
+                return type;
+            }
+
+            public void setType(Class<?> type) {
+                this.type = type;
+            }
+
+            @Override
+            public String toString() {
+                return "WhereBean{" +
+                        "type=" + type +
+                        ", sqlSelect=" + Arrays.toString(sqlSelect) +
+                        ", sqlWhere=" + Arrays.toString(sqlWhere) +
+                        ", sqlValue=" + Arrays.toString(sqlValue) +
+                        ", sqlCode='" + sqlCode + '\'' +
+                        ", flashback='" + flashback + '\'' +
+                        ", limit=" + Arrays.toString(limit) +
+                        ", groupBy='" + groupBy + '\'' +
+                        ", having='" + having + '\'' +
+                        ", isList=" + isList +
+                        '}';
+            }
+        }
+
         /**
          * 具体请求
          *
@@ -9972,12 +10126,11 @@ public class GT {
 
             if (callBack != null) {
                 //异步操作
-                Hibernate.Callback<T> finalCallBack = callBack;
-                Callback<T> finalCallBack1 = callBack;
+                Callback<T> finalCallBack = callBack;
                 call.executor.execute(new Runnable() {
                     @Override
                     public void run() {
-                        callSynchronization(call, finalCallBack1);
+                        callSynchronization(call, finalCallBack);
                     }
                 });
             } else {
@@ -9997,34 +10150,69 @@ public class GT {
          * @return
          */
         private static <T> Hibernate.Call<T> callSynchronization(Hibernate.Call<T> call, Hibernate.Callback<T> callback) {
-            GT.logt("call.tClass:" + call.tClass);
-            GT.logt("call.type:" + call.type);
-            GT.logt("call.sqlCode:" + call.sqlCode);
-            GT.logt("call.hibernate:" + call.hibernate);
 
-            if (GT_Insert.class.equals(call.type)) {
-//                call.hibernate.save
-            } else if (GT_Delete.class.equals(call.type)) {
+            if (call.hibernate == null) return call;
 
-            } else if (GT_Query.class.equals(call.type)) {
-//                call.hibernate.query()
-            } else if (GT_Update.class.equals(call.type)) {
+            if (call.whereBean.sqlWhere != null && call.whereBean.sqlWhere.length > 0 && call.whereBean.sqlValue != null && call.whereBean.sqlValue.length == 0) {
+                call.whereBean.sqlValue = new String[call.paramMap.size()];
+                Set<String> keys = call.paramMap.keySet();
+                Iterator<String> iterator = keys.iterator();
+                //TODO 应该倒序的 sqlWhere=[sex = ? and age > ?], sqlValue=[42, 女] 这样导致 查询条件与查询值不匹配
+                for (int i = 0; i < call.whereBean.sqlValue.length; i++) {
+                    String key = iterator.next();
+                    String value = String.valueOf(call.paramMap.get(key));
+                    GT.logt("key:" + key);
+                    GT.logt("value:" + value);
+                    call.whereBean.sqlValue[i] = value;
+//                    GT.logt("条件值:" + call.whereBean.sqlValue[i]);
+                }
+            }
 
-            } else if (GT_Code.class.equals(call.type)) {
+            GT.logt("call.whereBean:" + call.whereBean);
 
+            //查询条件
+            call.hibernate
+                    .where(call.whereBean.sqlWhere, call.whereBean.sqlValue)
+                    .select(call.whereBean.sqlSelect)
+                    .flashback(call.whereBean.flashback)
+                    .limit(call.whereBean.limit)
+                    .groupBy(call.whereBean.groupBy)
+                    .having(call.whereBean.having)
+                    .isLast(call.whereBean.isList);
+
+            if (GT_Insert.class.equals(call.whereBean.type)) {
+                GT.logt("进入 GT_Insert");
+//                call.hibernate.save()
+            } else if (GT_Delete.class.equals(call.whereBean.type)) {
+                GT.logt("进入 GT_Delete");
+            } else if (GT_Query.class.equals(call.whereBean.type)) {
+                GT.logt("进入 GT_Query1:" + call.t.getClass());
+                if (call.t instanceof ArrayList) {
+                    call.t = (T) call.hibernate.queryAll(call.tClass);
+                } else {
+                    call.t = (T) call.hibernate.query(call.tClass);
+                }
+                callback.onSuccess(call.t, call);
+                GT.logt("进入 GT_Query2");
+            } else if (GT_Update.class.equals(call.whereBean.type)) {
+                GT.logt("进入 GT_Update");
+
+            } else if (GT_Code.class.equals(call.whereBean.type)) {
+                GT.logt("进入 GT_Code");
+            } else {
+                GT.logt("进入 else");
             }
 
 
             return call;
         }
 
-
         //增强版请求接口
         public static interface CallbackListener<T> {
 
-            public void onSuccess(T t, HttpCall.Call<T> call);
+            public void onSuccess(T t, Hibernate.Call<T> call);
 
-            public void onError(HttpCall.Call<T> call, String e);
+            public void onError(Hibernate.Call<T> call, String e);
 
         }
 
@@ -11247,8 +11435,8 @@ public class GT {
          *
          * @param msg
          */
-        private static void log(Object msg) {
-            Log.i("GT_i", msg.toString());
+        private static void log(Object msg, String... tag) {
+            Log.d(tag.length != 0 ? tag[0] : LOG.LOG_TAG, msg.toString());
             DataSendReception.sendUpdateUiBroadcast(SerialPortUtils.class.getName(), msg.toString());
         }
 
@@ -13694,6 +13882,7 @@ public class GT {
                             if (indexOf != -1) {
                                 String key = parameterName.substring(0, indexOf);
                                 String value = parameterName.substring(indexOf + 1, parameterName.length() - 1);
+//                                GT.logt("本地代码:" + key + ":" + value);
                                 parameterNameMap.put(key, value.split(","));
                             }
                         }
@@ -13817,24 +14006,30 @@ public class GT {
                     String[] parameterArray = null;
 
                     //第一种方法：通过 JDK1.8 获取方法形参的名称
-                    try {
-                        Parameter[] parameters = method.getParameters();
-                        parameterArray = new String[parameters.length];
-                        for (int i = 0; i < parameters.length; i++) {
-                            parameterArray[i] = parameters[i].getName();
-                        }
-                    } catch (NoSuchMethodError e) {
-                        if (LOG.GT_LOG_TF) {
-                            GT.errt("method.getParameters 方法无效:" + e);
+                    if (httpCallBuild == null) {
+                        try {
+                            GT.logt("第一种方法获取方法形参的名称");
+                            Parameter[] parameters = method.getParameters();
+                            parameterArray = new String[parameters.length];
+                            for (int i = 0; i < parameters.length; i++) {
+                                parameterArray[i] = parameters[i].getName();
+                                GT.logt("parameterArray[" + i + "]:" + parameterArray[i]);
+                            }
+                        } catch (NoSuchMethodError e) {
+                            if (LOG.GT_LOG_TF) {
+                                GT.errt("method.getParameters 方法无效:" + e);
+                            }
                         }
                     }
 
                     //第二种方法：使用 GT_DataBinding 进行获取方法形参
-                    if (parameterArray == null || parameterArray.length == 0 && httpCallBuild != null && parameterNameMap.size() >= 1) {
+                    if (parameterArray == null || parameterArray.length == 0 || httpCallBuild != null) {
+                        GT.logt("第二种方法获取方法形参的名称");
                         try {
                             String GT_KEY = classz.getName() + "+" + methodName + "-";
                             for (Class<?> cla : parameterTypes) {
                                 String parameterType = cla.toString();
+                                GT.logt("parameterType:" + parameterType);
                                 if (parameterType.contains(".")) {
                                     String[] split = parameterType.split("\\.");
                                     GT_KEY += split[split.length - 1] + "-";
@@ -13906,18 +14101,15 @@ public class GT {
                                     for (String key : map.keySet()) {
                                         if (!call.getParamMap().containsKey(key)) {
                                             call.addParam(key, map.get(key));
-
                                         }
                                     }
                                 }
                             } else if (aClass.contains("Object")) {
                                 if (!call.getParamMap().containsKey(parameterArray[i])) {
                                     call.addParam(parameterArray[i], args[i].toString());
-
                                 }
                             } else {
 //                                GT.logt("parameterArray:" + parameterArray[i]);
-//                                GT.logt("fileDownload.value:" + fileDownload.value());
                                 if (fileDownload != null && parameterArray[i].equals(fileDownload.value())) {
                                     //下载
                                     call.uploadingOrDownload = false;
@@ -13947,7 +14139,9 @@ public class GT {
                                         call.filePath = file.getPath();
                                     }
                                 } else {
+                                    //形参传下来的形参具体值,不添加重复的形参,有重复的以第一个为准
                                     if (!call.getParamMap().containsKey(parameterArray[i])) {
+                                        GT.logt("形参值:" + parameterArray[i] + ":" + args[i].toString());
                                         call.addParam(parameterArray[i], args[i]);
                                     }
                                 }
@@ -13961,6 +14155,9 @@ public class GT {
                     call.keyList.remove(call.keyList.size() - 1);
 
                     call.method = method;
+
+                    GT.logt("call:" + call);
+
                     return call;
                 }
             });
@@ -14316,9 +14513,13 @@ public class GT {
                         ", contentType='" + contentType + '\'' +
                         ", filePath='" + filePath + '\'' +
                         ", file=" + file +
+                        ", fileState=" + fileState +
+                        ", filePause=" + filePause +
+                        ", uploadingOrDownload=" + uploadingOrDownload +
                         ", keyList=" + keyList +
                         ", paramMap=" + paramMap +
                         ", headerMap=" + headerMap +
+                        ", executor=" + executor +
                         ", charset='" + charset + '\'' +
                         ", redirects=" + redirects +
                         ", cache=" + cache +
@@ -14326,12 +14527,11 @@ public class GT {
                         ", connectTimeout=" + connectTimeout +
                         ", readTimeout=" + readTimeout +
                         ", response='" + response + '\'' +
-                        ", code=" + code +
-                        ", tClass=" + tClass +
-                        ", t=" + t +
-                        ", exception=" + exception +
-                        ", executor=" + executor +
                         ", method=" + method +
+                        ", t=" + t +
+                        ", tClass=" + tClass +
+                        ", code=" + code +
+                        ", exception=" + exception +
                         '}';
             }
 
@@ -15534,7 +15734,7 @@ public class GT {
                                     if (isCache && finalIsCache && keyList.containsKey(key[0])) {
                                         glideBean.imgObjet = keyList.get(key[0]);
                                         if (glideBean.imgObjet != null && LOG.GT_LOG_TF) {
-                                            GT.logl("使用 使用内存缓存图片");
+                                            GT.logt("使用 使用内存缓存图片");
                                         }
                                     }
 
@@ -15542,23 +15742,22 @@ public class GT {
                                     if (isCache && finalIsCache && glideBean.imgObjet == null) {
                                         glideBean.imgObjet = ImageViewTools.getBitmapFromLocal(key[0], CACHE_PATH);
                                         if (glideBean.imgObjet != null && LOG.GT_LOG_TF) {
-                                            GT.logl("使用 本地缓存");
+                                            GT.logt("使用 本地缓存");
                                         }
                                     }
 
                                     //使用网络缓存或请求,开启网络缓存
                                     if (glideBean.imgObjet == null) {
-//                                    GT.logl("使用 网络");
                                         //网络加载或本地加载图片
                                         if (url.contains("http")) {
                                             glideBean.imgObjet = ImageViewTools.getImageBitmap(url);//Bitmap 网络
                                             if (glideBean.imgObjet != null && LOG.GT_LOG_TF) {
-                                                GT.logl("使用 网络下载图片");
+                                                GT.logt("使用 网络下载图片");
                                             }
                                         } else {
                                             glideBean.imgObjet = ImageViewTools.getLoacalBitmap(url);//Bitmap 本地
                                             if (glideBean.imgObjet != null && LOG.GT_LOG_TF) {
-                                                GT.logl("使用 本地图片");
+                                                GT.logt("使用 本地图片");
                                             }
                                         }
                                         isSaveSD = true;
@@ -21117,7 +21316,6 @@ public class GT {
          */
         public static Bitmap saveBitmapToLocal(String url, Bitmap bitmap, String CACHE_PATH) {
             try {
-//                GT.logl("url:" + url);
                 String fileName = Encryption.MD5.encryptMD5(url);//把图片的url当做文件名,并进行MD5加密
                 File file = new File(CACHE_PATH, fileName);
                 //通过得到文件的父文件,判断父文件是否存在
@@ -22439,7 +22637,6 @@ public class GT {
             } else if (exists2) {
                 file = file2;
             }
-            Log.i("GT_i", "apk插件包是否存在:" + (file != null));
             if (file == null) return;
 
 
@@ -22479,11 +22676,9 @@ public class GT {
         public static void dexPlugin(Context context) {
             //插件包文件
             String path = "/storage/emulated/0/GT/com.zuanuniverse.myapplication/fix/classes.dex";
-            Log.i("GT_i", "path:" + path);
             //插件包文件
             File file = new File(path);
             boolean exists = file.exists();
-            Log.i("GT_i", "dex插件包是否存在:" + exists);
             if (!exists) {
                 return;
             }
@@ -22529,9 +22724,7 @@ public class GT {
                 }
                 //将组建出来的对象设置给 当前ClassLoader的pathList对象
                 dexElementsField.set(pathListObj, concatDexElementsObject);
-                Log.i("GT_i", "修复完成");
             } catch (Exception e) {
-                Log.i("GT_i", "修复异常:" + e);
                 e.printStackTrace();
             }
         }
@@ -22544,7 +22737,6 @@ public class GT {
             }
 
             boolean exists = new File(externalResourceFile).exists();
-            Log.i("GT_i", "资源包是否存在:" + exists);
             if (!exists) {
                 return;
             }
@@ -22627,7 +22819,6 @@ public class GT {
                 // 根据sdk版本的不同，用不同的方式获取Resources的弱引用集合
                 Collection<WeakReference<Resources>> references;
                 if (SDK_INT >= KITKAT) {
-                    Log.i("GT_i", "进入if");
                     // Find the singleton instance of ResourcesManager
                     Class<?> resourcesManagerClass = Class.forName("android.app.ResourcesManager");
                     Method mGetInstance = resourcesManagerClass.getDeclaredMethod("getInstance");
@@ -22710,7 +22901,6 @@ public class GT {
 
         public Resources reflectAssetManager(Context context, String path) throws Exception {
             boolean exists = new File(path).exists();
-            Log.i("GT_i", "是否存在资源包：" + exists);
             if (!exists) {
                 return null;
             }
@@ -22728,7 +22918,6 @@ public class GT {
         public void load(Context context, String path) throws ClassNotFoundException, NoSuchFieldException, NoSuchMethodException, InvocationTargetException, IllegalAccessException {
 
             boolean exists = new File(path).exists();
-            Log.i("GT_i", "是否存在资源包：" + exists);
             if (!exists) {
                 return;
             }
@@ -22758,7 +22947,6 @@ public class GT {
 
         public static Resources loadResources(Context context, String apkPath) {
             boolean exists = new File(apkPath).exists();
-            Log.i("GT_i", "当前资源文件是否存在:" + exists);
             if (!exists) return null;
             try {
                 AssetManager assetManager = AssetManager.class.newInstance();
@@ -25231,7 +25419,6 @@ public class GT {
             @Override
             protected void onCreate(Bundle savedInstanceState) {
                 super.onCreate(savedInstanceState);
-                GT.logl("开始初始化 事件");
                 EventBus.getDefault().register(this);//注册订阅者
                 initDrawView();// 设置绘制前的数据
                 initView(savedInstanceState);// 初始化 UI
@@ -25246,7 +25433,6 @@ public class GT {
             @Override
             protected void onDestroy() {
                 super.onDestroy();
-                GT.logl("进入取消 事件");
                 EventBus.getDefault().unregister(this);//取消订阅者
             }
 
@@ -25593,7 +25779,7 @@ public class GT {
                         }
 
                         if (LOG.GT_LOG_TF) {
-                            GT.logl("Activity 切换方式");//在其他切换方式里，也应该调用 hiad 方法
+                            GT.logt("Activity 切换方式");//在其他切换方式里，也应该调用 hiad 方法
                         }
                         transaction.add(fragmentId, fragment, fragmentName);
                         break;
@@ -25630,7 +25816,7 @@ public class GT {
                             }
                         }
                         if (LOG.GT_LOG_TF) {
-                            GT.logl("Fragment 切换方式");
+                            GT.logt("Fragment 切换方式");
                         }
                         transaction.replace(fragmentId, fragment, fragmentName);
                         break;
@@ -25639,7 +25825,7 @@ public class GT {
                     case DIALOG:// Dialog 切换方式
                     {
                         if (LOG.GT_LOG_TF) {
-                            GT.logl("Dialog 切换方式:" + fragmentByTag);
+                            GT.logt("Dialog 切换方式:" + fragmentByTag);
                         }
                         if (fragmentName != null && stackTopFragmentName != null && fragmentName.equals(stackTopFragmentName)) {
                             break;
@@ -26019,7 +26205,7 @@ public class GT {
                     case MODE_STANDARD: //默认模式     该启动模式为Android默认启动模式，每当启动一个 fragment 就会在任务栈中创建一个
                     {
                         if (LOG.GT_LOG_TF) {
-                            GT.logl("默认模式");
+                            GT.logt("默认模式");
                         }
                         START_MODE = MODE_STANDARD;//恢复默认模式
                         transaction.addToBackStack(name);//加入到回退栈
@@ -26029,7 +26215,7 @@ public class GT {
                     case MODE_HOME:  //主界面模式   该启动模式不将 Fragment 加入退回栈,一般用于APP首页
                     {
                         if (LOG.GT_LOG_TF) {
-                            GT.logl("主界面模式");
+                            GT.logt("主界面模式");
                         }
                         START_MODE = MODE_STANDARD;//恢复默认模式
 
@@ -26046,7 +26232,7 @@ public class GT {
                     case MODE_SINGLE_TOP: //栈顶模式     该启动模式是在查看任务栈顶和你将要启动的 fragment 是否是同一个 fragment，是一个就直接复用，否则就新创一个实例
                     {
                         if (LOG.GT_LOG_TF) {
-                            GT.logl("栈顶模式");
+                            GT.logt("栈顶模式");
                         }
                         START_MODE = MODE_STANDARD;//恢复默认模式
 
@@ -26062,7 +26248,7 @@ public class GT {
                     case MODE_SINGLE_TASK: //栈内复用模式 该启动模式是在任务栈中看是否有和你一样的 fragment，有则直接把该 fragment 之上的 fragment 全部弹出使之置于栈顶,如果当前即最顶端那就复用。
                     {
                         if (LOG.GT_LOG_TF) {
-                            GT.logl("栈内复用模式");
+                            GT.logt("栈内复用模式");
                         }
                         START_MODE = MODE_STANDARD;//恢复默认模式
 
@@ -26089,7 +26275,7 @@ public class GT {
                     case MODE_ENTRANCE: {//  入口模式     弹出除栈底外所有 Fragment 再创建一个新的实例。常用于一个程序的入口处
 
                         if (LOG.GT_LOG_TF) {
-                            GT.logl("入口模式");
+                            GT.logt("入口模式");
                         }
                         START_MODE = MODE_STANDARD;//恢复默认模式
 
@@ -27029,8 +27215,6 @@ public class GT {
 
             }
 
-            // 是否恢复Fragment数据
-            protected View view;// 用于存储 Fragment
             private Fragment fragment;
 
             protected boolean isRecoverBundle() {
@@ -27100,8 +27284,7 @@ public class GT {
              * @return
              */
             protected View findViewById(int id) {
-                if (view == null) return null;
-                return view.findViewById(id);
+                return getView().findViewById(id);
             }
 
             /**
@@ -27463,9 +27646,7 @@ public class GT {
             @Override
             public void onViewCreated(View view, @Nullable Bundle savedInstanceState) {
                 super.onViewCreated(view, savedInstanceState);
-
                 this.fragment = this;
-                this.view = view;
 
                 //防止点击穿透
                 view.setOnClickListener(null);
@@ -31105,7 +31286,7 @@ public class GT {
                     ((ViewGroup) getParent()).removeView(this);//重父类将WebView移除
                     destroy();//销毁WebView
                     context = null;
-                    if(photoView != null){
+                    if (photoView != null) {
                         photoView.finish();
                         photoView = null;
                     }
@@ -34943,7 +35124,7 @@ public class GT {
          *
          * @param <T>
          */
-        public abstract static class MVC_Model<T> {
+        public abstract static class MVC_Model<T> extends ViewModel {
             protected T bindingView;//持有的 Controller/View 对象
 
             public MVC_Model() {
@@ -38778,7 +38959,11 @@ public class GT {
          * @param obj
          * @return
          */
-        public Object classToObject(Object obj) {
+        public static <T> Object classToObject(Object obj) {
+            String data = String.valueOf(obj);
+            if (data.contains("java.util.List")) {
+                return new ArrayList<Object>();
+            }
             String[] strs = obj.toString().split(" ");
             String str = "";
             if (strs.length == 2) {
@@ -38790,7 +38975,9 @@ public class GT {
             try {
                 clazz = Class.forName(str);
             } catch (ClassNotFoundException e) {
-                GT.errt("e:" + e);
+                if (LOG.GT_LOG_TF) {
+                    GT.errt("e:" + e);
+                }
 //                e.printStackTrace();
             }
             try {
@@ -38804,6 +38991,30 @@ public class GT {
 //                e.printStackTrace();
             }
             return obj;
+        }
+
+        /**
+         * 获取 ListView 中存储类型的bean
+         *
+         * @param obj
+         * @param <T>
+         * @return
+         */
+        public static <T> Class<T> stringListToClass(Object obj) {
+            String data = String.valueOf(obj);
+            if (data.contains("java.util.List")) {
+                data = data.substring(data.indexOf("<") + 1, data.indexOf(">"));
+            }
+            Class<?> clazz = null;
+            try {
+                clazz = Class.forName(data);
+            } catch (ClassNotFoundException e) {
+                if (LOG.GT_LOG_TF) {
+                    GT.errt("e:" + e);
+                }
+//                e.printStackTrace();
+            }
+            return (Class<T>) clazz;
         }
 
         /**
