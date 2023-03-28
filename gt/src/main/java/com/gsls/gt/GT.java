@@ -1380,7 +1380,7 @@ public class GT {
         private static String prefix; // 占位符
 
         // 获取log打印前缀(行数、类名、方法名)
-        public static String getPrefix(int number) {
+        private static String getPrefix(int number) {
             if (number < 0) {
                 return "log Hierarchy error ";
             }
@@ -1399,7 +1399,7 @@ public class GT {
             return prefix;
         }
 
-        public static String getPrefixT(int number) {
+        private static String getPrefixT(int number) {
             if (number < 0) {
                 return "log Hierarchy error ";
             }
@@ -1442,6 +1442,7 @@ public class GT {
                 }
             }
             String time = dfs.format(new Date());
+//            Log.i("GT_i", "path:" + path);
             File file = createPathFile(path);
             BufferedWriter out = null;
             try {
@@ -6296,7 +6297,6 @@ public class GT {
             this.values = values;
 
             GT.logt("最后的查询条件:" + this.conditions);
-            GT.log("最后的查询条件:" + this.conditions);
             GT.logt("最后的查询值:" + this.values);
             for (String value : this.values) {
                 GT.logt("value:" + value);
@@ -10157,9 +10157,18 @@ public class GT {
                 call.whereBean.sqlValue = new String[call.paramMap.size()];
                 Set<String> keys = call.paramMap.keySet();
                 Iterator<String> iterator = keys.iterator();
-                //TODO 应该倒序的 sqlWhere=[sex = ? and age > ?], sqlValue=[42, 女] 这样导致 查询条件与查询值不匹配
+
+                //倒序
+                List<String> sqlValueList = new ArrayList<>();
                 for (int i = 0; i < call.whereBean.sqlValue.length; i++) {
                     String key = iterator.next();
+                    sqlValueList.add(key);
+                }
+                Collections.reverse(sqlValueList);
+
+                //TODO 应该倒序的 sqlWhere=[sex = ? and age > ?], sqlValue=[42, 女] 这样导致 查询条件与查询值不匹配
+                for (int i = 0; i < call.whereBean.sqlValue.length; i++) {
+                    String key = sqlValueList.get(i);
                     String value = String.valueOf(call.paramMap.get(key));
                     GT.logt("key:" + key);
                     GT.logt("value:" + value);
@@ -19208,6 +19217,23 @@ public class GT {
      * @AppUtils 应用程序的小工具集合
      */
     public static class ApplicationUtils {
+
+        private static long exitTime = 0;
+        /**
+         * 连续点击2次退出
+         */
+        public static void clickTwice(Context context,OnListener<Boolean> onListener,long... times) {
+            long time = 2000;
+            if(times != null && times.length > 0){
+                time = times[0];
+            }
+            if ((System.currentTimeMillis() - exitTime) > time) {
+                exitTime = System.currentTimeMillis();
+                onListener.onListener(false);
+            } else {
+                onListener.onListener(true);
+            }
+        }
 
         /**
          * 过滤掉屏蔽字库
