@@ -4,13 +4,17 @@ import com.gsls.gt.GT;
 
 @GT.Hibernate.GT_Entity
 public class UserBean {
-
     @GT.Hibernate.GT_Key
     private int userId;
 
     private String name;
     private int age;
+
     private String sex;
+
+    public void setUserId(int userId) {
+        this.userId = userId;
+    }
 
     public UserBean() {
         super();

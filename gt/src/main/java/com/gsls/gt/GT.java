@@ -300,6 +300,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
@@ -324,29 +326,26 @@ import dalvik.system.PathClassLoader;
  * GSLS_Tool
  * <p>
  * <p>
- * 更新时间:2023.3.2
- * 更新内容 v1.4.2.6 版本 大爆料：
+ * 更新时间:2023.4.22
+ * 更新内容 v1.4.2.8 版本：大爆料：数据库Hibernate 新增索引功能
  * CSDN 博客/官网教程:https://blog.csdn.net/qq_39799899
  * GitHub https://github.com/1079374315/GT
  * 更新内容如下：
- * 1.优化 Fragment 框架
- * 2.优化 GT日志悬浮窗 部分功能
- * 3.优化 GT_Floating 	日志,具体详情参考教程：https://blog.csdn.net/qq_39799899/article/details/128497267
- * 4.优化 Glide 		加载动态图设置圆角的问题
- * 5.修改 Hibernate 	SQL插入数据的方式
- * 6.优化 HttpUtil 	网络请求框架 body 方式
- * 7.优化 WebViewUtils 工具的 setWebViewKernel方法
- * 8.增加 ImageViewTools 工具的 base64ToBitmap()方法
- * 9.优化 Adapters		GT封装的适配器
- * 10.优化 GT_WebView	初始化默认不缓存参数
- * 11.优化 GTImageView	优化圆角设置方法
- * 12.优化 Frame 思想	ViewModel 框架（让所有页面共用同一个 ViewModel）
- * 13.增强 ApplicationUtils
- * (1)增加屏蔽字库方法 shieldedCharacterLibrary()
- * (2)去掉结尾为0		removeZero()
- * (3)防止空数据的方法	notyNull()
- * (4)获取 字符串中的 电话号码	checkCellphone()
- * (5)获取当前手机所有app信息 getAllAppData2()
+ * 1.优化 Hibernate 数据库
+ * (1)新增索引功能：单列索引、组合索引、唯一索引
+ * (2)新增 数据库Hibernate 使用 接口的方式调用管理数据库API
+ * (3)将数据库注解 @GT.Hibernate.GT_Property 改为了 @GT.Hibernate.GT_Column
+ * (4)数据库新增 读写锁，线程操作更安全
+ * (5)增强数据库 保存全部数据saveAll() 的功能(之前最多一次性能保存50万条，增强后内存足够的情况下，上无上限)
+ * <p>
+ * 2.优化日志 调用方法
+ * 3.优化 GT_WebView googleplay 报错 onReceivedSslError 的问题
+ * 4.优化 使用串口工具 SerialPortUtils 时，缺少 libserial_port.so 文件的问题
+ * 5.
+ * 6.
+ * 7.
+ * 8.
+ * 9.
  * <p>
  * <p>
  * 小提示：(用于 AndroidStudio )
@@ -1956,9 +1955,9 @@ public class GT {
          * 查看普通事件
          */
         public Map<String, EventBusBean> showEventBusMap() {
-            GT.logt("eventBusSize:" + eventBusMap.keySet().size());
+            logt("eventBusSize:" + eventBusMap.keySet().size());
             for (String s : eventBusMap.keySet()) {
-                GT.logt("eventBus:" + eventBusMap.get(s));
+                logt("eventBus:" + eventBusMap.get(s));
             }
             return eventBusMap;
         }
@@ -1988,9 +1987,9 @@ public class GT {
          * 查看粘性事件
          */
         public void showEventBusStickyMap() {
-            GT.logt("eventBusStickySize:" + eventBusStickyMap.keySet().size());
+            logt("eventBusStickySize:" + eventBusStickyMap.keySet().size());
             for (String key : eventBusStickyMap.keySet()) {
-                GT.logt(key + ":" + eventBusStickyMap.get(key));
+                logt(key + ":" + eventBusStickyMap.get(key));
             }
         }
 
@@ -2310,9 +2309,6 @@ public class GT {
                         }
                     }
 
-//                GT.logt("keyClassList:" + keyClassList);
-//                GT.logt("keyStringList:" + keyStringList);
-
                     //类型匹配后进行向订阅者按照线程优先级进行遍历 发布事件
                     for (EventBusBean eventBusBean : priorityList) {
 
@@ -2335,7 +2331,7 @@ public class GT {
                         }
 
                         //按照订阅者的线程类型进行处理
-//                    GT.logt("eventBusBean.threadMode:" + eventBusBean.threadMode);
+//                    logt("eventBusBean.threadMode:" + eventBusBean.threadMode);
                         switch (eventBusBean.threadMode) {
                             case ThreadMode.POSTING://默认使用发布事件的当前线程
                                 t = setMethodValue(eventBusBean, eventData);
@@ -2472,7 +2468,7 @@ public class GT {
          */
         private <T> T setMethodValue(EventBusBean eventBusBean, Object eventData) {
             try {
-//                GT.logt(eventBusBean.object + ":" + eventBusBean.methodName + ":" + eventBusBean.returnType + ":" + eventBusBean.parameterTypes);
+//                logt(eventBusBean.object + ":" + eventBusBean.methodName + ":" + eventBusBean.returnType + ":" + eventBusBean.parameterTypes);
                 return (T) AnnotationAssist.setReflectMethodValue(eventBusBean.object, eventBusBean.methodName, eventBusBean.returnType, eventBusBean.parameterTypes, eventData == null ? "null" : eventData);
             } catch (Exception e) {
                 if (LOG.GT_LOG_TF) {
@@ -2632,7 +2628,7 @@ public class GT {
             private static final ServiceConnection connection = new ServiceConnection() {
                 public void onServiceConnected(ComponentName name, IBinder service) {
                     servermessenger = new Messenger(service);//获取服务端信使
-//                    GT.logt("获取到服务器信使");
+//                    logt("获取到服务器信使");
                 }
 
                 public void onServiceDisconnected(ComponentName name) {
@@ -2653,7 +2649,7 @@ public class GT {
             }
 
             public static void sendMsg(Object eventData, Object... eventKeys) {
-//                GT.logt("servermessenger:" + servermessenger);
+//                logt("servermessenger:" + servermessenger);
 
                 GT.Observable.getDefault().execute(new Observable.RunJava<Object>() {
                     @Override
@@ -2742,7 +2738,7 @@ public class GT {
                             bundle.putString("valueObject", objJson);
                         }
                         message.setData(bundle);
-//                        GT.logt("向服务器发送一波数据:" + bundle.getString("type") + "," + bundle.getString("key") + "," + eventData);
+//                        logt("向服务器发送一波数据:" + bundle.getString("type") + "," + bundle.getString("key") + "," + eventData);
                         //非常重要的一句话
                         message.replyTo = clientmesssager;
                         try {
@@ -2762,7 +2758,7 @@ public class GT {
                 @Override
                 public void dispatchMessage(@NonNull Message msg) {
                     super.handleMessage(msg);
-//                    GT.logt("接收到 服务器发来的数据");
+//                    logt("接收到 服务器发来的数据");
                     Bundle bundle = msg.getData();
                     String type = bundle.getString("type");
                     String key = bundle.getString("key");
@@ -2798,10 +2794,10 @@ public class GT {
                             break;
                     }
 
-//                    GT.logt("type:" + type);
-//                    GT.logt("key:" + key);
-//                    GT.logt("value:" + value);
-//                    GT.logt("发布事件数据");
+//                    logt("type:" + type);
+//                    logt("key:" + key);
+//                    logt("value:" + value);
+//                    logt("发布事件数据");
                     if (key != null) {
                         //如果存在多个发布目标，那就发分割发送多个
                         if (key.contains(EventBus.SEPARATOR)) {
@@ -2831,7 +2827,7 @@ public class GT {
             private static Messenger clientMessager;
 
             public static void sendMsg(Object eventData, Object... eventKeys) {
-//                GT.logt("clientMessager:" + clientMessager);
+//                logt("clientMessager:" + clientMessager);
 
                 GT.Observable.getDefault().execute(new Observable.RunJava<Object>() {
                     @Override
@@ -2924,7 +2920,7 @@ public class GT {
                             bundle.putString("valueObject", objJson);
                         }
 
-//                        GT.logt("向客户端发送一波数据:" + bundle.getString("type") + "," + bundle.getString("key") + "," + eventData);
+//                        logt("向客户端发送一波数据:" + bundle.getString("type") + "," + bundle.getString("key") + "," + eventData);
                         messenge.setData(bundle);
                         try {
                             clientMessager.send(messenge);
@@ -2946,7 +2942,7 @@ public class GT {
                 return new Messenger(new Handler(Looper.myLooper()) {
                     @Override
                     public void dispatchMessage(@NonNull Message msg) {
-//                        GT.logt("接收到客户端信息");
+//                        logt("接收到客户端信息");
                         //接受客户端消息
                         Bundle bundle = msg.getData();
                         String type = bundle.getString("type");
@@ -3001,7 +2997,7 @@ public class GT {
 
                         //向客户端发送消息
                         clientMessager = msg.replyTo;//用于获取客户端的信使
-//                        GT.logt("获取客户端的信使");
+//                        logt("获取客户端的信使");
 
                         super.handleMessage(msg);
                     }
@@ -3361,6 +3357,9 @@ public class GT {
         }//清空    //如果使用 commit 来提交事务，是直接写入磁盘 ，如果需要频繁的提交的话， apply 的性能会优于 commit
 
         private SharedPreferences sp;
+        private ReentrantReadWriteLock mReadWriteLock = new ReentrantReadWriteLock();
+        private ReentrantReadWriteLock.ReadLock lockRead;
+        private ReentrantReadWriteLock.WriteLock lockWrite;
 
         public SharedPreferences getSharedPreferences() {
             return sp;
@@ -3384,6 +3383,11 @@ public class GT {
          * @param commit      是否自动提交
          */
         public GT_SharedPreferences(Context context, String sPName, boolean commit) {
+            if (sp != null) return;
+
+            lockRead = mReadWriteLock.readLock();
+            lockWrite = mReadWriteLock.writeLock();
+
             this.commit = commit;
             sp = context.getSharedPreferences(sPName, 0);//打开 或 创建 SharedPreferences
             sp_e = sp.edit();//让userData处于编辑状态
@@ -3397,26 +3401,37 @@ public class GT {
          * @return 返回 sp 操作对象
          */
         public GT_SharedPreferences save(String key, Object object) {
-            boolean TF = true;//监测保存状态是否正常
-            if (object instanceof String) {
-                sp_e.putString(key, object.toString());
-            } else if (object instanceof Integer) {
-                sp_e.putInt(key, (Integer) object);
-            } else if (object instanceof Long) {
-                sp_e.putLong(key, (Long) object);
-            } else if (object instanceof Float) {
-                sp_e.putFloat(key, (Float) object);
-            } else if (object instanceof Boolean) {
-                sp_e.putBoolean(key, (Boolean) object);
-            } else if (object instanceof Set) {
-                sp_e.putStringSet(key, (Set) object);
-            } else {
-                String json = JSON.toJson2(object);
-                String json_class = object.getClass().toString();
-                sp_e.putString(key, json);                           //保存对象的 Json 数据
-                sp_e.putString(key + "_class", json_class);            //保存对象的 class 数据
+            try {
+                if (lockWrite != null) {
+                    lockWrite.lock();
+                }
+                boolean TF = true;//监测保存状态是否正常
+                if (object instanceof String) {
+                    sp_e.putString(key, object.toString());
+                } else if (object instanceof Integer) {
+                    sp_e.putInt(key, (Integer) object);
+                } else if (object instanceof Long) {
+                    sp_e.putLong(key, (Long) object);
+                } else if (object instanceof Float) {
+                    sp_e.putFloat(key, (Float) object);
+                } else if (object instanceof Boolean) {
+                    sp_e.putBoolean(key, (Boolean) object);
+                } else if (object instanceof Set) {
+                    sp_e.putStringSet(key, (Set) object);
+                } else {
+                    String json = JSON.toJson2(object);
+                    String json_class = object.getClass().toString();
+                    sp_e.putString(key, json);                           //保存对象的 Json 数据
+                    sp_e.putString(key + "_class", json_class);            //保存对象的 class 数据
+                }
+                if (commit && TF) sp_e.apply();  //如果设置了自动提交 并且 保存状态正常 即可自定提交
+            } catch (Exception e) {
+                GT.errs("e:" + e);
+            } finally {
+                if (lockWrite != null) {
+                    lockWrite.unlock();
+                }
             }
-            if (commit && TF) sp_e.apply();  //如果设置了自动提交 并且 保存状态正常 即可自定提交
             return this;
 
         }
@@ -3428,11 +3443,23 @@ public class GT {
          * @return 返回 sp 操作对象
          */
         public SharedPreferences.Editor delete(String key) {
-            if (query(key) != null) {
-                sp_e.remove(key);
-                if (commit) sp_e.apply();
-            } else {
-                if (LOG.GT_LOG_TF) log("删除失败  当前 sp 中无此 key");
+
+            try {
+                if (lockWrite != null) {
+                    lockWrite.lock();
+                }
+                if (query(key) != null) {
+                    sp_e.remove(key);
+                    if (commit) sp_e.apply();
+                } else {
+                    if (LOG.GT_LOG_TF) log("删除失败  当前 sp 中无此 key");
+                }
+            } catch (Exception e) {
+                GT.errs("e:" + e);
+            } finally {
+                if (lockWrite != null) {
+                    lockWrite.unlock();
+                }
             }
             return sp_e;
         }
@@ -3460,6 +3487,9 @@ public class GT {
         public Object query(String key) {
             Object obj = null;
             try {
+                if (lockRead != null) {
+                    lockRead.lock();
+                }
                 obj = sp.getInt(key, 0);
             } catch (ClassCastException e1) {
                 try {
@@ -3494,6 +3524,10 @@ public class GT {
                         }
                     }
                 }
+            } finally {
+                if (lockRead != null) {
+                    lockRead.unlock();
+                }
             }
             return obj;
         }
@@ -3508,30 +3542,41 @@ public class GT {
          */
         public <T> T query(String key, Class<T> dataType) {
             Object obj = null;
-            if (dataType == Integer.class) {
-                obj = sp.getInt(key, 0);
-            } else if (dataType == String.class) {
-                obj = sp.getString(key, null);
-            } else if (dataType == Long.class) {
-                obj = sp.getLong(key, 0);
-            } else if (dataType == Float.class) {
-                obj = sp.getFloat(key, 0);
-            } else if (dataType == Boolean.class) {
-                obj = sp.getBoolean(key, false);
-            } else if (dataType == Set.class) {
-                obj = sp.getStringSet(key, null);
-            } else {// Bean
-                String str_class = sp.getString(key + "_class", null);     //获取对象 class 数据
-                String str = sp.getString(key, null);                          //获取对象 Json  数据
-                if (str_class == null) {      //如果 class 数据为空
-                    obj = str;              //普通的 Json 数据
-                } else {
-                    Object object_class = getObj(str_class);    //通过对象的 class 反射出 实例对象
-                    try {
-                        obj = JSON.fromJson2(str, object_class.getClass());     //通过 JSON 与 实例对象 获取相应的 Object 对象
-                    } catch (Exception e) {
-                        e.printStackTrace();
+            try {
+                if (lockRead != null) {
+                    lockRead.lock();
+                }
+                if (dataType == Integer.class) {
+                    obj = sp.getInt(key, 0);
+                } else if (dataType == String.class) {
+                    obj = sp.getString(key, null);
+                } else if (dataType == Long.class) {
+                    obj = sp.getLong(key, 0);
+                } else if (dataType == Float.class) {
+                    obj = sp.getFloat(key, 0);
+                } else if (dataType == Boolean.class) {
+                    obj = sp.getBoolean(key, false);
+                } else if (dataType == Set.class) {
+                    obj = sp.getStringSet(key, null);
+                } else {// Bean
+                    String str_class = sp.getString(key + "_class", null);     //获取对象 class 数据
+                    String str = sp.getString(key, null);                          //获取对象 Json  数据
+                    if (str_class == null) {      //如果 class 数据为空
+                        obj = str;              //普通的 Json 数据
+                    } else {
+                        Object object_class = getObj(str_class);    //通过对象的 class 反射出 实例对象
+                        try {
+                            obj = JSON.fromJson2(str, object_class.getClass());     //通过 JSON 与 实例对象 获取相应的 Object 对象
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
                     }
+                }
+            } catch (Exception e) {
+                GT.errs("e:" + e);
+            } finally {
+                if (lockRead != null) {
+                    lockRead.unlock();
                 }
             }
             return (T) obj;
@@ -3556,6 +3601,9 @@ public class GT {
              *  ***Bean 解释:   List<***Bean>   是之前 save 时 List的泛型
              *
              */
+            if (lockRead != null) {
+                lockRead.lock();
+            }
             Object obj = null;
             String str_class = sp.getString(key + "_class", null);     //获取对象 class 数据
             String str = sp.getString(key, null);                          //获取对象 Json  数据
@@ -3564,7 +3612,11 @@ public class GT {
                     obj = JSON.fromJson2(str, type.getClass());//字符串转 List
                 } catch (Exception e) {
                     e.printStackTrace();
+                } finally {
                 }
+            }
+            if (lockRead != null) {
+                lockRead.unlock();
             }
             return obj;
         }
@@ -4897,6 +4949,13 @@ public class GT {
      */
     public static class Hibernate implements SaveObject.SaveBean {
 
+        private Context context;
+        private final int MAX = 100000;//最大存储10万数值分界线
+        private Hibernate hibernate;
+        private ReentrantReadWriteLock readWriteLock;//读写锁
+        private Lock lockRead;//读锁
+        private Lock lockWrite;//写锁
+
         public Hibernate() {
             Context context = getActivity();
             if (context != null) {
@@ -4904,11 +4963,23 @@ public class GT {
             } else {
                 errs("当前并没有绑定 Activity 无法使用无参构造方法，请先使用 GT.GT.build(this); 进行 Activity 绑定。");
             }
+            if (readWriteLock == null) {
+                readWriteLock = new ReentrantReadWriteLock();//读写锁
+                lockRead = readWriteLock.readLock();//读锁
+                lockWrite = readWriteLock.writeLock();//写锁
+            }
+        }
+
+        public Hibernate(Context context) {
+            this.context = context;
+            if (readWriteLock == null) {
+                readWriteLock = new ReentrantReadWriteLock();//读写锁
+                lockRead = readWriteLock.readLock();//读锁
+                lockWrite = readWriteLock.writeLock();//写锁
+            }
         }
 
         //=============================== 实例化 动态的 Hibernate 对象 ====================================
-        private Context context;
-        private Hibernate hibernate;
 
         /**
          * 初始化 Hibernate
@@ -4943,9 +5014,6 @@ public class GT {
             return hibernate;
         }
 
-        public Hibernate(Context context) {
-            this.context = context;
-        }
 
         //=============================== 数据库注解 ====================================
 
@@ -4961,7 +5029,7 @@ public class GT {
 
             boolean setIsThread() default false;//是否使用线程创建数据库：TODO 注意，如果在线程中创建数据库就不能直接创建就引用数据库对象，需要触发使用
 
-            String setPassWord() default "123456";//默认的数据库加密密码
+            String setPassWord() default Hibernate.DATABASE_PASSWORD;//默认的数据库加密密码
 
             boolean setTransaction() default true;//默认的数据库所有操作是使用事务的
         }
@@ -4999,7 +5067,7 @@ public class GT {
         //表字段特殊设置注解
         @Target({ElementType.FIELD})
         @Retention(RetentionPolicy.RUNTIME)
-        public @interface GT_Property {
+        public @interface GT_Column {
 
             String setOldTableValue() default "";       //用于修改字段名，填写旧的字段名
 
@@ -5019,36 +5087,48 @@ public class GT {
 
             boolean setIsEncryption() default false;   //是否加密,默认不加密
 
+
+            /**
+             * 索引标识
+             * 什么情况下要避免使用索引？
+             * 虽然索引的目的在于提高数据库的性能，但这里有几个情况需要避免使用索引。使用索引时，应重新考虑下列准则：
+             * 索引不应该使用在较小的表上。
+             * 索引不应该使用在有频繁的大批量的更新或插入操作的表上。
+             * 索引不应该使用在含有大量的 NULL 值的列上。
+             * 索引不应该使用在频繁操作的列上。
+             */
+            String GENERAL_INDEX = "CREATE INDEX index_name ON tableName (column);";//单列索引或组合索引
+            String UNIQUE_INDEX = "CREATE UNIQUE INDEX index_name on tableName (column);";//唯一索引
+            String DEFAULT_INDEX = "UNIQUE NOT NULL";//默认索引
+
+            String setIndex() default DEFAULT_INDEX; //索引信息
+
         }
 
 
         //设置数据库接口标识
-       /* @Target(ElementType.TYPE)
+        @Target(ElementType.TYPE)
         @Retention(RetentionPolicy.RUNTIME)
         public @interface GT_Dao {
 
-        }*/
+        }
 
         //插入数据
         @Target(ElementType.METHOD)
         @Retention(RetentionPolicy.RUNTIME)
         public @interface GT_Insert {
-            String[] value() default "";
+            String[] value() default {};
 
-            String[] where() default "";
-
-            String code() default "";
+            String[] where() default {};
         }
 
         //删除数据
         @Target(ElementType.METHOD)
         @Retention(RetentionPolicy.RUNTIME)
         public @interface GT_Delete {
-            String[] value() default "";
+            String[] value() default {};
 
-            String[] where() default "";
-
-            String code() default "";
+            String[] where() default {};
         }
 
         //查询数据
@@ -5060,8 +5140,6 @@ public class GT {
             String[] where() default {};      //查询条件
 
             String[] value() default {};    //查询条件值
-
-            String code() default "";       //执行手写代码
 
             String flashback() default "";  //排序
 
@@ -5079,11 +5157,9 @@ public class GT {
         @Target(ElementType.METHOD)
         @Retention(RetentionPolicy.RUNTIME)
         public @interface GT_Update {
-            String[] value() default "";
+            String[] value() default {};
 
-            String[] where() default "";
-
-            String code() default "";
+            String[] where() default {};
         }
 
         //万能sql语句
@@ -5103,6 +5179,8 @@ public class GT {
 
         //=============================== 数据库属性 ====================================
         private String DATABASE_NAME = "GT.db";   //默认数据库名称(可修改)
+
+        private static final String DATABASE_PASSWORD = "123456"; //默认数据库密码
         private int DATABASE_VERSION = 1;         //默认数据库版本(可升级)
         private Object SCAN_TABLE = null;         //默认数据库映射方式(可修改)
         private boolean isDeleteNullTable;        //是否删除无用表
@@ -5215,33 +5293,50 @@ public class GT {
 
             @Override
             public void onCreate(SQLiteDatabase sqLiteDatabase) {
+                createSQL(sqLiteDatabase);
+            }
+
+            private void createSQL(SQLiteDatabase sqLiteDatabase){
                 scanTable(SCAN_TABLE); //设置创建或更新升级的数据库表
                 sqLiteDatabase2 = sqLiteDatabase;
                 //如果设置了 独自的 SQL 语句代码就用单独设置的
                 if (null != SQL_CODE && !"".equals(SQL_CODE)) {
-//                    GT.logt("手动代码:", SQL_CODE);
                     sqLiteDatabase.execSQL(SQL_CODE); //创建数据库 sql 语句 并 执行
                     SQL_CODE = "";//初始化
                 } else {//否则用智能SQL代码
                     for (String sqlStr : creationTableNameList) {
-//                        GT.log("智能代码:", sqlStr);
                         sqLiteDatabase.execSQL(sqlStr); //创建数据库 sql 语句 并 执行
                     }
+
+                    //检查是否需要建立索引
+                    if (tableIndexList.size() != 0) {
+                        for (String indexCode : tableIndexList) {
+                            try {
+                                sqLiteDatabase.execSQL(indexCode); //执行数据库索引代码
+                            } catch (Exception e) {
+                                GT.errs("e:" + e);
+                            }
+                        }
+                    }
+
                 }
             }
 
             @Override
             public void onUpgrade(SQLiteDatabase sqLiteDatabase, int oldVersion, int newVersion) {
                 //如果当前版本需要升级
+                updateSQL(sqLiteDatabase, oldVersion, newVersion);
+            }
+
+            private void updateSQL(SQLiteDatabase sqLiteDatabase, int oldVersion, int newVersion) {
                 if (oldVersion < newVersion) {
                     scanTable(SCAN_TABLE); //设置创建或更新升级的数据库表
                     //更新开始
-                    sqLiteDatabase2 = sqLiteDatabase;
+                    sqLiteDatabase2 = sqLiteDatabase;//赋值
                     if (SQL_CODE != null && !"".equals(SQL_CODE)) {//用户指定的代码
                         sqLiteDatabase.execSQL(SQL_CODE);
                         SQL_CODE = "";//初始化
                     } else {//用智能代码
-
                         for (int i = 0; i < creationTableNameList.size(); i++) { //遍历需要升级的表
 
                             //第一步：获取想要更新升级的所有表名，将表名全部改成“待删除表”
@@ -5251,20 +5346,28 @@ public class GT {
 
                             //第二步：创建最新的表
                             if (!isTable(tableNameList.get(i))) {//当前表如果不存在
-                                if (sqLiteDatabase2 == null) return;
-                                sqLiteDatabase2.execSQL(creationTableNameList.get(i));//ok
+                                sqLiteDatabase.execSQL(creationTableNameList.get(i));//ok
+                                //检查是否需要建立索引
+                                if (tableIndexList.size() != 0) {
+                                    for (String indexCode : tableIndexList) {
+                                        try {
+                                            sqLiteDatabase.execSQL(indexCode); //执行数据库索引代码
+                                        } catch (Exception e) {
+                                            GT.errs("e:" + e);
+                                        }
+                                    }
+                                }
                             }
 
-                            //第三步：将旧表数据导入新表中
-                            if (isTable("temp_" + tableNameList.get(i)) && isTable(tableNameList.get(i))) {//如果当前数据库存在该表
-
+                            //第三步：将旧表数据导入新表中,如果当前数据库存在该表
+                            if (isTable("temp_" + tableNameList.get(i)) && isTable(tableNameList.get(i))) {
                                 List<String> oldList = new ArrayList<>();//需要导入的旧字段
                                 List<String> newList = new ArrayList<>();//需要导入的新字段
 
-                                List<String> tempSQLTableValue = getTableAllValue("temp_" + tableNameList.get(i));//获取上个版本表所有字段
-                                List<String> SQLTableValue = getTableAllValue(tableNameList.get(i));//获取当前最新版本数据库表所有字段
+                                List<String> tempSQLTableValue = getTableAllValue("temp_" + tableNameList.get(i), sqLiteDatabase);//获取上个版本表所有字段
+                                List<String> sqlTableValue = getTableAllValue(tableNameList.get(i), sqLiteDatabase);//获取当前最新版本数据库表所有字段
                                 for (String tableValue : tempSQLTableValue) {//遍历旧版本，如果新版本也有就存入 待导入数据字段行列
-                                    if (SQLTableValue.contains(tableValue)) {
+                                    if (sqlTableValue.contains(tableValue)) {
                                         oldList.add(tableValue);//存入容器中
                                         newList.add(tableValue);//存入容器中
                                     }
@@ -5293,7 +5396,6 @@ public class GT {
                                             newList.add(news);//存入容器中
                                         }
 
-
                                     }
                                 }
                                 //将旧表中 需要导入的数据 导入到新表中
@@ -5320,8 +5422,8 @@ public class GT {
                         //更新结束
                     }
                 }
-
             }
+
         }
 
         //=============================== 数据库操作 ====================================
@@ -5379,21 +5481,17 @@ public class GT {
          * @return
          * @获取表所有字段名
          */
-        public synchronized List<String> getTableAllValue(String tableName) {
+        public static synchronized List<String> getTableAllValue(String tableName, SQLiteDatabase sqLiteDatabase) {
             Cursor tempCursor = null;
             List<String> tableNameList = new ArrayList<>();
-            if (sqLiteDatabase2 == null) return tableNameList;
-            if (isTransaction)
-                sqLiteDatabase2.beginTransaction();
+            if (sqLiteDatabase == null) return tableNameList;
             try {
                 String sql = "SELECT * FROM " + tableName + " WHERE 0";
-                tempCursor = sqLiteDatabase2.rawQuery(sql, null);//ok
+                tempCursor = sqLiteDatabase.rawQuery(sql, null);//ok
                 String[] columnNames = tempCursor.getColumnNames();
                 for (String str : columnNames) {
                     tableNameList.add(str);
                 }
-                if (isTransaction)
-                    sqLiteDatabase2.setTransactionSuccessful();
                 return tableNameList;
             } catch (Exception e) {
                 err(getLineInfo(1), "出现异常操作失误:" + e);
@@ -5401,8 +5499,6 @@ public class GT {
                 if (tempCursor != null) {
                     tempCursor.close();
                 }
-                if (isTransaction)
-                    sqLiteDatabase2.endTransaction();
             }
             return tableNameList;
         }
@@ -5421,7 +5517,6 @@ public class GT {
                 sqLiteDatabase2.beginTransaction();
             try {
                 String sql = "SELECT * FROM " + tableClass.getSimpleName() + " WHERE 0";
-
                 tempCursor = sqLiteDatabase2.rawQuery(sql, null);//ok
                 String[] columnNames = tempCursor.getColumnNames();
                 for (String str : columnNames) {
@@ -5504,6 +5599,7 @@ public class GT {
          * @删除表
          */
         public synchronized Hibernate deleteTable(String tableName) {
+
             if (sqLiteDatabase2 == null) return this;
             if (isTransaction)
                 sqLiteDatabase2.beginTransaction();
@@ -5551,10 +5647,9 @@ public class GT {
         public synchronized List<String> getSqlAllTableName() {
             List<String> strList = new ArrayList<>();
             if (sqLiteDatabase2 == null) return strList;
-            if (isTransaction)
-                sqLiteDatabase2.beginTransaction();
+            Cursor cursor = null;
             try {
-                Cursor cursor = sqLiteDatabase2.rawQuery("select name from sqlite_master where type='table' order by name", null);//ok
+                cursor = sqLiteDatabase2.rawQuery("select name from sqlite_master where type='table' order by name", null);//ok
                 while (cursor.moveToNext()) {
                     String tableName = cursor.getString(0);
                     if ("android_metadata".equals(tableName)) {//是否遍历到系统数据库
@@ -5563,13 +5658,12 @@ public class GT {
                         strList.add(tableName);
                     }
                 }
-                if (isTransaction)
-                    sqLiteDatabase2.setTransactionSuccessful();
             } catch (Exception e) {
                 e.printStackTrace();
             } finally {
-                if (isTransaction)
-                    sqLiteDatabase2.endTransaction();
+                if (cursor != null) {
+                    cursor.close();
+                }
             }
             return strList;
         }
@@ -5581,6 +5675,7 @@ public class GT {
          */
         public synchronized List<String> getSqlAllName() {
             if (context == null) return null;
+
             List<String> filesAllNames = FileUtils.getFilesAllName(context.getFilesDir().getParent() + "/databases/");
             if (filesAllNames == null) {
                 return null;
@@ -5645,8 +5740,8 @@ public class GT {
             if (isTransaction)
                 sqLiteDatabase2.beginTransaction();
             try {
-                List<String> tempSQLTableValue = getTableAllValue(oldTable);//获取上个版本表所有字段
-                List<String> SQLTableValue = getTableAllValue(newTable);//获取当前最新版本数据库表所有字段
+                List<String> tempSQLTableValue = getTableAllValue(oldTable, sqLiteDatabase2);//获取上个版本表所有字段
+                List<String> SQLTableValue = getTableAllValue(newTable, sqLiteDatabase2);//获取当前最新版本数据库表所有字段
                 //效验出 旧版本 与 新版本 数据库均有的字段
                 List<String> SQLValue = new ArrayList<>();
                 for (String tableValue : tempSQLTableValue) {//遍历旧版本，如果新版本也有就存入 待导入数据字段行列
@@ -5690,8 +5785,8 @@ public class GT {
                 String oldTable = oldTableClass.getSimpleName();
                 String newTable = newTableClass.getSimpleName();
 
-                List<String> tempSQLTableValue = getTableAllValue(oldTable);//获取上个版本表所有字段
-                List<String> SQLTableValue = getTableAllValue(newTable);//获取当前最新版本数据库表所有字段
+                List<String> tempSQLTableValue = getTableAllValue(oldTable, sqLiteDatabase2);//获取上个版本表所有字段
+                List<String> SQLTableValue = getTableAllValue(newTable, sqLiteDatabase2);//获取当前最新版本数据库表所有字段
                 //效验出 旧版本 与 新版本 数据库均有的字段
                 List<String> SQLValue = new ArrayList<>();
                 for (String tableValue : tempSQLTableValue) {//遍历旧版本，如果新版本也有就存入 待导入数据字段行列
@@ -5736,7 +5831,6 @@ public class GT {
             try {
                 //如果当前数据库存在该表
                 if (isTable(oldTable) && isTable(newTable)) {
-
                     //生成旧的可用表字段
                     String oldTableChar = "";
                     for (String str : oldTableList) {
@@ -5750,10 +5844,7 @@ public class GT {
                         newTableChar += (str + ",");
                     }
                     newTableChar = newTableChar.substring(0, newTableChar.length() - 1);//去掉SQLCode 最后一个无用逗号
-
-
                     String inputSQL = "INSERT INTO " + newTable + "(" + newTableChar + ") SELECT " + oldTableChar + " FROM " + oldTable;
-
                     sqLiteDatabase2.execSQL(inputSQL);//ok
                     if (isTransaction)
                         sqLiteDatabase2.setTransactionSuccessful();
@@ -5824,8 +5915,7 @@ public class GT {
          * @param <T>
          * @return
          */
-        private Object returnListOrMap(Class<?> type, String value) {
-
+        public static Object returnListOrMap(Class<?> type, String value) {
             if (type == List.class) {
                 if (value == null || "null".equals(value)) return null;
                 //如果是 List java.lang.String[1111, 2222, 3333]
@@ -6096,8 +6186,6 @@ public class GT {
                 return map;
 
             }
-
-
             return null;
         }
 
@@ -6107,7 +6195,7 @@ public class GT {
          * @param type
          * @return
          */
-        private Class returnType(Class<?> type) {
+        public static Class returnType(Class<?> type) {
 
             switch (type.getName()) {
                 case "java.lang.String":
@@ -6201,7 +6289,7 @@ public class GT {
          * ======================================================== 表的 聚合函数 代码 ========================================
          */
 
-        private boolean status = true;//当前增删查改的状态
+        private boolean status = false;//当前增删查改的状态
         private int statusNumber = 0;//数据库操作返回值
 
         // SQL 操作属性
@@ -6215,12 +6303,12 @@ public class GT {
         private boolean isLast = false;             //是否查询到最后一条 默认从第一条查询
         private boolean saveAddUpdateKey = false;   //保存与修改主键是否已被创建
         //        private boolean isEncryption;//是否加密
-        private String passWord = "";//数据加密密码
+        private static String passWord = "";//数据加密密码
 
 
         //初始化数据库参数
         private void initSqlParameter() {
-            status = true;
+            status = false;
             statusNumber = 0;
             saveAddUpdateKey = false;
         }
@@ -6293,15 +6381,8 @@ public class GT {
                 condition = (String) conditions;
             }
 
-            this.conditions = condition;
+            this.conditions = condition;//1
             this.values = values;
-
-            GT.logt("最后的查询条件:" + this.conditions);
-            GT.logt("最后的查询值:" + this.values);
-            for (String value : this.values) {
-                GT.logt("value:" + value);
-            }
-
             return this;
         }
 
@@ -6413,8 +6494,8 @@ public class GT {
                         continue;
                     }
 
-                    GT_Property gt_Property = field.getAnnotation(GT_Property.class);//如果是不被初始化的那就进行跳过解析
-                    if (gt_Property != null && gt_Property.setNotInit()) {
+                    GT_Column gt_Column = field.getAnnotation(GT_Column.class);//如果是不被初始化的那就进行跳过解析
+                    if (gt_Column != null && gt_Column.setNotInit()) {
                         continue;
                     }
 
@@ -6424,7 +6505,6 @@ public class GT {
                         if (saveAddUpdateKey || annotation.setAutoincrement())
                             continue;
                     }
-
 
                     if (String.class == type) {
                         if (val == null) {
@@ -6483,7 +6563,6 @@ public class GT {
                     } else if (byte[].class.equals(type)) {
                         contentValues.put(name, (byte[]) val);
                     }
-
 
                     //数组类型
                     else if (String[].class == type) {
@@ -6598,12 +6677,6 @@ public class GT {
          */
         private <T> void saveAddUpdateOperation(T bean, ContentValues contentValues) {
             Class<?> class1 = bean.getClass();//当前类
-
-           /* GT_Bean gt_bean = class1.getAnnotation(GT_Bean.class);//获取该类 GT_Bean 的注解类
-            if (gt_bean != null) {
-                isEncryption = gt_bean.setIsEncryption();
-            }*/
-
             //获取所有成员变量
             Field[] fields = class1.getDeclaredFields();
             //解析并设置保存的数据
@@ -6615,8 +6688,8 @@ public class GT {
                     Object val = field.get(bean);// 得到此属性的值
                     if (val == null) continue;
 
-                    GT_Property gt_Property = field.getAnnotation(GT_Property.class);//如果是不被初始化的那就进行跳过解析
-                    if (gt_Property != null && gt_Property.setNotInit()) {
+                    GT_Column gt_Column = field.getAnnotation(GT_Column.class);//如果是不被初始化的那就进行跳过解析
+                    if (gt_Column != null && gt_Column.setNotInit()) {
                         continue;
                     }
 
@@ -6630,8 +6703,8 @@ public class GT {
 
                     //解析多个默认值，并随机选择后设置为默认值
                     boolean defaultOneValue = false;//是否是一个默认值
-                    if (gt_Property != null) {
-                        String[] defaultValues = gt_Property.setDefaultValue();
+                    if (gt_Column != null) {
+                        String[] defaultValues = gt_Column.setDefaultValue();
                         if (defaultValues.length > 1) {
                             int anInt = GT_Random.getInt(0, defaultValues.length);
                             String defaultValue = defaultValues[anInt];
@@ -6648,7 +6721,7 @@ public class GT {
                         if (defaultOneValue && val == null) continue;
                         //加密数据
 
-                        if (gt_Property != null && gt_Property.setIsEncryption()) {
+                        if (gt_Column != null && gt_Column.setIsEncryption()) {
                             val = Encryption.DES.encryptPassword(val, passWord);
                         }
 
@@ -6802,7 +6875,7 @@ public class GT {
         }
 
         //查询父类
-        private <T> void querySuper(T bean, Class<?> class1, String[] tableChar, Cursor cursor) {
+        public static <T> void querySuper(T bean, Class<?> class1, String[] tableChar, Cursor cursor) {
 
             //递归查询父类字段
             Class<?> superclass = class1.getSuperclass();
@@ -6817,7 +6890,7 @@ public class GT {
             for (Field field : fields) {
 
                 //用于解密
-                GT_Property gt_Property = field.getAnnotation(GT_Property.class);
+                GT_Column gt_Column = field.getAnnotation(GT_Column.class);
 
                 String valueName = field.getName();
                 Class<?> type = field.getType();
@@ -6828,7 +6901,7 @@ public class GT {
                         if (String.class == type) {
                             String value = cursor.getString(cursor.getColumnIndex(valueName));
                             //解密
-                            if (gt_Property != null && gt_Property.setIsEncryption()) {
+                            if (gt_Column != null && gt_Column.setIsEncryption()) {
                                 value = Encryption.DES.decryptPassword(value, passWord);
                             }
                             obj = value;
@@ -7080,7 +7153,7 @@ public class GT {
 
             //获取查询该表的返回字段
             if (returnValues == null || returnValues.length == 0) {
-                List<String> tableAllValue = getTableAllValue(tableName);
+                List<String> tableAllValue = getTableAllValue(tableName, sqLiteDatabase2);
                 if (tableAllValue != null && tableAllValue.size() > 0) {
                     returnValues = new String[tableAllValue.size()];
                     for (int i = 0; i < tableAllValue.size(); i++) {
@@ -7125,7 +7198,7 @@ public class GT {
                     for (Field field : fields) {
 
                         //用于解密
-                        GT_Property gt_Property = field.getAnnotation(GT_Property.class);//如果是不被初始化的那就进行跳过解析
+                        GT_Column gt_Column = field.getAnnotation(GT_Column.class);//如果是不被初始化的那就进行跳过解析
 
                         String valueName = field.getName();
                         Class<?> type = field.getType();
@@ -7137,7 +7210,7 @@ public class GT {
                                     if (String.class == type) {
                                         String value = cursor.getString(cursor.getColumnIndex(valueName));
 //                                      //解密
-                                        if (gt_Property != null && gt_Property.setIsEncryption()) {
+                                        if (gt_Column != null && gt_Column.setIsEncryption()) {
                                             value = Encryption.DES.decryptPassword(value, passWord);
                                         }
                                         obj = value;
@@ -7417,9 +7490,8 @@ public class GT {
                     try {
                         String name = field.getName();//获取属性名
                         Object val = field.get(bean);// 得到此属性的值
-//                            log("当前主键是:" + "name:" + name + "  val:" + val);
-                        conditions = name + " = ?";
-                        values = new String[]{val.toString()};
+                        conditions = name + " = ?";//2
+                        values = new String[]{String.valueOf(val)};
                     } catch (IllegalAccessException e) {
                         e.printStackTrace();
                     }
@@ -7427,6 +7499,408 @@ public class GT {
                 }
             }
         }
+
+        /**
+         * 那实体类中不为 null 的值自动设置为 操作条件
+         *
+         * @param bean
+         * @param aClass
+         * @param <T>
+         */
+        private <T> void wheresValue(T bean, Class<?> aClass) {
+
+            Class<?> superclass = aClass.getSuperclass();//父类
+            if (superclass != Object.class) {
+                wheresValue(bean, superclass);//递归调用
+            }
+
+            List<String> valueList = new ArrayList<>();
+
+            for (Field field : aClass.getDeclaredFields()) {
+                field.setAccessible(true); // 设置属性是可以访问的
+                try {
+                    String name = field.getName();//获取属性名
+                    String val = String.valueOf(field.get(bean));// 得到此属性的值
+                    if ("null".equals(val) || "0".equals(val)) continue;//过滤掉空值
+                    valueList.add(val);
+                    if (conditions == null) conditions = "";
+                    conditions += name + " = ? and ";//2
+                } catch (IllegalAccessException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            //去掉多余的 and
+            if (conditions != null && conditions.contains("?")) {
+                conditions = conditions.substring(0, conditions.lastIndexOf("?") + 1);
+            }
+
+            if (valueList.size() > 0) {
+                values = new String[valueList.size()];
+                for (int i = 0; i < valueList.size(); i++) {
+                    values[i] = valueList.get(i);
+                }
+            }
+
+        }
+
+        /**
+         * @param cursor         游标对象
+         * @param tClass         实体类class
+         * @param sqLiteDatabase 数据库操作对象
+         * @param tableName      表名
+         * @param returnValues   返回字段
+         * @param <T>            返回值 单个或多个实体类，具体拿到返回值需要自己判断
+         * @return
+         */
+        @SuppressLint({"Range", "SimpleDateFormat"})
+        public static <T> Object cursorToObject(Cursor cursor, Class<T> tClass, SQLiteDatabase sqLiteDatabase, String tableName, String... returnValues) {
+            if (cursor == null || tClass == null) return null;
+
+            if (tableName == null) {
+                tableName = tClass.getSimpleName();
+            }
+
+            if (returnValues == null || returnValues.length == 0 || (returnValues.length == 1 && returnValues[0].equals("*"))) {
+                //获取查询该表的返回字段
+                List<String> tableAllValue = getTableAllValue(tableName, sqLiteDatabase);
+                if (tableAllValue != null && tableAllValue.size() > 0) {
+                    returnValues = new String[tableAllValue.size()];
+                    for (int i = 0; i < tableAllValue.size(); i++) {
+                        returnValues[i] = tableAllValue.get(i);
+                    }
+                }
+            }
+
+            boolean isQueryAll = cursor.getCount() != 1;//自动判断是否需要返回多个值
+
+            List<T> beanList = new ArrayList<T>();//创建容器
+
+            if (cursor.getCount() > 0) {
+                cursor.moveToFirst();//移动到首位
+                for (int i = 0; i < cursor.getCount(); i++) {
+                    T bean = null;//定义泛型
+                    try {
+                        bean = tClass.newInstance();//实体化
+                    } catch (IllegalAccessException e) {
+                        return null;
+                    } catch (InstantiationException e) {
+                        e.printStackTrace();
+                        return null;
+                    }
+
+                    //递归查询父类
+                    GT.Hibernate.querySuper(bean, tClass, returnValues, cursor);
+
+                    Field[] fields = bean.getClass().getDeclaredFields();
+                    for (Field field : fields) {
+
+                        //用于解密
+                        GT_Column gt_Column = field.getAnnotation(GT_Column.class);//如果是不被初始化的那就进行跳过解析
+
+                        String valueName = field.getName();
+                        Class<?> type = field.getType();
+                        field.setAccessible(true);
+                        if (returnValues != null) {
+                            for (String str : returnValues) {
+                                Object obj = null;
+                                if (str.equals(valueName)) {
+                                    if (String.class == type) {
+                                        String value = cursor.getString(cursor.getColumnIndex(valueName));
+//                                      //解密
+                                        if (gt_Column != null && gt_Column.setIsEncryption()) {
+                                            value = GT.Encryption.DES.decryptPassword(value, passWord);
+                                        }
+                                        obj = value;
+                                    } else if (int.class == type || Integer.class == type) {
+                                        obj = cursor.getInt(cursor.getColumnIndex(valueName));
+                                    } else if (boolean.class == type || Boolean.class == type) {
+                                        int value = cursor.getInt(cursor.getColumnIndex(valueName));// false:0   true:1
+                                        if (value == 1) {
+                                            obj = true;
+                                        } else if (value == 0) {
+                                            obj = false;
+                                        }
+                                    } else if (double.class == type || Double.class == type) {
+                                        obj = cursor.getDouble(cursor.getColumnIndex(valueName));
+                                    } else if (float.class == type || Float.class == type) {
+                                        obj = cursor.getFloat(cursor.getColumnIndex(valueName));
+                                    } else if (Time.class == type) {
+                                        String time = cursor.getString(cursor.getColumnIndex(valueName));
+                                        if (time == null || time.length() == 0) {
+                                            obj = null;
+                                            continue;
+                                        }
+                                        Date d2 = null;
+                                        try {
+                                            d2 = new SimpleDateFormat("hh:mm:ss").parse(time);
+                                        } catch (Exception e) {
+                                            e.printStackTrace();
+                                        }
+                                        obj = new Time(d2.getTime());
+                                    } else if (Date.class == type || java.sql.Date.class == type) {
+                                        String value = cursor.getString(cursor.getColumnIndex(valueName));
+                                        if (value == null || value.length() == 0) {
+                                            obj = null;
+                                            continue;
+                                        }
+                                        try {
+                                            obj = new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy", Locale.US).parse(value);
+                                        } catch (ParseException e) {
+                                            e.printStackTrace();
+                                        }
+                                    } else if (long.class == type || Long.class == type) {
+                                        obj = cursor.getLong(cursor.getColumnIndex(valueName));
+                                    } else if (short.class == type || Short.class == type) {
+                                        obj = cursor.getShort(cursor.getColumnIndex(valueName));
+                                    } else if (byte[].class.equals(type)) {
+                                        obj = cursor.getBlob(cursor.getColumnIndex(valueName));
+                                    }
+
+
+                                    //数组类型
+                                    else if (String[].class == type) {
+                                        //String[]
+                                        String value = cursor.getString(cursor.getColumnIndex(valueName));
+                                        if (value == null) {
+                                            obj = null;
+                                        } else if ("[]".equals(value)) {
+                                            obj = new String[]{};
+                                        } else if (value.length() >= 5) {
+                                            obj = value.substring(2, value.length() - 2).split("\",\"");
+                                        }
+                                    } else if (int[].class == type) {
+                                        //int[]
+                                        String value = cursor.getString(cursor.getColumnIndex(valueName));
+                                        int[] intArr = null;
+                                        if (value == null) {
+                                            obj = null;
+                                        } else if ("[]".equals(value)) {
+                                            obj = new int[]{};
+                                        } else if (value.length() >= 3) {
+                                            value = value.substring(1, value.length() - 1);
+
+                                            if (value.contains(",")) {
+                                                String[] split = value.split(",");
+                                                intArr = new int[split.length];
+                                                for (int p = 0; p < split.length; p++) {
+                                                    intArr[p] = Integer.parseInt(split[p]);
+                                                }
+                                            } else {
+                                                intArr = new int[]{Integer.parseInt(value)};
+                                            }
+                                        }
+                                        obj = intArr;
+                                    } else if (boolean[].class == type) {
+                                        //boolean[]
+                                        String value = cursor.getString(cursor.getColumnIndex(valueName));
+                                        boolean[] booleanArr = null;
+                                        if (value == null) {
+                                            obj = null;
+                                        } else if ("[]".equals(value)) {
+                                            obj = new boolean[]{};
+                                        } else if (value.length() >= 3) {
+                                            value = value.substring(1, value.length() - 1);
+
+                                            if (value.contains(",")) {
+                                                String[] split = value.split(",");
+                                                booleanArr = new boolean[split.length];
+                                                for (int p = 0; p < split.length; p++) {
+                                                    booleanArr[p] = Boolean.parseBoolean(split[p]);
+                                                }
+                                            } else {
+                                                booleanArr = new boolean[]{Boolean.parseBoolean(value)};
+                                            }
+                                        }
+                                        obj = booleanArr;
+                                    } else if (double[].class == type) {
+                                        //double[]
+                                        String value = cursor.getString(cursor.getColumnIndex(valueName));
+                                        double[] doubleArr = null;
+                                        if (value == null) {
+                                            obj = null;
+                                        } else if ("[]".equals(value)) {
+                                            obj = new double[]{};
+                                        } else if (value.length() >= 3) {
+                                            value = value.substring(1, value.length() - 1);
+
+                                            if (value.contains(",")) {
+                                                String[] split = value.split(",");
+                                                doubleArr = new double[split.length];
+                                                for (int p = 0; p < split.length; p++) {
+                                                    doubleArr[p] = Double.parseDouble(split[p]);
+                                                }
+                                            } else {
+                                                doubleArr = new double[]{Double.parseDouble(value)};
+                                            }
+                                        }
+                                        obj = doubleArr;
+                                    } else if (float[].class == type) {
+                                        //float[]
+                                        String value = cursor.getString(cursor.getColumnIndex(valueName));
+                                        float[] floatArr = null;
+                                        if (value == null) {
+                                            obj = null;
+                                        } else if ("[]".equals(value)) {
+                                            obj = new float[]{};
+                                        } else if (value.length() >= 3) {
+                                            value = value.substring(1, value.length() - 1);
+
+                                            if (value.contains(",")) {
+                                                String[] split = value.split(",");
+                                                floatArr = new float[split.length];
+                                                for (int p = 0; p < split.length; p++) {
+                                                    floatArr[p] = Float.parseFloat(split[p]);
+                                                }
+                                            } else {
+                                                floatArr = new float[]{Float.parseFloat(value)};
+                                            }
+                                        }
+                                        obj = floatArr;
+                                    } else if (long[].class == type) {
+                                        //long[]
+                                        String value = cursor.getString(cursor.getColumnIndex(valueName));
+                                        long[] longArr = null;
+                                        if (value == null) {
+                                            obj = null;
+                                        } else if ("[]".equals(value)) {
+                                            obj = new long[]{};
+                                        } else if (value.length() >= 3) {
+                                            value = value.substring(1, value.length() - 1);
+
+                                            if (value.contains(",")) {
+                                                String[] split = value.split(",");
+                                                longArr = new long[split.length];
+                                                for (int p = 0; p < split.length; p++) {
+                                                    longArr[p] = Long.parseLong(split[p]);
+                                                }
+                                            } else {
+                                                longArr = new long[]{Long.parseLong(value)};
+                                            }
+                                        }
+                                        obj = longArr;
+                                    } else if (short[].class == type) {
+                                        //short[]
+                                        String value = cursor.getString(cursor.getColumnIndex(valueName));
+                                        short[] shortArr = null;
+                                        if (value == null) {
+                                            obj = null;
+                                        } else if ("[]".equals(value)) {
+                                            obj = new short[]{};
+                                        } else if (value.length() >= 3) {
+                                            value = value.substring(1, value.length() - 1);
+
+                                            if (value.contains(",")) {
+                                                String[] split = value.split(",");
+                                                shortArr = new short[split.length];
+                                                for (int p = 0; p < split.length; p++) {
+                                                    shortArr[p] = Short.parseShort(split[p]);
+                                                }
+                                            } else {
+                                                shortArr = new short[]{Short.parseShort(value)};
+                                            }
+                                        }
+                                        obj = shortArr;
+                                    } else if (List.class == type || Map.class == type) {
+
+                                        String value = cursor.getString(cursor.getColumnIndex(valueName));
+                                        if (value == null || "null".equals(value)) {
+                                            obj = null;
+                                        } else {
+                                            //第二次转换 List OR Map
+                                            obj = GT.Hibernate.returnListOrMap(type, value);
+                                        }
+                                    } else {
+                                        String value = cursor.getString(cursor.getColumnIndex(valueName));
+                                        try {
+                                            obj = GT.JSON.fromJson2(value, type);
+                                        } catch (Exception e) {
+                                            e.printStackTrace();
+                                        }
+
+                                    }
+                                }
+
+                                try {
+                                    if (obj != null) {
+                                        field.set(bean, obj);
+                                    }
+                                } catch (Exception e) {
+//                                    e.printStackTrace();
+                                    errs("查询数据中出现了无法转换的类型:" + e);
+                                }
+                            }
+                        }
+                    }
+                    beanList.add(bean);//存入查询到的数据
+
+                    //是否查询全部
+                    if (isQueryAll) {
+                        cursor.moveToNext();//移动到下一位
+                    } else {
+                        //查询到一个后退出
+                        break;
+                    }
+                }
+            }
+            cursor.close();//释放资源
+            switch (beanList.size()) {
+                case 0:
+                    return null;
+                case 1:
+                    return beanList.get(0);
+                default:
+                    return (T) beanList;
+            }
+        }
+
+
+        /**
+         * @param cursor         游标对象
+         * @param tClass         实体类class
+         * @param sqLiteDatabase 数据库操作对象
+         * @param tableName      表名
+         * @param returnValues   返回字段
+         * @param <T>            返回值 单个或多个实体类，具体拿到返回值需要自己判断
+         * @return
+         */
+        public <T> Object cursorToObject(Cursor cursor, Class<T> tClass, String tableName, String... returnValues) {
+            return cursorToObject(cursor, tClass, sqLiteDatabase2, tableName, returnValues);
+        }
+
+        /**
+         * 返回 自定义 SQL code 返回值
+         *
+         * @param data
+         * @return
+         */
+        private static String[] replaceSelectValue(String data) {
+            if (data == null || data.length() == 0) return new String[]{"*"};
+            try {
+                int startIndex = data.toLowerCase().indexOf("select") + 6;
+                int endIndex = data.toLowerCase().indexOf("from");
+                data = data.substring(startIndex, endIndex);
+                if (data.replaceAll("\\s*", "").equals("*")) {
+                    return new String[]{"*"};
+                }
+
+                if (data.contains(",")) {
+                    String[] split = data.split(",");
+                    for (int i = 0; i < split.length; i++) {
+                        split[i] = split[i].substring(split[i].indexOf(".") + 1).replaceAll("\\s*", "");
+                    }
+                    return split;
+                } else if (data.contains(".")) {
+                    data = data.substring(data.indexOf(".") + 1).replaceAll("\\s*", "");
+                    return new String[]{data};
+                } else {
+                    return new String[]{data.replaceAll("\\s*", "")};
+                }
+            } catch (Exception e) {
+                return new String[]{"*"};
+            }
+        }
+
 
         /**
          * 获取表数据总数量
@@ -7437,22 +7911,32 @@ public class GT {
         public long count(Class<?> tableClass) {
             if (tableClass == null) return -1;
             long count = 0;
-            String tableName = tableClass.getSimpleName();
-            if (isTable(tableName)) {
-                String sqlCode = "select count(1) from " + tableName;//默认计数语句
-                if (conditions != null && values != null) {
-                    sqlCode += " where " + conditions;
+            try {
+                if (lockRead != null) {
+                    lockRead.lock();
                 }
-                if (sqLiteDatabase2 == null) return -1;
-                Cursor cursor = sqLiteDatabase2.rawQuery(sqlCode, values);//ok
-                if (cursor != null && cursor.moveToFirst()) {
-                    count = cursor.getLong(0);
+                String tableName = tableClass.getSimpleName();
+                if (isTable(tableName)) {
+                    String sqlCode = "select count(1) from " + tableName;//默认计数语句
+                    if (conditions != null && values != null) {
+                        sqlCode += " where " + conditions;
+                    }
+                    if (sqLiteDatabase2 == null) return -1;
+                    Cursor cursor = sqLiteDatabase2.rawQuery(sqlCode, values);//ok
+                    if (cursor != null && cursor.moveToFirst()) {
+                        count = cursor.getLong(0);
+                    }
+                    cursor.close();
+                } else {
+                    count = -1;
                 }
-                cursor.close();
-            } else {
-                count = -1;
+            } catch (Exception e) {
+                GT.errs("e:" + e);
+            } finally {
+                if (lockRead != null) {
+                    lockRead.unlock();
+                }
             }
-
             return count;
         }
 
@@ -7465,19 +7949,31 @@ public class GT {
          */
         public Object sum(Class<?> aClass, String columnName) {
             if (aClass == null || columnName == null) return null;
-            String tableName = aClass.getSimpleName();//表名
-            String sqlCode = "select sum(" + columnName + ") from " + tableName;//默认的代码
-            if (conditions != null && values != null) {
-                sqlCode += " where " + conditions;
-            }
-            //查一下数据库怎么查询该字段是属于什么类型的数据
             Object sum = -1;
-            if (sqLiteDatabase2 == null) return null;
-            Cursor cursor = sqLiteDatabase2.rawQuery(sqlCode, values);//ok
-            if (cursor != null && cursor.moveToFirst()) {
-                sum = cursor.getInt(0);
+            try {
+                if (lockRead != null) {
+                    lockRead.lock();
+                }
+                String tableName = aClass.getSimpleName();//表名
+                String sqlCode = "select sum(" + columnName + ") from " + tableName;//默认的代码
+                if (conditions != null && values != null) {
+                    sqlCode += " where " + conditions;
+                }
+                //查一下数据库怎么查询该字段是属于什么类型的数据
+
+                if (sqLiteDatabase2 == null) return null;
+                Cursor cursor = sqLiteDatabase2.rawQuery(sqlCode, values);//ok
+                if (cursor != null && cursor.moveToFirst()) {
+                    sum = cursor.getInt(0);
+                }
+                cursor.close();
+            } catch (Exception e) {
+                GT.errs("e:" + e);
+            } finally {
+                if (lockRead != null) {
+                    lockRead.unlock();
+                }
             }
-            cursor.close();
             return sum;
         }
 
@@ -7490,19 +7986,30 @@ public class GT {
          */
         public Object max(Class<?> aClass, String columnName) {
             if (aClass == null || columnName == null) return null;
-            String tableName = aClass.getSimpleName();//表名
-            String sqlCode = "select max(" + columnName + ") from " + tableName;//默认的代码
-            if (conditions != null && values != null) {
-                sqlCode += " where " + conditions;
-            }
-            //查一下数据库怎么查询该字段是属于什么类型的数据
             Object sum = -1;
-            if (sqLiteDatabase2 == null) return null;
-            Cursor cursor = sqLiteDatabase2.rawQuery(sqlCode, values);//ok
-            if (cursor != null && cursor.moveToFirst()) {
-                sum = cursor.getInt(0);
+            try {
+                if (lockRead != null) {
+                    lockRead.lock();
+                }
+                String tableName = aClass.getSimpleName();//表名
+                String sqlCode = "select max(" + columnName + ") from " + tableName;//默认的代码
+                if (conditions != null && values != null) {
+                    sqlCode += " where " + conditions;
+                }
+                //查一下数据库怎么查询该字段是属于什么类型的数据
+                if (sqLiteDatabase2 == null) return null;
+                Cursor cursor = sqLiteDatabase2.rawQuery(sqlCode, values);//ok
+                if (cursor != null && cursor.moveToFirst()) {
+                    sum = cursor.getInt(0);
+                }
+                cursor.close();
+            } catch (Exception e) {
+                GT.errs("e:" + e);
+            } finally {
+                if (lockRead != null) {
+                    lockRead.unlock();
+                }
             }
-            cursor.close();
             return sum;
         }
 
@@ -7515,19 +8022,34 @@ public class GT {
          */
         public Object min(Class<?> aClass, String columnName) {
             if (aClass == null || columnName == null) return null;
-            String tableName = aClass.getSimpleName();//表名
-            String sqlCode = "select min(" + columnName + ") from " + tableName;//默认的代码
-            if (conditions != null && values != null) {
-                sqlCode += " where " + conditions;
-            }
-            //查一下数据库怎么查询该字段是属于什么类型的数据
             Object sum = -1;
-            if (sqLiteDatabase2 == null) return null;
-            Cursor cursor = sqLiteDatabase2.rawQuery(sqlCode, values);//ok
-            if (cursor != null && cursor.moveToFirst()) {
-                sum = cursor.getInt(0);
+
+            try {
+                if (lockRead != null) {
+                    lockRead.lock();
+                }
+                String tableName = aClass.getSimpleName();//表名
+                String sqlCode = "select min(" + columnName + ") from " + tableName;//默认的代码
+                if (conditions != null && values != null) {
+                    sqlCode += " where " + conditions;
+                }
+                //查一下数据库怎么查询该字段是属于什么类型的数据
+
+                if (sqLiteDatabase2 == null) return null;
+                Cursor cursor = sqLiteDatabase2.rawQuery(sqlCode, values);//ok
+                if (cursor != null && cursor.moveToFirst()) {
+                    sum = cursor.getInt(0);
+                }
+                cursor.close();
+            } catch (Exception e) {
+                GT.errs("e:" + e);
+            } finally {
+                if (lockRead != null) {
+                    lockRead.unlock();
+                }
             }
-            cursor.close();
+
+
             return sum;
         }
 
@@ -7540,19 +8062,30 @@ public class GT {
          */
         public Object average(Class<?> aClass, String columnName) {
             if (aClass == null || columnName == null) return null;
-            String tableName = aClass.getSimpleName();//表名
-            String sqlCode = "select avg(" + columnName + ") from " + tableName;//默认的代码
-            if (conditions != null && values != null) {
-                sqlCode += " where " + conditions;
-            }
-            //查一下数据库怎么查询该字段是属于什么类型的数据
             Object sum = -1;
-            if (sqLiteDatabase2 == null) return null;
-            Cursor cursor = sqLiteDatabase2.rawQuery(sqlCode, values);//ok
-            if (cursor != null && cursor.moveToFirst()) {
-                sum = cursor.getInt(0);
+            try {
+                if (lockRead != null) {
+                    lockRead.lock();
+                }
+                String tableName = aClass.getSimpleName();//表名
+                String sqlCode = "select avg(" + columnName + ") from " + tableName;//默认的代码
+                if (conditions != null && values != null) {
+                    sqlCode += " where " + conditions;
+                }
+                //查一下数据库怎么查询该字段是属于什么类型的数据
+                if (sqLiteDatabase2 == null) return null;
+                Cursor cursor = sqLiteDatabase2.rawQuery(sqlCode, values);//ok
+                if (cursor != null && cursor.moveToFirst()) {
+                    sum = cursor.getInt(0);
+                }
+                cursor.close();
+            } catch (Exception e) {
+                GT.errs("e:" + e);
+            } finally {
+                if (lockRead != null) {
+                    lockRead.unlock();
+                }
             }
-            cursor.close();
             return sum;
         }
 
@@ -7607,6 +8140,9 @@ public class GT {
             if (isTransaction)
                 sqLiteDatabase2.beginTransaction();
             try {
+                if (lockWrite != null) {
+                    lockWrite.lock();
+                }
                 if (!isTable(tableName)) {
                     err(getLineInfo(LOG.lineInfoIndex), "保存的表不存在，操作失败");
                     status = false;
@@ -7628,6 +8164,9 @@ public class GT {
             } finally {
                 if (isTransaction)
                     sqLiteDatabase2.endTransaction();
+                if (lockWrite != null) {
+                    lockWrite.unlock();
+                }
             }
             return this;
         }
@@ -7644,32 +8183,7 @@ public class GT {
             Thread.getInstance(0).execute(new Runnable() {
                 @Override
                 public void run() {
-                    if (isTransaction)
-                        sqLiteDatabase2.beginTransaction();
-                    try {
-                        if (!isTable(tableName)) {
-                            err(getLineInfo(LOG.lineInfoIndex), "保存的表不存在，操作失败");
-                            status = false;
-                            return;
-                        }
-                        initSqlParameter();
-
-                        long insert = sqLiteDatabase2.insert(tableName, null, contentValues);//ok
-                        statusNumber = (int) insert;
-                        //设置状态码
-                        if (insert == -1) {
-                            status = false;
-                        } else {
-                            status = true;
-                        }
-                        if (isTransaction)
-                            sqLiteDatabase2.setTransactionSuccessful();
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    } finally {
-                        if (isTransaction)
-                            sqLiteDatabase2.endTransaction();
-                    }
+                    save(tableName, contentValues);
                 }
             });
             return this;
@@ -7687,6 +8201,9 @@ public class GT {
             if (isTransaction)
                 sqLiteDatabase2.beginTransaction();
             try {
+                if (lockWrite != null) {
+                    lockWrite.lock();
+                }
                 if (tableName == null || conditions == null || values == null) {
                     err(getLineInfo(LOG.lineInfoIndex), "删除的 " + tableName + " 数据为null，操作失败");
                     return this;
@@ -7714,6 +8231,9 @@ public class GT {
             } finally {
                 if (isTransaction)
                     sqLiteDatabase2.endTransaction();
+                if (lockWrite != null) {
+                    lockWrite.unlock();
+                }
             }
             return this;
         }
@@ -7732,36 +8252,7 @@ public class GT {
             Thread.getInstance(0).execute(new Runnable() {
                 @Override
                 public void run() {
-                    if (isTransaction)
-                        sqLiteDatabase2.beginTransaction();
-                    try {
-                        if (tableName == null || conditions == null || values == null) {
-                            err(getLineInfo(LOG.lineInfoIndex), "删除的 " + tableName + " 数据为null，操作失败");
-                            return;
-                        }
-                        //进行删除
-                        if (!isTable(tableName)) {
-                            err(getLineInfo(LOG.lineInfoIndex), "删除的表不存在，操作失败");
-                            status = false;
-                        }
-                        //初始化
-                        initSqlParameter();
-
-                        int update = sqLiteDatabase2.delete(tableName, conditions, values);//ok
-                        if (update == 0) {
-                            status = false;
-                        } else {
-                            status = true;
-                        }
-                        closeSqlParameter();
-                        if (isTransaction)
-                            sqLiteDatabase2.setTransactionSuccessful();
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    } finally {
-                        if (isTransaction)
-                            sqLiteDatabase2.endTransaction();
-                    }
+                    delete(tableName);
                 }
             });
 
@@ -7781,6 +8272,9 @@ public class GT {
             if (isTransaction)
                 sqLiteDatabase2.beginTransaction();
             try {
+                if (lockRead != null) {
+                    lockRead.lock();
+                }
                 //判断这个表是否存在
                 if (!isTable(tableName)) {
                     err(getLineInfo(2), "查询的表不存在，操作失败");
@@ -7802,6 +8296,9 @@ public class GT {
             } finally {
                 if (isTransaction)
                     sqLiteDatabase2.endTransaction();
+                if (lockRead != null) {
+                    lockRead.unlock();
+                }
             }
             return cursor;
         }
@@ -7819,6 +8316,9 @@ public class GT {
             if (isTransaction)
                 sqLiteDatabase2.beginTransaction();
             try {
+                if (lockWrite != null) {
+                    lockWrite.lock();
+                }
                 if (!isTable(tableName)) {
                     err(getLineInfo(LOG.lineInfoIndex), "修改的表不存在，操作失败");
                     status = false;
@@ -7840,6 +8340,9 @@ public class GT {
             } finally {
                 if (isTransaction)
                     sqLiteDatabase2.endTransaction();
+                if (lockWrite != null) {
+                    lockWrite.unlock();
+                }
             }
             return this;
         }
@@ -7859,32 +8362,7 @@ public class GT {
             Thread.getInstance(0).execute(new Runnable() {
                 @Override
                 public void run() {
-                    if (isTransaction)
-                        sqLiteDatabase2.beginTransaction();
-                    try {
-                        if (!isTable(tableName)) {
-                            err(getLineInfo(LOG.lineInfoIndex), "修改的表不存在，操作失败");
-                            status = false;
-                            return;
-                        }
-                        initSqlParameter();
-
-                        statusNumber = sqLiteDatabase2.update(tableName, contentValues, conditions, values);//ok
-                        //进行更新
-                        if (statusNumber == 0) {
-                            status = false;
-                        } else {
-                            status = true;
-                        }
-                        closeSqlParameter();
-                        if (isTransaction)
-                            sqLiteDatabase2.setTransactionSuccessful();
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    } finally {
-                        if (isTransaction)
-                            sqLiteDatabase2.endTransaction();
-                    }
+                    update(tableName, contentValues);
                 }
             });
             return this;
@@ -7900,6 +8378,9 @@ public class GT {
             if (isTransaction)
                 sqLiteDatabase2.beginTransaction();
             try {
+                if (lockWrite != null) {
+                    lockWrite.lock();
+                }
                 //判断这个表是否存在
                 if (!isTable(tableName)) {
                     err(getLineInfo(LOG.lineInfoIndex), "删除的表不存在，操作失败");
@@ -7922,6 +8403,9 @@ public class GT {
             } finally {
                 if (isTransaction)
                     sqLiteDatabase2.endTransaction();
+                if (lockWrite != null) {
+                    lockWrite.unlock();
+                }
             }
 
             return this;
@@ -7939,32 +8423,7 @@ public class GT {
             Thread.getInstance(0).execute(new Runnable() {
                 @Override
                 public void run() {
-                    if (isTransaction)
-                        sqLiteDatabase2.beginTransaction();
-                    try {
-                        //判断这个表是否存在
-                        if (!isTable(tableName)) {
-                            err(getLineInfo(LOG.lineInfoIndex), "删除的表不存在，操作失败");
-                            status = false;
-                            return;
-                        }
-                        initSqlParameter();
-
-                        statusNumber = sqLiteDatabase2.delete(tableName, null, null);//ok
-                        //进行更新
-                        if (statusNumber == 0) {
-                            status = false;
-                        } else {
-                            status = true;
-                        }
-                        if (isTransaction)
-                            sqLiteDatabase2.setTransactionSuccessful();
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    } finally {
-                        if (isTransaction)
-                            sqLiteDatabase2.endTransaction();
-                    }
+                    deleteAll(tableName);
                 }
             });
 
@@ -7983,6 +8442,9 @@ public class GT {
             if (isTransaction)
                 sqLiteDatabase2.beginTransaction();
             try {
+                if (lockWrite != null) {
+                    lockWrite.lock();
+                }
                 if (bean == null) {
                     err(getLineInfo(LOG.lineInfoIndex), "保存的对象为null，操作失败！");
                     status = false;
@@ -8021,6 +8483,9 @@ public class GT {
             } finally {
                 if (isTransaction)
                     sqLiteDatabase2.endTransaction();
+                if (lockWrite != null) {
+                    lockWrite.unlock();
+                }
             }
 
             return this;
@@ -8038,56 +8503,14 @@ public class GT {
             Thread.getInstance(0).execute(new Runnable() {
                 @Override
                 public void run() {
-                    if (isTransaction)
-                        sqLiteDatabase2.beginTransaction();
-                    try {
-                        if (bean == null) {
-                            err(getLineInfo(LOG.lineInfoIndex), "保存的对象为null，操作失败！");
-                            status = false;
-                            return;
-                        }
-
-                        String simpleName = bean.getClass().getSimpleName();//获取表名
-                        //检查数据库中是否存在该表
-                        if (!isTable(simpleName)) {
-                            err(getLineInfo(LOG.lineInfoIndex), "当前数据库中 " + simpleName + " 表不存在，操作失败！.");
-                            status = false;
-                            return;
-                        }
-
-                        //创建游标
-                        ContentValues contentValues = new ContentValues();
-
-                        initSqlParameter();
-
-                        //保存和修改的操作
-                        saveAddUpdateOperation(bean, contentValues);
-
-                        //开始插入
-                        long insert = sqLiteDatabase2.insert(bean.getClass().getSimpleName(), null, contentValues);//ok
-                        statusNumber = (int) insert;
-                        //设置状态码
-                        if (insert == -1) {
-                            status = false;
-                        } else {
-                            status = true;
-                        }
-                        if (isTransaction)
-                            sqLiteDatabase2.setTransactionSuccessful();
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    } finally {
-                        if (isTransaction)
-                            sqLiteDatabase2.endTransaction();
-                    }
+                    save(bean);
                 }
             });
-
-
             return this;
         }
 
         /**
+         * 保存全部
          * 如果一次性存储的数据很多，推荐用所有存储
          * 存储所有数据,当前测试效率：存储10万条数据，09:07:53.199——09:07:59.646 耗时6秒多
          * 注意，影响存储的效率有如下：
@@ -8117,18 +8540,37 @@ public class GT {
             }
 
             try {
+                if (lockWrite != null) {
+                    lockWrite.lock();
+                }
                 if (isTransaction)
                     sqLiteDatabase2.beginTransaction();
+
+
                 //创建游标
                 ContentValues contentValues = new ContentValues();
                 initSqlParameter();
-                for (T bean : beanList) {
-                    //保存和修改的操作
-                    saveAddUpdateOperation(bean, contentValues);//保存全部
-                    //数据库操作
-                    if (sqLiteDatabase2 == null) return this;
-                    insert = sqLiteDatabase2.insert(tableName, null, contentValues);//ok
-                    contentValues.clear();
+                if (beanList.size() > MAX) {
+                    List<List<T>> lists = listToLists(beanList, MAX);
+                    for (List<T> list : lists) {
+                        for (T bean : list) {
+                            //保存和修改的操作
+                            saveAddUpdateOperation(bean, contentValues);//保存全部
+                            //数据库操作
+                            if (sqLiteDatabase2 == null) return this;
+                            insert = sqLiteDatabase2.insert(tableName, null, contentValues);//ok
+                            contentValues.clear();
+                        }
+                    }
+                } else {
+                    for (T bean : beanList) {
+                        //保存和修改的操作
+                        saveAddUpdateOperation(bean, contentValues);//保存全部
+                        //数据库操作
+                        if (sqLiteDatabase2 == null) return this;
+                        insert = sqLiteDatabase2.insert(tableName, null, contentValues);//ok
+                        contentValues.clear();
+                    }
                 }
                 if (isTransaction)
                     sqLiteDatabase2.setTransactionSuccessful();
@@ -8139,6 +8581,9 @@ public class GT {
             } finally {
                 if (isTransaction)
                     sqLiteDatabase2.endTransaction();
+                if (lockWrite != null) {
+                    lockWrite.unlock();
+                }
             }
 
             statusNumber = (int) insert;
@@ -8149,6 +8594,40 @@ public class GT {
                 status = true;
             }
             return this;
+        }
+
+        /**
+         * List 分割 api
+         *
+         * @param list 需要分割的list
+         * @param max  分割数额
+         * @param <T>
+         * @return
+         */
+        private static <T> List<List<T>> listToLists(List<T> list, int max) {
+            double value = Double.parseDouble(String.valueOf(list.size())) / Double.parseDouble(String.valueOf(max));
+            int count = 0;
+            count = (int) value;
+            if (String.valueOf(value).contains(".")) {
+                count++;
+            }
+            List<List<T>> lists = new ArrayList<>();
+            int record = 0;
+            int index = 0;
+            for (int i = 0; i < count; i++) {
+                List<T> tList = new ArrayList<>();
+                for (int j = record; j < list.size(); j++) {
+                    record++;
+                    index++;
+                    tList.add(list.get(j));
+                    if (index == max) {
+                        index = 0;
+                        break;
+                    }
+                }
+                lists.add(tList);
+            }
+            return lists;
         }
 
         /**
@@ -8164,60 +8643,63 @@ public class GT {
          * @return
          */
         public synchronized <T> Hibernate saveAllAsync(List<T> beanList) {
-
             Thread.getInstance(0).execute(new Runnable() {
                 @Override
                 public void run() {
-                    if (beanList == null && beanList.size() != 0) {
-                        err(getLineInfo(LOG.lineInfoIndex), "保存全部的对象为null，操作失败！");
-                        status = false;
-                        return;
-                    }
-
-                    long insert = 0;
-
-                    String tableName = beanList.get(0).getClass().getSimpleName();
-                    //检查数据库中是否存在该表
-                    if (!isTable(tableName)) {
-                        err(getLineInfo(LOG.lineInfoIndex), "当前数据库中 " + tableName + " 表不存在，操作失败！.");
-                        status = false;
-                        return;
-                    }
-
-                    try {
-                        if (isTransaction)
-                            sqLiteDatabase2.beginTransaction();
-                        //创建游标
-                        ContentValues contentValues = new ContentValues();
-                        initSqlParameter();
-                        for (T bean : beanList) {
-                            //保存和修改的操作
-                            saveAddUpdateOperation(bean, contentValues);//保存全部
-                            //数据库操作
-                            if (sqLiteDatabase2 == null) return;
-                            insert = sqLiteDatabase2.insert(tableName, null, contentValues);//ok
-                            contentValues.clear();
-                        }
-                        if (isTransaction)
-                            sqLiteDatabase2.setTransactionSuccessful();
-                    } catch (Exception e) {
-                        err(getLineInfo(LOG.lineInfoIndex), "当前数据库中 " + tableName + " 存储全部，操作失败！.");
-                        status = false;
-                        return;
-                    } finally {
-                        if (isTransaction)
-                            sqLiteDatabase2.endTransaction();
-                    }
-
-                    statusNumber = (int) insert;
-                    //设置状态码
-                    if (insert == -1) {
-                        status = false;
-                    } else {
-                        status = true;
-                    }
+                    saveAll(beanList);
                 }
             });
+            return this;
+        }
+
+        /**
+         * 保存全部
+         *
+         * @param ts
+         * @param <T>
+         * @return
+         */
+        public synchronized <T> Hibernate saveAll(T... ts) {
+            if (ts == null || ts.length == 0) {
+                err(getLineInfo(LOG.lineInfoIndex), "保存全部的对象为null，操作失败！");
+                status = false;
+                return this;
+            }
+
+            Object[] ts2 = ts;
+            List<Object> list = new ArrayList<>();
+            //如果 传递过来的参数是 变量数组的话，那就进行解析一层
+            if (String.valueOf(ts[0]).contains("[Lcom")) {
+                ts2 = (Object[]) ts[0];
+            }
+
+            for (Object t : ts2) {
+                list.add(t);
+            }
+            saveAll(list);
+            return this;
+        }
+
+        /**
+         * 异步保存全部
+         *
+         * @param ts
+         * @param <T>
+         * @return
+         */
+        public synchronized <T> Hibernate saveAllAsync(T... ts) {
+            if (ts == null) {
+                err(getLineInfo(LOG.lineInfoIndex), "保存全部的对象为null，操作失败！");
+                status = false;
+                return this;
+            }
+            Thread.getInstance(0).execute(new Runnable() {
+                @Override
+                public void run() {
+                    saveAll(ts);
+                }
+            });
+
             return this;
         }
 
@@ -8234,6 +8716,9 @@ public class GT {
             if (isTransaction)
                 sqLiteDatabase2.beginTransaction();
             try {
+                if (lockWrite != null) {
+                    lockWrite.lock();
+                }
                 Class<?> aClass = classOrBean.getClass();
 
                 if (classOrBean == null || (classOrBean.getClass() == Class.class && (conditions == null || values == null))) {
@@ -8246,13 +8731,14 @@ public class GT {
                     aClass = (Class) classOrBean;
                 } else {
                     aClass = classOrBean.getClass();
+
                 }
 
                 String simpleName = aClass.getSimpleName();//获取表名
 
                 //如果没有自己设置条件，那就直接使用该对象的ID值进行默认操作
                 if (conditions == null || values == null) {
-                    wheresKeyValue(classOrBean, aClass);
+                    wheresValue(classOrBean, aClass);
                 }
 
                 //检查数据库中是否存在该表
@@ -8281,6 +8767,9 @@ public class GT {
             } finally {
                 if (isTransaction)
                     sqLiteDatabase2.endTransaction();
+                if (lockWrite != null) {
+                    lockWrite.unlock();
+                }
             }
             return this;
         }
@@ -8299,59 +8788,9 @@ public class GT {
             Thread.getInstance(0).execute(new Runnable() {
                 @Override
                 public void run() {
-                    if (isTransaction)
-                        sqLiteDatabase2.beginTransaction();
-                    try {
-                        Class<?> aClass = classOrBean.getClass();
-
-                        if (classOrBean == null || (classOrBean.getClass() == Class.class && (conditions == null || values == null))) {
-                            err(getLineInfo(LOG.lineInfoIndex), "删除的 " + classOrBean + " 数据为null，操作失败");
-                            return;
-                        }
-
-                        if (classOrBean.getClass() == Class.class) {
-                            aClass = (Class) classOrBean;
-                        } else {
-                            aClass = classOrBean.getClass();
-                        }
-
-                        String simpleName = aClass.getSimpleName();//获取表名
-
-                        //如果没有自己设置条件，那就直接使用该对象的ID值进行默认操作
-                        if (conditions == null || values == null) {
-                            wheresKeyValue(classOrBean, aClass);
-                        }
-
-                        //检查数据库中是否存在该表
-                        if (!isTable(simpleName)) {
-                            err(getLineInfo(LOG.lineInfoIndex), "当前数据库中 " + simpleName + " 表不存在，操作失败！...");
-                            status = false;
-                            return;
-                        }
-
-                        initSqlParameter();
-
-                        //进行更新
-                        int update = sqLiteDatabase2.delete(simpleName, conditions, values);//ok
-
-                        if (update == 0) {
-                            status = false;
-                        } else {
-                            status = true;
-                        }
-
-                        closeSqlParameter();
-                        if (isTransaction)
-                            sqLiteDatabase2.setTransactionSuccessful();
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    } finally {
-                        if (isTransaction)
-                            sqLiteDatabase2.endTransaction();
-                    }
+                    delete(classOrBean);
                 }
             });
-
             return this;
         }
 
@@ -8366,6 +8805,9 @@ public class GT {
             if (isTransaction)
                 sqLiteDatabase2.beginTransaction();
             try {
+                if (lockWrite != null) {
+                    lockWrite.lock();
+                }
                 if (beanClass == null || key <= 0) {
                     err(getLineInfo(LOG.lineInfoIndex), "删除的 beanClass 数据为null，操作失败");
                     return this;
@@ -8376,7 +8818,7 @@ public class GT {
                 //检查数据库中是否存在该表
                 List<String> tableAllValue = null;
                 if (isTable(simpleName)) {
-                    tableAllValue = getTableAllValue(simpleName);
+                    tableAllValue = getTableAllValue(simpleName, sqLiteDatabase2);
                     if (tableAllValue == null || tableAllValue.size() == 0) {
                         err(getLineInfo(LOG.lineInfoIndex), "删除的表数据为空，操作失败");
                         status = false;
@@ -8403,6 +8845,9 @@ public class GT {
             } finally {
                 if (isTransaction)
                     sqLiteDatabase2.endTransaction();
+                if (lockWrite != null) {
+                    lockWrite.unlock();
+                }
             }
             return this;
         }
@@ -8415,52 +8860,12 @@ public class GT {
          * @return
          * @更具ID删除
          */
-        public synchronized Hibernate deleteAsync(Class<?> beanClass, Object keyValue) {
+        public synchronized Hibernate deleteAsync(Class<?> beanClass, int key) {
             if (sqLiteDatabase2 == null) return this;
             Thread.getInstance(0).execute(new Runnable() {
                 @Override
                 public void run() {
-                    if (isTransaction)
-                        sqLiteDatabase2.beginTransaction();
-                    try {
-                        if (beanClass == null || keyValue == null) {
-                            err(getLineInfo(LOG.lineInfoIndex), "删除的 beanClass 数据为null，操作失败");
-                            return;
-                        }
-
-                        String simpleName = beanClass.getSimpleName();//获取表名
-
-                        //检查数据库中是否存在该表
-                        List<String> tableAllValue = null;
-                        if (isTable(simpleName)) {
-                            tableAllValue = getTableAllValue(simpleName);
-                            if (tableAllValue == null || tableAllValue.size() == 0) {
-                                err(getLineInfo(LOG.lineInfoIndex), "删除的表数据为空，操作失败");
-                                status = false;
-                                return;
-                            }
-                        } else {
-                            err(getLineInfo(LOG.lineInfoIndex), "删除的表不存在，操作失败");
-                            status = false;
-                            return;
-                        }
-
-                        //进行更新
-                        int update = sqLiteDatabase2.delete(simpleName, tableAllValue.get(0) + "= ?", new String[]{keyValue.toString()});//ok
-
-                        if (update == 0) {
-                            status = false;
-                        } else {
-                            status = true;
-                        }
-                        if (isTransaction)
-                            sqLiteDatabase2.setTransactionSuccessful();
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    } finally {
-                        if (isTransaction)
-                            sqLiteDatabase2.endTransaction();
-                    }
+                    delete(beanClass, key);
                 }
             });
             return this;
@@ -8469,13 +8874,16 @@ public class GT {
         /**
          * @param tableClass
          * @return
-         * @删除所有表
+         * @删除这张表的 所有数据
          */
         public synchronized Hibernate deleteAll(Class<?> tableClass) {
             if (sqLiteDatabase2 == null) return this;
             if (isTransaction)
                 sqLiteDatabase2.beginTransaction();
             try {
+                if (lockWrite != null) {
+                    lockWrite.lock();
+                }
                 //初始化与获取必要属性
                 String simpleName = tableClass.getSimpleName();//获取表名
 
@@ -8501,6 +8909,9 @@ public class GT {
             } finally {
                 if (isTransaction)
                     sqLiteDatabase2.endTransaction();
+                if (lockWrite != null) {
+                    lockWrite.unlock();
+                }
             }
             return this;
         }
@@ -8517,38 +8928,9 @@ public class GT {
             Thread.getInstance(0).execute(new Runnable() {
                 @Override
                 public void run() {
-                    if (isTransaction)
-                        sqLiteDatabase2.beginTransaction();
-                    try {
-                        //初始化与获取必要属性
-                        String simpleName = tableClass.getSimpleName();//获取表名
-
-                        //判断这个表是否存在
-                        if (!isTable(simpleName)) {
-                            err(getLineInfo(LOG.lineInfoIndex), "删除的表不存在，操作失败");
-                            status = false;
-                            return;
-                        }
-                        initSqlParameter();
-                        statusNumber = sqLiteDatabase2.delete(simpleName, conditions, values);//ok
-                        //进行更新
-                        if (statusNumber == 0) {
-                            status = false;
-                        } else {
-                            status = true;
-                        }
-                        closeSqlParameter();
-                        if (isTransaction)
-                            sqLiteDatabase2.setTransactionSuccessful();
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    } finally {
-                        if (isTransaction)
-                            sqLiteDatabase2.endTransaction();
-                    }
+                    deleteAll(tableClass);
                 }
             });
-
             return this;
         }
 
@@ -8565,6 +8947,9 @@ public class GT {
             if (isTransaction)
                 sqLiteDatabase2.beginTransaction();
             try {
+                if (lockRead != null) {
+                    lockRead.lock();
+                }
                 if (tableNameClass == null) {
                     err(getLineInfo(LOG.lineInfoIndex), "查询的数据为 null，操作失败");
                     status = false;
@@ -8579,6 +8964,9 @@ public class GT {
             } finally {
                 if (isTransaction)
                     sqLiteDatabase2.endTransaction();
+                if (lockRead != null) {
+                    lockRead.unlock();
+                }
             }
             if (list == null || list.size() == 0) {
                 return null;
@@ -8599,6 +8987,9 @@ public class GT {
             List<T> list = null;
             if (sqLiteDatabase2 == null) return null;
             try {
+                if (lockRead != null) {
+                    lockRead.lock();
+                }
                 if (tableNameClass == null || key <= 0) {
                     err(getLineInfo(LOG.lineInfoIndex), "查询的数据为 null，操作失败");
                     status = false;
@@ -8618,7 +9009,7 @@ public class GT {
                     sqLiteDatabase2.beginTransaction();
 
                 //获取表名
-                List<String> tableAllValue = getTableAllValue(tableName);
+                List<String> tableAllValue = getTableAllValue(tableName, sqLiteDatabase2);
                 if (tableAllValue != null && tableAllValue.size() > 0) {
                     //条件参数
                     where(tableAllValue.get(0) + " = ?", String.valueOf(key));
@@ -8636,6 +9027,9 @@ public class GT {
             } finally {
                 if (isTransaction)
                     sqLiteDatabase2.endTransaction();
+                if (lockRead != null) {
+                    lockRead.unlock();
+                }
             }
 
             if (list == null || list.size() == 0) {
@@ -8658,6 +9052,9 @@ public class GT {
             if (isTransaction)
                 sqLiteDatabase2.beginTransaction();
             try {
+                if (lockRead != null) {
+                    lockRead.lock();
+                }
                 if (tableNameClass == null) {
                     err(getLineInfo(LOG.lineInfoIndex), "查询的数据为 null，操作失败");
                     status = false;
@@ -8672,6 +9069,9 @@ public class GT {
             } finally {
                 if (isTransaction)
                     sqLiteDatabase2.endTransaction();
+                if (lockRead != null) {
+                    lockRead.unlock();
+                }
             }
             return list;
         }
@@ -8688,6 +9088,9 @@ public class GT {
             if (isTransaction)
                 sqLiteDatabase2.beginTransaction();
             try {
+                if (lockWrite != null) {
+                    lockWrite.lock();
+                }
                 if (bean == null) {
                     err(getLineInfo(LOG.lineInfoIndex), "修改的数据为null，操作失败");
                     status = false;
@@ -8713,7 +9116,9 @@ public class GT {
                 initSqlParameter();
                 //保存和修改的操作
                 saveAddUpdateOperation(bean, contentValues);
-                statusNumber = sqLiteDatabase2.update(aClass.getSimpleName(), contentValues, conditions, values);//ok
+
+                if (values != null)
+                    statusNumber = sqLiteDatabase2.update(aClass.getSimpleName(), contentValues, conditions, values);//ok
                 //进行更新
                 if (statusNumber == 0) {
                     status = false;
@@ -8728,6 +9133,9 @@ public class GT {
             } finally {
                 if (isTransaction)
                     sqLiteDatabase2.endTransaction();
+                if (lockWrite != null) {
+                    lockWrite.unlock();
+                }
             }
             return this;
         }
@@ -8746,50 +9154,7 @@ public class GT {
             Thread.getInstance(0).execute(new Runnable() {
                 @Override
                 public void run() {
-                    if (isTransaction)
-                        sqLiteDatabase2.beginTransaction();
-                    try {
-                        if (bean == null) {
-                            err(getLineInfo(LOG.lineInfoIndex), "修改的数据为null，操作失败");
-                            status = false;
-                            return;
-                        }
-
-                        Class<?> aClass = bean.getClass();
-
-                        String simpleName = aClass.getSimpleName();//获取表名
-                        //检查数据库中是否存在该表
-                        if (!isTable(simpleName)) {
-                            err(getLineInfo(LOG.lineInfoIndex), "当前数据库中 " + simpleName + " 表不存在，操作失败！.");
-                            status = false;
-                            return;
-                        }
-
-                        //如果没有自己设置条件，那就直接使用该对象的ID值进行默认操作
-                        if (conditions == null || values == null) {
-                            wheresKeyValue(bean, aClass);//第一次调用
-                        }
-
-                        ContentValues contentValues = new ContentValues();
-                        initSqlParameter();
-                        //保存和修改的操作
-                        saveAddUpdateOperation(bean, contentValues);
-                        statusNumber = sqLiteDatabase2.update(aClass.getSimpleName(), contentValues, conditions, values);//ok
-                        //进行更新
-                        if (statusNumber == 0) {
-                            status = false;
-                        } else {
-                            status = true;
-                        }
-                        closeSqlParameter();
-                        if (isTransaction)
-                            sqLiteDatabase2.setTransactionSuccessful();
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    } finally {
-                        if (isTransaction)
-                            sqLiteDatabase2.endTransaction();
-                    }
+                    update(bean);
                 }
             });
             return this;
@@ -8807,6 +9172,9 @@ public class GT {
             if (isTransaction)
                 sqLiteDatabase2.beginTransaction();
             try {
+                if (lockWrite != null) {
+                    lockWrite.lock();
+                }
                 if (bean == null) {
                     err(getLineInfo(LOG.lineInfoIndex), "修改的数据为null，操作失败");
                     status = false;
@@ -8856,6 +9224,9 @@ public class GT {
             } finally {
                 if (isTransaction)
                     sqLiteDatabase2.endTransaction();
+                if (lockWrite != null) {
+                    lockWrite.unlock();
+                }
             }
             return this;
         }
@@ -8874,59 +9245,7 @@ public class GT {
             Thread.getInstance(0).execute(new Runnable() {
                 @Override
                 public void run() {
-                    if (isTransaction)
-                        sqLiteDatabase2.beginTransaction();
-                    try {
-                        if (bean == null) {
-                            err(getLineInfo(LOG.lineInfoIndex), "修改的数据为null，操作失败");
-                            status = false;
-                            return;
-                        }
-
-                        String simpleName = bean.getClass().getSimpleName();//获取表名
-                        //检查数据库中是否存在该表
-                        if (!isTable(simpleName)) {
-                            err(getLineInfo(LOG.lineInfoIndex), "当前数据库中 " + simpleName + " 表不存在，操作失败！.");
-                            status = false;
-                            return;
-                        }
-
-                        //判断更新对象是 实体类 还是 ContentValues 对象
-                        if (ContentValues.class != bean.getClass()) {
-                            ContentValues contentValues = new ContentValues();
-                            initSqlParameter();
-                            //保存和修改的操作
-                            saveAddUpdateOperation(bean, contentValues);
-
-                            if (conditions == null || values == null) {
-                                wheresKeyValue(bean, tableClass);
-                            }
-
-                            statusNumber = sqLiteDatabase2.update(bean.getClass().getSimpleName(), contentValues, conditions, values);//ok
-                        } else {
-                            if (conditions == null || values == null) {
-                                err(getLineInfo(LOG.lineInfoIndex), "修改的数据为null，操作失败");
-                                status = false;
-                                return;
-                            }
-                            if (sqLiteDatabase2 == null) return;
-                            statusNumber = sqLiteDatabase2.update(tableClass.getSimpleName(), (ContentValues) bean, conditions, values);//ok
-                        }
-                        //进行更新
-                        if (statusNumber == 0) {
-                            status = false;
-                        } else {
-                            status = true;
-                        }
-                        closeSqlParameter();
-                        if (isTransaction)
-                            sqLiteDatabase2.setTransactionSuccessful();
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    } finally {
-                        if (isTransaction)
-                            sqLiteDatabase2.endTransaction();
-                    }
+                    update(tableClass, bean);
                 }
             });
             return this;
@@ -8943,6 +9262,9 @@ public class GT {
             if (isTransaction)
                 sqLiteDatabase2.beginTransaction();
             try {
+                if (lockWrite != null) {
+                    lockWrite.lock();
+                }
                 //判空
                 if (bean == null || keyValue == null) {
                     err(getLineInfo(LOG.lineInfoIndex), "修改的参数为null，操作失败");
@@ -8958,7 +9280,7 @@ public class GT {
                 //判断这个表是否存在
                 List<String> tableAllValue = null;
                 if (isTable(simpleName)) {
-                    tableAllValue = getTableAllValue(simpleName);
+                    tableAllValue = getTableAllValue(simpleName, sqLiteDatabase2);
                     if (tableAllValue == null || tableAllValue.size() == 0) {
                         err(getLineInfo(LOG.lineInfoIndex), "修改的表数据为空，操作失败");
                         status = false;
@@ -8988,6 +9310,9 @@ public class GT {
             } finally {
                 if (isTransaction)
                     sqLiteDatabase2.endTransaction();
+                if (lockWrite != null) {
+                    lockWrite.unlock();
+                }
             }
 
             return this;
@@ -9002,62 +9327,12 @@ public class GT {
          * @修改表
          */
         public synchronized Hibernate updateAsync(Object bean, Object keyValue) {
-            if (sqLiteDatabase2 == null) return this;
-            if (isTransaction)
-                sqLiteDatabase2.beginTransaction();
             Thread.getInstance(0).execute(new Runnable() {
                 @Override
                 public void run() {
-                    try {
-                        //判空
-                        if (bean == null || keyValue == null) {
-                            err(getLineInfo(LOG.lineInfoIndex), "修改的参数为null，操作失败");
-                            status = false;
-                            return;
-                        }
-
-                        //初始化与获取必要属性
-                        ContentValues contentValues = new ContentValues();
-                        statusNumber = 0;
-
-                        String simpleName = bean.getClass().getSimpleName();//获取表名
-                        //判断这个表是否存在
-                        List<String> tableAllValue = null;
-                        if (isTable(simpleName)) {
-                            tableAllValue = getTableAllValue(simpleName);
-                            if (tableAllValue == null || tableAllValue.size() == 0) {
-                                err(getLineInfo(LOG.lineInfoIndex), "修改的表数据为空，操作失败");
-                                status = false;
-                                return;
-                            }
-                        } else {
-                            err(getLineInfo(LOG.lineInfoIndex), "修改的表不存在，操作失败");
-                            status = false;
-                            return;
-                        }
-
-                        initSqlParameter();
-                        //保存和修改的操作
-                        saveAddUpdateOperation(bean, contentValues);
-                        statusNumber = sqLiteDatabase2.update(simpleName, contentValues, tableAllValue.get(0) + "= ?", new String[]{keyValue.toString()});//ok
-
-                        //进行更新
-                        if (statusNumber == 0) {
-                            status = false;
-                        } else {
-                            status = true;
-                        }
-                        if (isTransaction)
-                            sqLiteDatabase2.setTransactionSuccessful();
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    } finally {
-                        if (isTransaction)
-                            sqLiteDatabase2.endTransaction();
-                    }
+                    update(bean, keyValue);
                 }
             });
-
             return this;
         }
 
@@ -9072,6 +9347,9 @@ public class GT {
             if (isTransaction)
                 sqLiteDatabase2.beginTransaction();
             try {
+                if (lockWrite != null) {
+                    lockWrite.lock();
+                }
                 //判空
                 if (contentValues == null || tableClass == null) {
                     err(getLineInfo(LOG.lineInfoIndex), "修改的参数为null，操作失败");
@@ -9103,8 +9381,10 @@ public class GT {
             } finally {
                 if (isTransaction)
                     sqLiteDatabase2.endTransaction();
+                if (lockWrite != null) {
+                    lockWrite.unlock();
+                }
             }
-
             return this;
         }
 
@@ -9121,44 +9401,9 @@ public class GT {
             Thread.getInstance(0).execute(new Runnable() {
                 @Override
                 public void run() {
-                    if (isTransaction)
-                        sqLiteDatabase2.beginTransaction();
-                    try {
-                        //判空
-                        if (contentValues == null || tableClass == null) {
-                            err(getLineInfo(LOG.lineInfoIndex), "修改的参数为null，操作失败");
-                            status = false;
-                            return;
-                        }
-
-                        //初始化与获取必要属性
-                        String simpleName = tableClass.getSimpleName();//获取表名
-                        statusNumber = 0;
-
-                        //判断这个表是否存在
-                        if (!isTable(simpleName)) {
-                            err(getLineInfo(LOG.lineInfoIndex), "修改的表不存在，操作失败");
-                            status = false;
-                            return;
-                        }
-                        statusNumber = sqLiteDatabase2.update(simpleName, contentValues, conditions, values);//ok
-                        //进行更新
-                        if (statusNumber == 0) {
-                            status = false;
-                        } else {
-                            status = true;
-                        }
-                        if (isTransaction)
-                            sqLiteDatabase2.setTransactionSuccessful();
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    } finally {
-                        if (isTransaction)
-                            sqLiteDatabase2.endTransaction();
-                    }
+                    updateAll(tableClass, contentValues);
                 }
             });
-
             return this;
         }
 
@@ -9253,6 +9498,9 @@ public class GT {
         private final List<String> creationTableNameList = new ArrayList<>();//实例化表名集合
         private final List<String> tableNameList = new ArrayList<>();//实例化表名集合
         private final List<String> updateTableValueList = new ArrayList<>();//实例化存储更新字段的集合
+        private final List<String> tableIndexList = new ArrayList<>();//表索引信息
+        private String indexChar = "";//添加要创建索引的表字段
+
         private String tableSqlCode;//创建表的SQL语句
         private String sqlChar = "";//添加要创建表字段
         private String KeyType = "";//创建主键的类型
@@ -9293,6 +9541,8 @@ public class GT {
 
                 creationTableNameList.add(tableSqlCode + KeySqlCode + sqlChar + ")");//添加在创建表时需要执行的
             }
+
+
             return this;
         }
 
@@ -9304,8 +9554,10 @@ public class GT {
          */
         private String analysisClassAllChar(Class<?> aClass) {
 
+            tableIndexList.clear();
+            indexChar = "";
             String tableName = aClass.getSimpleName();//获取表名
-            List<String> sqlCharList = new ArrayList<>();
+            List<String> sqlCharList = new ArrayList<>();//存储映射过的字段
 
             //遍历所有成员变量
             for (Field field : aClass.getDeclaredFields()) {
@@ -9314,8 +9566,8 @@ public class GT {
                 Class<?> type = field.getType();//获取当前字段类型
                 String tableChar = field.getName();//获取当前字段的名称
 
-                GT_Property gt_Property = field.getAnnotation(GT_Property.class);//创建表时的
-                if (gt_Property != null && gt_Property.setNotInit()) {
+                GT_Column gt_Column = field.getAnnotation(GT_Column.class);//创建表时的
+                if (gt_Column != null && gt_Column.setNotInit()) {//过滤掉 不映射的字段
                     continue;
                 }
 
@@ -9332,7 +9584,7 @@ public class GT {
                     String[] checkValuesLength = gt_Key.setCheckValues();    //获取限定数据，仅String字段使用
                     double max = gt_Key.setMax();                  //最大值
                     double min = gt_Key.setMin();                  //最小值
-                    if (checkValuesLength.length != 0) {//TODO男女的还不行,如果是这种就完犊子了 (你，我，他，其他)
+                    if (checkValuesLength.length != 0) {//TODO 男女的还不行,如果是这种就完犊子了 (你，我，他，其他)
                         fieldPropertyCode = " CHECK(";
                         //遍历添加限制值
                         for (int i = 0; i < checkValuesLength.length; i++) {
@@ -9341,15 +9593,12 @@ public class GT {
                             } else {
                                 fieldPropertyCode += tableChar + "='" + checkValuesLength[i] + "' OR ";
                             }
-
                         }
-
 
                         fieldPropertyCode += ")";
                     } else if (max != Double.MAX_VALUE || min != Double.MIN_VALUE) {
                         fieldPropertyCode = " CHECK(" + tableChar + ">=" + min + " AND " + tableChar + "<=" + max + ")";
                     }
-
 
                     //若需要兼容其他字段可直接在这添加，不会对其他代码有影响
                     if (String.class == type) {
@@ -9404,15 +9653,15 @@ public class GT {
 
                 //普通表字段解析
                 int fieldLength = 200;//字段长度
-                if (gt_Property != null) {
+                if (gt_Column != null) {
 
                     //字段属性解析设置
-                    fieldLength = gt_Property.setLength();                  //获取字段长度,仅对String有效
-                    String[] checkValuesLength = gt_Property.setCheckValues();        //获取限定数据，仅String字段使用
-                    double max = gt_Property.setMax();                      //最大值
-                    double min = gt_Property.setMin();                      //最小值
-                    boolean notNull = gt_Property.setNotNull();             //不为null,默认值是 false
-                    String[] defaultValue = gt_Property.setDefaultValue();  //默认值,如果只有一个那就在创建的时候直接定死，如果有多个，那就直接去保存，修改操作里去随机默认值
+                    fieldLength = gt_Column.setLength();                  //获取字段长度,仅对String有效
+                    String[] checkValuesLength = gt_Column.setCheckValues();        //获取限定数据，仅String字段使用
+                    double max = gt_Column.setMax();                      //最大值
+                    double min = gt_Column.setMin();                      //最小值
+                    boolean notNull = gt_Column.setNotNull();             //不为null,默认值是 false
+                    String[] defaultValue = gt_Column.setDefaultValue();  //默认值,如果只有一个那就在创建的时候直接定死，如果有多个，那就直接去保存，修改操作里去随机默认值
 
                     //字段限定值
                     if (checkValuesLength.length != 0) {
@@ -9436,7 +9685,6 @@ public class GT {
                     if (notNull) {
                         fieldPropertyCode += " NOT NULL";//添加不可以为null
                     }
-
 
                     //设置默认值
                     if (defaultValue.length == 1) {
@@ -9486,17 +9734,46 @@ public class GT {
                 } else if (List.class == type || Map.class == type) {
                     sqlChar += (", " + tableChar + " TEXT");
                 } else {
-                    //自动创建
-//                        err(getLineInfo(), "解析的表文件 [" + tableName + "] 类中的字段 [" + field + "] 出现不支持类型。");
-//                        isCreateTable = false;
                     sqlChar += (", " + tableChar + " TEXT");
-//                        return this;
                 }
-                sqlCharList.add(tableChar);//存储映射过的字段
 
+
+                //如果是默认索引，那就添加默认索引
+                if (gt_Column != null) {
+                    switch (gt_Column.setIndex()) {
+                        case GT_Column.DEFAULT_INDEX://默认索引
+                            sqlChar += " " + gt_Column.setIndex();
+                            break;
+                        case GT_Column.UNIQUE_INDEX://默认索引
+                            String index = gt_Column.setIndex().replaceFirst("index_name", tableChar)
+                                    .replaceFirst("tableName", tableName)
+                                    .replaceFirst("column", tableChar);
+                            tableIndexList.add(index);
+                            break;
+                        case GT_Column.GENERAL_INDEX://单列索引或组合索引 CREATE INDEX [index_name] ON [tableName] ([column]);
+                            indexChar += tableChar + ",";
+                            break;
+
+                    }
+                }
+
+                sqlCharList.add(tableChar);//存储映射过的字段
             }
 
-            //解析父类,放在下面代表，在父类子类有相同字段时，优先选用子表里的字段
+            //单列或组合索引 如果 indexChar != null 代表是 单列或组合索引
+            if (indexChar != null && indexChar.length() > 0) {
+                indexChar = indexChar.substring(0, indexChar.length() - 1);
+                String column = indexChar;
+                if (indexChar.contains(",")) {//如果是组合索引 就创建新的索引名字
+                    column = indexChar.replaceAll(",", "_");
+                }
+                String index = GT_Column.GENERAL_INDEX.replaceFirst("index_name", column)
+                        .replaceFirst("tableName", tableName)
+                        .replaceFirst("column", indexChar);
+                tableIndexList.add(index);
+            }
+
+            //解析父类,放在下面的表，在父类子类有相同字段时，优先选用子表里的字段
             Class<?> superclass = aClass.getSuperclass();
             if (Object.class != superclass) {
                 analysisClassAllChar(superclass);
@@ -9511,15 +9788,15 @@ public class GT {
          * @存储需要更新的数据
          */
         private synchronized void saveUpdateData(Class<?> mClass) {
-            String simpleName = mClass.getSimpleName();//获取表名
+            String tableName = mClass.getSimpleName();//获取表名
             Field[] fields = mClass.getDeclaredFields();//获取所有成员变量
             String oldStr = "";//存储旧字段
             String newStr = "";//存储新字段
             for (Field field : fields) {
                 String newTableName = field.getName();//获取新字段名
-                GT_Property gt_Property = field.getAnnotation(GT_Property.class);//保存修改数据解析
-                if (gt_Property != null) {
-                    String oldTableName = gt_Property.setOldTableValue();//获取注解值
+                GT_Column gt_Column = field.getAnnotation(GT_Column.class);//保存修改数据解析
+                if (gt_Column != null) {
+                    String oldTableName = gt_Column.setOldTableValue();//获取注解值
                     if (oldTableName != null && !"".equals(oldTableName)) {
                         //过滤掉 字段值 与 注解值 一样的问题
                         if (newTableName.equals(oldTableName)) continue;
@@ -9529,7 +9806,7 @@ public class GT {
                 }
             }
             if (oldStr != null && newStr != null && !"".equals(oldStr) && !"".equals(newStr)) {
-                updateTableValueList.add(simpleName + "{" + oldStr + "," + newStr + "}");
+                updateTableValueList.add(tableName + "{" + oldStr + "," + newStr + "}");
             }
         }
 
@@ -9537,7 +9814,6 @@ public class GT {
         public boolean isCreateTable = true;//是否创建数据库
 
         private Hibernate initSQL(String sqlName, int sqlVersion, String passWord, Object scanTable) {
-
             //初始化数据库名称
             if (sqlName != null) {
                 DATABASE_NAME = sqlName + ".db";
@@ -9557,7 +9833,6 @@ public class GT {
                 SCAN_TABLE = scanTable;//映射表的方式赋值
                 isDeleteNullTable = false;
                 DatabaseHelper databaseHelper = new DatabaseHelper(context, DATABASE_NAME, null, DATABASE_VERSION);
-
                 sqLiteDatabase2 = databaseHelper.getWritableDatabase();//ok
                 if (isDeleteNullTable) {
                     deleteUnnecessaryTable();//删除掉多余的表
@@ -9566,18 +9841,7 @@ public class GT {
                         deleteTable("android_metadata");
                     }
                 }
-                /*try {
-                    sqLiteDatabase2 = databaseHelper.getWritableDatabase();//ok
-                    if (isDeleteNullTable) {
-                        deleteUnnecessaryTable();//删除掉多余的表
-                    } else {
-                        if (isTable("android_metadata")) {
-                            deleteTable("android_metadata");
-                        }
-                    }
-                } catch (RuntimeException e) {
-                    errs(getLineInfo() + " 数据库报错:" + e);
-                }*/
+
             }
             return this;
         }
@@ -9586,7 +9850,6 @@ public class GT {
          * 删除掉多余的表,如系统自己创建的表
          */
         private void deleteUnnecessaryTable() {
-
             //删除系统创建的多余表
             List<String> okTableNameList = new ArrayList<>();
             for (Class classz : tableList) {
@@ -9673,10 +9936,8 @@ public class GT {
             //如果该类被 GT_Dao 所标识，那就进行反射获取绑定对象进行解析
             if (gt_dao != null) {
                 Object object = new AnnotationAssist().classToObject(classz.getName() + "Binding");
-//                GT.logt("object:" + object);
                 if (object != null) {
                     String javaCode = object.toString();
-//                    GT.logt("javaCode:" + javaCode);
                     if (javaCode != null) {
                         String[] parameterNameArrays = javaCode.split(" ");
                         for (String parameterName : parameterNameArrays) {
@@ -9684,8 +9945,6 @@ public class GT {
                             if (indexOf != -1) {
                                 String key = parameterName.substring(0, indexOf);
                                 String value = parameterName.substring(indexOf + 1, parameterName.length() - 1);
-//                                GT.logt("key:" + key);
-//                                GT.logt("value:" + value);
                                 parameterNameMap.put(key, value.split(","));
                             }
                         }
@@ -9707,7 +9966,7 @@ public class GT {
                         call.hibernate = hibernates[0];
                     }
                     if (call.hibernate == null) {
-                        call.hibernate = new GT.Hibernate().initialize(null, 1, "123456", null);
+                        call.hibernate = new GT.Hibernate().initialize(null, 1, Hibernate.DATABASE_PASSWORD, null);
                     }
 
                     //获取所有注解
@@ -9720,64 +9979,18 @@ public class GT {
                     try {
                         Type genericReturnType = method.getGenericReturnType();
                         String typeName = genericReturnType.toString();
-//                        GT.logt("typeName1:" + typeName);
                         if (typeName.indexOf("Call<") != -1) {
                             typeName = typeName.substring(typeName.indexOf("Call<") + "Call<".length(), typeName.length() - 1);
-//                            GT.logt("typeName2:" + typeName);
                         }
-//                        GT.logt("反射 数据:" + typeName);
                         call.t = (T) AnnotationAssist.classToObject(typeName);
                         if (typeName.contains("java.util.List")) {
                             call.tClass = AnnotationAssist.stringListToClass(typeName);
+                        } else {
+                            call.tClass = (Class<T>) AnnotationAssist.stringToClass(typeName);
                         }
-
                     } catch (Exception e) {
                         call.exception = e;
                     }
-
-                    //再把具体请求的方法进行整合
-                    GT_Insert insert = method.getAnnotation(GT_Insert.class);
-                    GT_Delete delete = method.getAnnotation(GT_Delete.class);
-                    GT_Query query = method.getAnnotation(GT_Query.class);
-                    GT_Update update = method.getAnnotation(GT_Update.class);
-                    GT_Code code = method.getAnnotation(GT_Code.class);
-
-                    WhereBean whereBean = new WhereBean();
-
-                    //请求第二段地址
-                    //请求类型
-                    if (insert != null) {
-                        whereBean.setType(GT_Insert.class);
-                        whereBean.setSqlWhere(insert.where());
-                        whereBean.setSqlValue(insert.value());
-                        whereBean.setSqlCode(insert.code());
-                    } else if (delete != null) {
-                        whereBean.setType(GT_Delete.class);
-                        whereBean.setSqlWhere(delete.where());
-                        whereBean.setSqlValue(delete.value());
-                        whereBean.setSqlCode(delete.code());
-                    } else if (query != null) {
-                        whereBean.setType(GT_Query.class);
-                        whereBean.setSqlSelect(query.select());
-                        whereBean.setSqlWhere(query.where());
-                        whereBean.setSqlValue(query.value());
-                        whereBean.setFlashback(query.flashback());
-                        whereBean.setLimit(query.limit());
-                        whereBean.setGroupBy(query.groupBy());
-                        whereBean.setHaving(query.having());
-                        whereBean.setList(query.isLast());
-                        whereBean.setSqlCode(query.code());
-                    } else if (update != null) {
-                        whereBean.setType(GT_Update.class);
-                        whereBean.setSqlWhere(update.where());
-                        whereBean.setSqlValue(update.value());
-                        whereBean.setSqlCode(update.code());
-                    } else if (code != null) {
-                        whereBean.setType(GT_Code.class);
-                        whereBean.setSqlCode(code.value());
-                    }
-
-                    call.whereBean = whereBean;
 
                     //获取方法形参的类型
                     Class<?>[] parameterTypes = method.getParameterTypes();
@@ -9786,7 +9999,6 @@ public class GT {
 
                     //第一种方法：使用 GT_DataBinding 进行获取方法形参
                     if (parameterArray == null || parameterArray.length == 0 || parameterNameMap.size() >= 1) {
-//                        GT.logt("第一种方法 if");
                         try {
                             String GT_KEY = classz.getName() + "+" + methodName + "-";
                             for (Class<?> cla : parameterTypes) {
@@ -9807,7 +10019,6 @@ public class GT {
 
                     //第二种方法：使用注解的方式获取方法形参名
                     if (parameterArray == null || parameterArray.length == 0) {
-//                        GT.logt("第二种方法 if");
                         Annotation[][] declaredAnnotations = method.getParameterAnnotations();
                         List<String> list = new ArrayList<>();
                         //获取 注解上的方法名称
@@ -9831,7 +10042,6 @@ public class GT {
                     //第三种方法：通过 JDK1.8 获取方法形参的名称
                     if (parameterArray == null || parameterArray.length == 0) {
                         try {
-//                        GT.logt("第三种方法");
                             Parameter[] parameters = method.getParameters();
                             parameterArray = new String[parameters.length];
                             for (int i = 0; i < parameters.length; i++) {
@@ -9858,29 +10068,28 @@ public class GT {
 
                     if (args != null) {
                         for (int i = 0; i < args.length; i++) {
-                            if (args[i] == null) continue;//跳过为 null 的参数
+                            Object obj = args[i];
+                            if (obj == null) continue;//跳过为 null 的参数
                             String aClass = AnnotationAssist.returnType(parameterTypes[i]).toString();
-//                            GT.logt("aClass:" + aClass);
                             if (aClass.contains("Map")) {
-                                if (args[i] instanceof Map) {
-                                    Map<String, Object> map = (Map<String, Object>) args[i];
+                                if (obj instanceof Map) {
+                                    Map<String, Object> map = (Map<String, Object>) obj;
                                     for (String key : map.keySet()) {
-//                                        GT.logt("key:" + key);
                                         if (!call.getParamMap().containsKey(key)) {
                                             call.addParam(key, map.get(key));
 
                                         }
                                     }
                                 }
-                            } else if (aClass.contains("Object")) {
-                                if (!call.getParamMap().containsKey(parameterArray[i])) {
-                                    call.addParam(parameterArray[i], args[i].toString());
-
+                            } else if (aClass.contains("Object") || aClass.contains("java.util.List") || aClass.contains("class [Lcom")) {
+                                if (obj instanceof WhereBean) {
+                                    call.whereBean = (WhereBean) obj;
+                                } else {
+                                    call.t = (T) obj;
                                 }
-                            } else {
-                                GT.logt("parameterArray:" + parameterArray[i]);
+                            } else {//call.whereBean
                                 if (!call.getParamMap().containsKey(parameterArray[i])) {
-                                    call.addParam(parameterArray[i], args[i]);
+                                    call.addParam(parameterArray[i], obj);
                                 }
                             }
 
@@ -9892,9 +10101,58 @@ public class GT {
                         call.keyList.remove(call.keyList.size() - 1);
                     }
 
-                    call.method = method;
+                    //再把具体请求的方法进行整合
+                    GT_Insert insert = method.getAnnotation(GT_Insert.class);
+                    GT_Delete delete = method.getAnnotation(GT_Delete.class);
+                    GT_Query query = method.getAnnotation(GT_Query.class);
+                    GT_Update update = method.getAnnotation(GT_Update.class);
+                    GT_Code code = method.getAnnotation(GT_Code.class);
 
-                    GT.logt("call 核心检测:" + call);
+                    //如果存在代表，赋值直接是以 whereBean 实体类赋值的
+                    if (call.whereBean == null) {
+                        call.whereBean = new WhereBean();
+                        //请求类型
+                        if (insert != null) {
+                            call.whereBean.setType(GT_Insert.class);
+                            call.whereBean.setSqlWhere(insert.where());
+                            call.whereBean.setSqlValue(insert.value());
+                        } else if (delete != null) {
+                            call.whereBean.setType(GT_Delete.class);
+                            call.whereBean.setSqlWhere(delete.where());
+                            call.whereBean.setSqlValue(delete.value());
+                        } else if (query != null) {
+                            call.whereBean.setType(GT_Query.class);
+                            call.whereBean.setSqlSelect(query.select());
+                            call.whereBean.setSqlWhere(query.where());
+                            call.whereBean.setSqlValue(query.value());
+                            call.whereBean.setFlashback(query.flashback());
+                            call.whereBean.setLimit(query.limit());
+                            call.whereBean.setGroupBy(query.groupBy());
+                            call.whereBean.setHaving(query.having());
+                            call.whereBean.setList(query.isLast());
+                        } else if (update != null) {
+                            call.whereBean.setType(GT_Update.class);
+                            call.whereBean.setSqlWhere(update.where());
+                            call.whereBean.setSqlValue(update.value());
+                        } else if (code != null) {
+                            call.whereBean.setType(GT_Code.class);
+                            call.whereBean.setSqlCode(code.value());
+                        }
+                    } else {
+                        if (insert != null) {
+                            call.whereBean.setType(GT_Insert.class);
+                        } else if (delete != null) {
+                            call.whereBean.setType(GT_Delete.class);
+                        } else if (query != null) {
+                            call.whereBean.setType(GT_Query.class);
+                        } else if (update != null) {
+                            call.whereBean.setType(GT_Update.class);
+                        } else if (code != null) {
+                            call.whereBean.setType(GT_Code.class);
+                        }
+                    }
+
+                    call.method = method;
                     return call;
                 }
             });
@@ -9936,16 +10194,19 @@ public class GT {
              * @param tClass
              */
             public Call(Class<T>... tClass) {
-//                GT.logt("进入 Call:" + tClass.length);
                 executor = Thread.getInstance(0);
                 if (tClass.length > 0) {
                     Class tClass1 = tClass[0];
-//                    GT.logt("tClass1:" + tClass1);
                     this.tClass = tClass1;
 
                 }
 
             }
+
+            public T getData() {
+                return t;
+            }
+
 
             @Override
             public String toString() {
@@ -9968,6 +10229,7 @@ public class GT {
             public Hibernate.Call<T> newCall(Hibernate.Callback<T>... callback) {
                 return callRequest(this, callback);
             }
+
 
             public void close() {
                 response = null;
@@ -10018,80 +10280,96 @@ public class GT {
                 return sqlSelect;
             }
 
-            public void setSqlSelect(String... sqlSelect) {
+            public WhereBean setSqlSelect(String... sqlSelect) {
                 this.sqlSelect = sqlSelect;
+                return this;
             }
 
             public String[] getSqlWhere() {
                 return sqlWhere;
             }
 
-            public void setSqlWhere(String... sqlWhere) {
+            public WhereBean setSqlWhere(String... sqlWhere) {
                 this.sqlWhere = sqlWhere;
+                return this;
             }
 
             public String[] getSqlValue() {
                 return sqlValue;
             }
 
-            public void setSqlValue(String... sqlValue) {
+            public WhereBean setSqlValue(String... sqlValue) {
                 this.sqlValue = sqlValue;
+                return this;
             }
 
             public String getSqlCode() {
                 return sqlCode;
             }
 
-            public void setSqlCode(String sqlCode) {
+            public WhereBean setSqlCode(String sqlCode) {
                 this.sqlCode = sqlCode;
+                return this;
             }
 
             public String getFlashback() {
                 return flashback;
             }
 
-            public void setFlashback(String flashback) {
+            public WhereBean setFlashback(String flashback) {
                 this.flashback = flashback;
+                return this;
             }
 
             public int[] getLimit() {
                 return limit;
             }
 
-            public void setLimit(int... limit) {
+            public WhereBean setLimit(int... limit) {
                 this.limit = limit;
+                return this;
             }
 
             public String getGroupBy() {
                 return groupBy;
             }
 
-            public void setGroupBy(String groupBy) {
+            public WhereBean setGroupBy(String groupBy) {
                 this.groupBy = groupBy;
+                return this;
             }
 
             public String getHaving() {
                 return having;
             }
 
-            public void setHaving(String having) {
+            public WhereBean setHaving(String having) {
                 this.having = having;
+                return this;
             }
 
             public boolean isList() {
                 return isList;
             }
 
-            public void setList(boolean list) {
+            public WhereBean setList(boolean list) {
                 isList = list;
+                return this;
             }
 
             public Class<?> getType() {
                 return type;
             }
 
-            public void setType(Class<?> type) {
+            /**
+             * 数据库操作类型(增删查改)
+             *
+             * @param type
+             * @return
+             */
+            public WhereBean setType(Class<?> type) {
                 this.type = type;
+                return this;
             }
 
             @Override
@@ -10150,68 +10428,213 @@ public class GT {
          * @return
          */
         private static <T> Hibernate.Call<T> callSynchronization(Hibernate.Call<T> call, Hibernate.Callback<T> callback) {
-
             if (call.hibernate == null) return call;
 
-            if (call.whereBean.sqlWhere != null && call.whereBean.sqlWhere.length > 0 && call.whereBean.sqlValue != null && call.whereBean.sqlValue.length == 0) {
-                call.whereBean.sqlValue = new String[call.paramMap.size()];
-                Set<String> keys = call.paramMap.keySet();
-                Iterator<String> iterator = keys.iterator();
-
-                //倒序
-                List<String> sqlValueList = new ArrayList<>();
-                for (int i = 0; i < call.whereBean.sqlValue.length; i++) {
-                    String key = iterator.next();
-                    sqlValueList.add(key);
+            GT.Thread.runAndroid(new Runnable() {
+                @Override
+                public void run() {
+                    callback.onStart(call);
                 }
-                Collections.reverse(sqlValueList);
+            });
 
-                //TODO 应该倒序的 sqlWhere=[sex = ? and age > ?], sqlValue=[42, 女] 这样导致 查询条件与查询值不匹配
-                for (int i = 0; i < call.whereBean.sqlValue.length; i++) {
-                    String key = sqlValueList.get(i);
-                    String value = String.valueOf(call.paramMap.get(key));
-                    GT.logt("key:" + key);
-                    GT.logt("value:" + value);
-                    call.whereBean.sqlValue[i] = value;
-//                    GT.logt("条件值:" + call.whereBean.sqlValue[i]);
+            try {
+                if ((call.whereBean.sqlWhere != null || call.whereBean.sqlCode != null) && call.paramMap.size() > 0) {
+                    call.whereBean.sqlValue = new String[call.paramMap.size()];
+                    Iterator<String> iterator = call.paramMap.keySet().iterator();
+
+                    //倒序
+                    List<String> sqlValueList = new ArrayList<>();
+                    for (int i = 0; i < call.whereBean.sqlValue.length; i++) {
+                        String key = iterator.next();
+                        sqlValueList.add(key);
+                    }
+                    Collections.reverse(sqlValueList);
+
+                    //设置查询类型值
+                    for (int i = 0; i < sqlValueList.size(); i++) {
+                        String key = sqlValueList.get(i);
+                        String value = String.valueOf(call.paramMap.get(key));
+                        call.whereBean.sqlValue[i] = value;
+                    }
+                    sqlValueList.clear();
+                    sqlValueList = null;
                 }
-            }
 
-            GT.logt("call.whereBean:" + call.whereBean);
+                if (GT_Insert.class.equals(call.whereBean.type)) {//插入数据
+                    boolean status = false;
+                    if (call.tClass == call.t.getClass()) {
+                        status = call.hibernate.save(call.t).isStatus();
+                    } else if (call.t instanceof List) {
+                        status = call.hibernate.saveAll((List<?>) call.t).isStatus();
+                    } else if (call.t.getClass().toString().contains("class [Lcom")) {
+                        status = call.hibernate.saveAll(call.t).isStatus();
+                    }
 
-            //查询条件
-            call.hibernate
-                    .where(call.whereBean.sqlWhere, call.whereBean.sqlValue)
-                    .select(call.whereBean.sqlSelect)
-                    .flashback(call.whereBean.flashback)
-                    .limit(call.whereBean.limit)
-                    .groupBy(call.whereBean.groupBy)
-                    .having(call.whereBean.having)
-                    .isLast(call.whereBean.isList);
+                    boolean finalStatus = status;
+                    GT.Thread.runAndroid(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (finalStatus) {//插入成功
+                                callback.onSuccess(call.t, call);
+                            } else {//插入失败
+                                callback.onError(call, call.exception);
+                            }
+                        }
+                    });
 
-            if (GT_Insert.class.equals(call.whereBean.type)) {
-                GT.logt("进入 GT_Insert");
-//                call.hibernate.save()
-            } else if (GT_Delete.class.equals(call.whereBean.type)) {
-                GT.logt("进入 GT_Delete");
-            } else if (GT_Query.class.equals(call.whereBean.type)) {
-                GT.logt("进入 GT_Query1:" + call.t.getClass());
-                if (call.t instanceof ArrayList) {
-                    call.t = (T) call.hibernate.queryAll(call.tClass);
+                } else if (GT_Delete.class.equals(call.whereBean.type)) {//删除数据
+                    boolean status = true;
+                    if (call.t != null) {
+                        status = call.hibernate.delete(call.t).isStatus();
+                    } else if (call.whereBean.sqlWhere.length == 0 && call.whereBean.sqlValue.length == 1) {//根据ID删除
+                        status = call.hibernate.delete(call.tClass, Integer.parseInt(call.whereBean.sqlValue[0])).isStatus();
+                    } else {
+                        //根据条件删除操作
+                        if (call.whereBean.sqlWhere.length == 0 && call.whereBean.sqlValue.length == 0) {
+                            //删除所有
+                            status = call.hibernate.deleteAll(call.tClass).isStatus();
+                        } else {
+                            if (call.whereBean.sqlWhere.length != 0 || call.whereBean.sqlValue.length != 0) {
+                                status = call.hibernate
+                                        .where(call.whereBean.sqlWhere, call.whereBean.sqlValue)
+                                        .delete(call.tClass).isStatus();
+                            }
+                        }
+                    }
+
+                    boolean finalStatus = status;
+                    GT.Thread.runAndroid(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (finalStatus) {//删除成功
+                                callback.onSuccess(call.t, call);
+                            } else {//删除失败
+                                callback.onError(call, call.exception);
+                            }
+                        }
+                    });
+
+                } else if (GT_Query.class.equals(call.whereBean.type)) {//查询数据
+
+                    //查询条件
+                    call.hibernate
+                            .where(call.whereBean.sqlWhere, call.whereBean.sqlValue)
+                            .select(call.whereBean.sqlSelect)
+                            .flashback(call.whereBean.flashback)
+                            .limit(call.whereBean.limit)
+                            .groupBy(call.whereBean.groupBy)
+                            .having(call.whereBean.having)
+                            .isLast(call.whereBean.isList);
+                    if (call.t instanceof ArrayList) {
+                        call.t = (T) call.hibernate.queryAll(call.tClass);
+                    } else {
+                        call.t = (T) call.hibernate.query(call.tClass);
+                    }
+                    GT.Thread.runAndroid(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (call.t != null) {
+                                callback.onSuccess(call.t, call);
+                            } else {
+                                callback.onError(call, call.exception);
+                            }
+                        }
+                    });
+                } else if (GT_Update.class.equals(call.whereBean.type)) {//修改数据
+                    boolean status = false;
+                    if (call.t instanceof ContentValues) {
+                        ContentValues contentValues = (ContentValues) call.t;
+                        status = call.hibernate
+                                .where(call.whereBean.sqlWhere, call.whereBean.sqlValue)
+                                .update(call.tClass.getSimpleName(), contentValues).isStatus();
+
+                        //获取到返回 ID
+                        try {
+                            if (call.whereBean.sqlWhere != null && call.whereBean.sqlWhere.length > 0 && call.whereBean.sqlValue != null && call.whereBean.sqlValue.length > 0) {
+                                String idName = call.whereBean.sqlWhere[0];
+                                idName = idName.substring(0, idName.indexOf(" "));
+                                contentValues.put(idName, Integer.parseInt(call.whereBean.sqlValue[0]));
+                                call.t = (T) contentValues;
+                            }
+                        } catch (Exception e) {
+
+                        }
+
+                    } else {
+                        status = call.hibernate.update(call.t).isStatus();
+                    }
+                    boolean finalStatus = status;
+                    GT.Thread.runAndroid(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (finalStatus) {//修改成功
+                                if (call.t instanceof ContentValues) {//ContentValues 转 实体类
+                                    call.t = (T) AnnotationAssist.contentValuesToObject((ContentValues) call.t, call.tClass);
+                                }
+                                callback.onSuccess(call.t, call);
+                            } else {//修改失败
+                                callback.onError(call, call.exception);
+                            }
+                        }
+                    });
+                } else if (GT_Code.class.equals(call.whereBean.type)) {//使用自定义代码执行
+                    SQLiteDatabase sqliteDatabase = call.hibernate.getSqliteDatabase();
+                    if (sqliteDatabase == null || call.whereBean.getSqlCode() == null || call.whereBean.getSqlCode().length() == 0) {
+                        GT.Thread.runAndroid(new Runnable() {
+                            @Override
+                            public void run() {
+                                callback.onError(call, call.exception);
+                            }
+                        });
+
+                    } else {
+                        //自定义sql代码
+                        String code = call.whereBean.getSqlCode().toLowerCase();//注意：全部转为小写
+                        if (code.contains("insert")) {
+                            code = ApplicationUtils.replaceArray(call.whereBean.getSqlCode(), "\\?", call.whereBean.sqlValue);
+                            call.hibernate.getSqliteDatabase().execSQL(code);
+                        } else if (code.contains("delete")) {
+                            code = ApplicationUtils.replaceArray(call.whereBean.getSqlCode(), "\\?", call.whereBean.sqlValue);
+                            call.hibernate.getSqliteDatabase().execSQL(code);
+                        } else if (code.contains("select")) {
+                            code = ApplicationUtils.replaceArray(call.whereBean.getSqlCode(), "\\?", call.whereBean.sqlValue);
+                            Cursor cursor = sqliteDatabase.rawQuery(code, null);
+                            call.t = (T) cursorToObject(cursor, call.tClass, sqliteDatabase, call.tClass.getSimpleName(), replaceSelectValue(code));
+                        } else if (code.contains("update")) {
+                            code = ApplicationUtils.replaceArray(call.whereBean.getSqlCode(), "\\?", call.whereBean.sqlValue);
+                            call.hibernate.getSqliteDatabase().execSQL(code);
+                        } else {
+                            code = ApplicationUtils.replaceArray(call.whereBean.getSqlCode(), "\\?", call.whereBean.sqlValue);
+                            call.hibernate.getSqliteDatabase().execSQL(code);
+                        }
+
+                        //如果没报异常捕获，那就算执行正常走操作成功流程
+                        GT.Thread.runAndroid(new Runnable() {
+                            @Override
+                            public void run() {
+                                callback.onSuccess(call.t, call);
+                            }
+                        });
+
+                    }
                 } else {
-                    call.t = (T) call.hibernate.query(call.tClass);
+                    GT.err("非法的 查询实体类型");
                 }
-                callback.onSuccess(call.t, call);
-                GT.logt("进入 GT_Query2");
-            } else if (GT_Update.class.equals(call.whereBean.type)) {
-                GT.logt("进入 GT_Update");
-
-            } else if (GT_Code.class.equals(call.whereBean.type)) {
-                GT.logt("进入 GT_Code");
-            } else {
-                GT.logt("进入 else");
+            } catch (Exception e) {
+                GT.Thread.runAndroid(new Runnable() {
+                    @Override
+                    public void run() {
+                        callback.onError(call, e);
+                    }
+                });
             }
 
+            GT.Thread.runAndroid(new Runnable() {
+                @Override
+                public void run() {
+                    callback.onEnd(call);
+                }
+            });
 
             return call;
         }
@@ -10221,47 +10644,24 @@ public class GT {
 
             public void onSuccess(T t, Hibernate.Call<T> call);
 
-            public void onError(Hibernate.Call<T> call, String e);
+            public void onError(Hibernate.Call<T> call, Exception e);
 
         }
 
-        //请求接口类
+        //查询接口类
         public static abstract class Callback<T> implements Hibernate.CallbackListener<T> {
 
             public void onStart(Hibernate.Call<T> call) {
-            }//开始请求
+            }//开始查询
 
             public void onSuccess(T t, Hibernate.Call<T> call) {
-            }//请求成功单个
+            }//查询成功
 
-            public void onSuccess(String data, Hibernate.Call call) {
-            }//请求成功多个
-
-            public void onError(Hibernate.Call<T> call, String e) {
-            }//请求错误
+            public void onError(Hibernate.Call<T> call, Exception e) {
+            }//查询错误
 
             public void onEnd(Hibernate.Call<T> call) {
-            }//结束请求
-
-            //下载进度
-            public void onDownloading(File file, int progress, int fileProgress, int fileProgressMax, String fileSize) {
-
-            }
-
-            public void onDownloading(File file, int progress, int fileProgress, int fileProgressMax, String fileProgressValue, String fileProgressMaxValue, String fileSize) {
-            }
-
-            //下载成功之后的文件
-            public void onDownloadSuccess(File file) {
-            }
-
-            //上传进度
-            public void onUploading(File file, int progress, int fileProgress, long fileProgressMax, String fileSize) {
-            }
-
-            //上传成功之后的文件
-            public void onUploadingSuccess(File file) {
-            }
+            }//结束操作
 
         }
 
@@ -13891,7 +14291,6 @@ public class GT {
                             if (indexOf != -1) {
                                 String key = parameterName.substring(0, indexOf);
                                 String value = parameterName.substring(indexOf + 1, parameterName.length() - 1);
-//                                GT.logt("本地代码:" + key + ":" + value);
                                 parameterNameMap.put(key, value.split(","));
                             }
                         }
@@ -14017,12 +14416,10 @@ public class GT {
                     //第一种方法：通过 JDK1.8 获取方法形参的名称
                     if (httpCallBuild == null) {
                         try {
-                            GT.logt("第一种方法获取方法形参的名称");
                             Parameter[] parameters = method.getParameters();
                             parameterArray = new String[parameters.length];
                             for (int i = 0; i < parameters.length; i++) {
                                 parameterArray[i] = parameters[i].getName();
-                                GT.logt("parameterArray[" + i + "]:" + parameterArray[i]);
                             }
                         } catch (NoSuchMethodError e) {
                             if (LOG.GT_LOG_TF) {
@@ -14033,12 +14430,10 @@ public class GT {
 
                     //第二种方法：使用 GT_DataBinding 进行获取方法形参
                     if (parameterArray == null || parameterArray.length == 0 || httpCallBuild != null) {
-                        GT.logt("第二种方法获取方法形参的名称");
                         try {
                             String GT_KEY = classz.getName() + "+" + methodName + "-";
                             for (Class<?> cla : parameterTypes) {
                                 String parameterType = cla.toString();
-                                GT.logt("parameterType:" + parameterType);
                                 if (parameterType.contains(".")) {
                                     String[] split = parameterType.split("\\.");
                                     GT_KEY += split[split.length - 1] + "-";
@@ -14118,7 +14513,6 @@ public class GT {
                                     call.addParam(parameterArray[i], args[i].toString());
                                 }
                             } else {
-//                                GT.logt("parameterArray:" + parameterArray[i]);
                                 if (fileDownload != null && parameterArray[i].equals(fileDownload.value())) {
                                     //下载
                                     call.uploadingOrDownload = false;
@@ -14126,13 +14520,11 @@ public class GT {
                                         call.fileState = true;
                                         call.filePath = String.valueOf(args[i]);
                                         call.file = new File(call.filePath);
-//                                        GT.logt("String");
                                     } else if (aClass.contains("File")) {
                                         call.fileState = true;
                                         File file = (File) args[i];
                                         call.file = file;
                                         call.filePath = file.getPath();
-//                                        GT.logt("File");
                                     }
                                 } else if (fileUploading != null && parameterArray[i].equals(fileUploading.value())) {
                                     //上传
@@ -14150,7 +14542,6 @@ public class GT {
                                 } else {
                                     //形参传下来的形参具体值,不添加重复的形参,有重复的以第一个为准
                                     if (!call.getParamMap().containsKey(parameterArray[i])) {
-                                        GT.logt("形参值:" + parameterArray[i] + ":" + args[i].toString());
                                         call.addParam(parameterArray[i], args[i]);
                                     }
                                 }
@@ -14162,11 +14553,7 @@ public class GT {
                     disposalPath(urlValue, call);
                     call.url += call.keyList.get(call.keyList.size() - 1);
                     call.keyList.remove(call.keyList.size() - 1);
-
                     call.method = method;
-
-                    GT.logt("call:" + call);
-
                     return call;
                 }
             });
@@ -14591,7 +14978,6 @@ public class GT {
                             if (call.uploadingOrDownload) {
                                 callSynchronizationUploadingFile(call, finalCallBack);
                             } else {
-//                                GT.logt("进入异步下载文件");
                                 callSynchronizationDownloadFile(call, finalCallBack);
                             }
                         }
@@ -14605,7 +14991,6 @@ public class GT {
                     if (call.uploadingOrDownload) {
                         return callSynchronizationUploadingFile(call, callBack);
                     } else {
-//                        GT.logt("进入同步下载文件");
                         return callSynchronizationDownloadFile(call, callBack);
                     }
                 }
@@ -14788,7 +15173,6 @@ public class GT {
                 Thread.runAndroid(new Runnable() {
                     @Override
                     public void run() {
-//                        GT.logt("开始下载");
                         callback.onStart(call);
                     }
                 });
@@ -14856,7 +15240,6 @@ public class GT {
 
                 int count = 0;
                 byte[] buffer = new byte[1024];
-//                GT.logt("call.fileState:" + call.fileState);
                 while (call.fileState) {
 
                     while (call.fileState && call.filePause) {
@@ -14899,7 +15282,6 @@ public class GT {
                 Thread.runAndroid(new Runnable() {
                     @Override
                     public void run() {
-//                        GT.logt("下载异常:" + e);
                         callback.onError(call, e.toString());
                     }
                 });
@@ -14908,7 +15290,6 @@ public class GT {
                     @Override
                     public void run() {
                         callback.onEnd(call);
-//                        GT.logt("结束下载");
                     }
                 });
             }
@@ -15582,7 +15963,6 @@ public class GT {
                 glideBean = new GlideBean();
             }
             glideBean.error = resource;
-//            GT.logt("设置error：" + resource);
             return glide;
         }
 
@@ -15743,7 +16123,7 @@ public class GT {
                                     if (isCache && finalIsCache && keyList.containsKey(key[0])) {
                                         glideBean.imgObjet = keyList.get(key[0]);
                                         if (glideBean.imgObjet != null && LOG.GT_LOG_TF) {
-                                            GT.logt("使用 使用内存缓存图片");
+                                            logt("使用 使用内存缓存图片");
                                         }
                                     }
 
@@ -15751,7 +16131,7 @@ public class GT {
                                     if (isCache && finalIsCache && glideBean.imgObjet == null) {
                                         glideBean.imgObjet = ImageViewTools.getBitmapFromLocal(key[0], CACHE_PATH);
                                         if (glideBean.imgObjet != null && LOG.GT_LOG_TF) {
-                                            GT.logt("使用 本地缓存");
+                                            logt("使用 本地缓存");
                                         }
                                     }
 
@@ -15761,12 +16141,12 @@ public class GT {
                                         if (url.contains("http")) {
                                             glideBean.imgObjet = ImageViewTools.getImageBitmap(url);//Bitmap 网络
                                             if (glideBean.imgObjet != null && LOG.GT_LOG_TF) {
-                                                GT.logt("使用 网络下载图片");
+                                                logt("使用 网络下载图片");
                                             }
                                         } else {
                                             glideBean.imgObjet = ImageViewTools.getLoacalBitmap(url);//Bitmap 本地
                                             if (glideBean.imgObjet != null && LOG.GT_LOG_TF) {
-                                                GT.logt("使用 本地图片");
+                                                logt("使用 本地图片");
                                             }
                                         }
                                         isSaveSD = true;
@@ -15974,7 +16354,6 @@ public class GT {
 
                             }
                         }
-//                        GT.logt("返回的:" + glideBean.imgObjet);
                         return glideBean;
                     }
                 }).execute(new Observable.RunAndroidV<GlideBean>() {
@@ -15988,14 +16367,8 @@ public class GT {
 
                         //已加载图片 如果与 即将要加载的图片是一样的，那就跳过，不进行重复加载
                         Object obj2 = objList.get(String.valueOf(iv.hashCode()));
-//                    GT.logt("已加载图片:" + obj2);
-//                    GT.logt("待加载图片:" + obj);
-
                         if (obj2 != null && String.valueOf(obj2).equals(String.valueOf(glideBean.imgObjet))) {
-//                            GT.logt("过滤掉");
                             return;
-                        } else {
-//                            GT.logt("继续执行加载图片");
                         }
 
                         try {
@@ -16057,7 +16430,6 @@ public class GT {
                                     @Override
                                     public void run() {
                                         //最大显示不能大于 设置的默认透明度
-//                                        GT.logt("透明度:" + alpha);
                                         for (float i = 0; i < alpha; ) {
                                             i += 0.02f;
                                             Thread.sleep(3);
@@ -16082,7 +16454,7 @@ public class GT {
                 });
             } catch (Exception e) {
                 if (LOG.GT_LOG_TF) {
-                    GT.logt("e:" + e);
+                    logt("e:" + e);
                 }
             } finally {
                 glideBean.placeholder = null;
@@ -16102,8 +16474,6 @@ public class GT {
             if (LOG.GT_LOG_TF) {
                 GT.errt("loadGlideError:" + e);
             }
-
-//            GT.logt("进入异常:" + error);
 
             if (iv != null && glideBean != null && glideBean.error != null) {
                 try {
@@ -16561,7 +16931,7 @@ public class GT {
                 @Override
                 public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
                     onLoadWebViewListener.onReceivedSslError(view, handler, error);
-                    handler.proceed();    //表示等待证书响应
+
                 }
 
                 @Override
@@ -16991,15 +17361,11 @@ public class GT {
              * @param port
              */
             public TCP(int port) {
-//                GT.logt("开始创建 服务器TCP");
                 isDisconnect = false;
                 this.port = port;
                 Thread.getInstance(0).execute(new Runnable() {
                     @Override
                     public void run() {
-
-//                        GT.logt("服务器网线:" + serverSocket);
-
                         try {
                             serverSocket = new ServerSocket(port);//创建服务器
                             if (isLog)
@@ -17018,7 +17384,6 @@ public class GT {
                                 } else {
                                     //等待断开重连
                                     GT.Thread.sleep(2000);
-//                                    GT.logt("服务器等待:" + socket);
                                     socket = null;
                                 }
 
@@ -17039,7 +17404,6 @@ public class GT {
              * @param port
              */
             public TCP(String ip, int port) {
-//                GT.logt("开始创建 客户端TCP");
                 isDisconnect = false;
                 this.port = port;
                 this.ip = ip;
@@ -17048,7 +17412,6 @@ public class GT {
                     public void run() {
 
                         while (!isDisconnect) {
-//                            GT.logt("客户端网线:" + socket);
                             if (socket == null) {
                                 try {
                                     if (isLog)
@@ -17068,7 +17431,7 @@ public class GT {
                             } else {
                                 //断线重连
                                 GT.Thread.sleep(2000);
-//                                GT.logt("客户端等待:" + socket);
+//                                logt("客户端等待:" + socket);
 
 //                                if (socket != null) {
 //                                    socket = null;
@@ -17090,7 +17453,7 @@ public class GT {
              * @return
              */
             public TCP sendText(Object data) {
-//                GT.logt("发送流:" + printStream);
+//                logt("发送流:" + printStream);
                 if (printStream == null) return this;
                 Thread.getInstance(0).execute(new Runnable() {
                     @Override
@@ -17107,8 +17470,8 @@ public class GT {
              * @return
              */
             public String readText() {
-//                GT.logt("接收流:" + bufferedReader);
-//                GT.logt("输出流:" + printStream);
+//                logt("接收流:" + bufferedReader);
+//                logt("输出流:" + printStream);
                 if (bufferedReader == null) {
                     return null;
                 }
@@ -19219,12 +19582,13 @@ public class GT {
     public static class ApplicationUtils {
 
         private static long exitTime = 0;
+
         /**
          * 连续点击2次退出
          */
-        public static void clickTwice(Context context,OnListener<Boolean> onListener,long... times) {
+        public static void clickTwice(Context context, OnListener<Boolean> onListener, long... times) {
             long time = 2000;
-            if(times != null && times.length > 0){
+            if (times != null && times.length > 0) {
                 time = times[0];
             }
             if ((System.currentTimeMillis() - exitTime) > time) {
@@ -20378,10 +20742,6 @@ public class GT {
                 date = Math.abs(initYMD[2]);
             }
 
-//            GT.logt("year:" + year);
-//            GT.logt("monday:" + monday);
-//            GT.logt("date:" + date);
-
             //初始的日期
             onListener.onListener(String.valueOf(year), String.valueOf(monday), String.valueOf(date));
 
@@ -20570,6 +20930,23 @@ public class GT {
             }
         }
 
+        /**
+         * 数组替换字符串
+         *
+         * @param data   替换的主体内容
+         * @param key    被替换的 样式
+         * @param values 遍历替换的数组
+         * @return
+         */
+        private static String replaceArray(String data, String key, String[] values) {
+            if (data == null || data.length() == 0 || values == null || values.length == 0)
+                return null;
+
+            for (String value : values) {
+                data = data.replaceFirst(key, value);
+            }
+            return data;
+        }
 
     }
 
@@ -22423,34 +22800,34 @@ public class GT {
                 if (FIX_FILE_PATH == null || FIX_FILE_PATH.length() == 0) {
                     FIX_FILE_PATH = FileUtils.getGTPath(context) + "fix";
                 }
-//                GT.logt("FIX_FILE_PATH:" + FIX_FILE_PATH);
+//                logt("FIX_FILE_PATH:" + FIX_FILE_PATH);
                 // 遍历所有的修复dex , 因为可能是多个dex修复包
                 File fileDir = new File(FIX_FILE_PATH);// data/user/0/包名/files/odex（这个可以任意位置）
                 if (!fileDir.exists()) {//如果目录不存在就创建所有目录，这里需要添加权限
-//                    GT.logt("创建新文件:" + fileDir.getPath());
+//                    logt("创建新文件:" + fileDir.getPath());
                     fileDir.mkdirs();
                 }
 
-//                GT.logt("fixPath1:" + fileDir.getPath());
+//                logt("fixPath1:" + fileDir.getPath());
 
                 if (isGoingToFix(fileDir)) {
-//                    GT.logt("开始修复");
+//                    logt("开始修复");
                     doDexInject(context, loadedDex, true);
-//                    GT.logt("结束修复");
+//                    logt("结束修复");
                 } else {
                     //如果该文件不存在或文件夹内没有热更新文件，那就检查下面这个文件目录是否存在热更，是的话，那就直接加载这个下面旧的热更文件
           /*  String optimizeDir = context.getFilesDir().getAbsolutePath() + File.separator + OPTIMIZE_DEX_DIR;
-            GT.logt("optimizeDir:" + optimizeDir);
+            ogt("optimizeDir:" + optimizeDir);
 
 
             File[] listFiles = new File(optimizeDir).listFiles();
 
             if (listFiles != null)
-                GT.logt("个数：" + listFiles.length);
+                logt("个数：" + listFiles.length);
 
             if (listFiles != null) {
                 for (File file : listFiles) {
-                    GT.logt("file.getName()：" + file.getPath());
+                    logt("file.getName()：" + file.getPath());
                     if ((file.getName().endsWith(DEX_SUFFIX)
                             || file.getName().endsWith(APK_SUFFIX)
                             || file.getName().endsWith(JAR_SUFFIX)
@@ -22464,7 +22841,7 @@ public class GT {
             if (loadedDex.size() != 0) {
                 doDexInject(context, loadedDex, false);
             }*/
-//                    GT.logt("跳过修复");
+//                    logt("跳过修复");
                 }
             }
 
@@ -22475,16 +22852,16 @@ public class GT {
              */
             private static boolean isGoingToFix(File fileDir) {
                 boolean canFix = false;
-//                GT.logt("fixPath2:" + fileDir.getPath());
+//                logt("fixPath2:" + fileDir.getPath());
 
                 File[] listFiles = fileDir.listFiles();
 
 //                if (listFiles != null)
-//                    GT.logt("个数：" + listFiles.length);
+//                    logt("个数：" + listFiles.length);
 
                 if (listFiles != null) {
                     for (File file : listFiles) {
-//                        GT.logt("file.getName()：" + file.getPath());
+//                        logt("file.getName()：" + file.getPath());
                         if ((file.getName().endsWith(DEX_SUFFIX)
                                 || file.getName().endsWith(APK_SUFFIX)
                                 || file.getName().endsWith(JAR_SUFFIX)
@@ -22496,8 +22873,8 @@ public class GT {
                         }
                     }
                 }
-//                GT.logt("loadedDex：" + loadedDex);
-//                GT.logt("canFix：" + canFix);
+//                logt("loadedDex：" + loadedDex);
+//                logt("canFix：" + canFix);
 
                 return canFix;
             }
@@ -22510,15 +22887,15 @@ public class GT {
              */
             private static void doDexInject(Context appContext, HashSet<File> loadedDex, boolean isEmptyFile) {
                 String optimizeDir = appContext.getFilesDir().getAbsolutePath() + File.separator + OPTIMIZE_DEX_DIR;
-//                GT.logt("optimizeDir:" + optimizeDir);
+//                logt("optimizeDir:" + optimizeDir);
                 // data/data/包名/files/optimize_dex（这个必须是自己程序下的目录）
 
                 File fopt = new File(optimizeDir);
                 if (!fopt.exists()) {
-//                    GT.logt("创建data目录下的:" + fopt.getPath());
+//                    logt("创建data目录下的:" + fopt.getPath());
                     fopt.mkdirs();
                 } else {
-//                    GT.logt("存在，清空这个文件夹里所有文件");
+//                    logt("存在，清空这个文件夹里所有文件");
                     if (isEmptyFile)
                         FileUtils.deleteAllFiles(fopt, false);
                 }
@@ -22526,12 +22903,12 @@ public class GT {
                 try {
                     // 1.加载应用程序dex的Loader
                     PathClassLoader pathLoader = (PathClassLoader) appContext.getClassLoader();
-//                    GT.logt("pathLoader:" + pathLoader);
+//                    logt("pathLoader:" + pathLoader);
                     for (File dex : loadedDex) {
-//                        GT.logt("dex:" + dex.getPath());
+//                        logt("dex:" + dex.getPath());
 
-//                        GT.logt("getAbsolutePath1:" + dex.getAbsolutePath());
-//                        GT.logt("getAbsolutePath2:" + fopt.getAbsolutePath());
+//                        logt("getAbsolutePath1:" + dex.getAbsolutePath());
+//                        logt("getAbsolutePath2:" + fopt.getAbsolutePath());
 
                         // 2.加载指定的修复的dex文件的Loader
                         DexClassLoader dexLoader = new DexClassLoader(
@@ -22549,7 +22926,7 @@ public class GT {
                          * 依次反射即可
                          */
 
-//                        GT.logt("准备加载 pathList");
+//                        logt("准备加载 pathList");
                         //3.1 准备好pathList的引用
                         Object dexPathList = getPathList(dexLoader);
                         Object pathPathList = getPathList(pathLoader);
@@ -22562,11 +22939,11 @@ public class GT {
                         // 重写给PathList里面的Element[] dexElements;赋值
                         Object pathList = getPathList(pathLoader);// 一定要重新获取，不要用pathPathList，会报错
                         setField(pathList, pathList.getClass(), "dexElements", dexElements);
-//                        GT.logt("结束加载 pathList");
+//                        logt("结束加载 pathList");
                     }
-//                    GT.logt("修复完成");
+//                    logt("修复完成");
                 } catch (Exception e) {
-//                    GT.logt("修复异常:" + e);
+//                    logt("修复异常:" + e);
                     e.printStackTrace();
                 }
             }
@@ -25770,14 +26147,14 @@ public class GT {
                 }
 
                 if (LOG.GT_LOG_TF) {
-                    GT.logt("fragment:" + fragment);
-                    GT.logt("mainFragmentId:" + mainFragmentId);
-                    GT.logt("homeFragmentId:" + homeFragmentId);
-                    GT.logt("newFragmentId:" + fragmentId);
-                    GT.logt("oldFragmentId:" + oldFragmentId);
-                    GT.logt("fragmentName:" + fragmentName);
-                    GT.logt("stackTopFragmentName:" + stackTopFragmentName);
-                    GT.logt("fragmentByTag:" + fragmentByTag);
+                    logt("fragment:" + fragment);
+                    logt("mainFragmentId:" + mainFragmentId);
+                    logt("homeFragmentId:" + homeFragmentId);
+                    logt("newFragmentId:" + fragmentId);
+                    logt("oldFragmentId:" + oldFragmentId);
+                    logt("fragmentName:" + fragmentName);
+                    logt("stackTopFragmentName:" + stackTopFragmentName);
+                    logt("fragmentByTag:" + fragmentByTag);
                 }
 
                 switch (SWITCHING_MODE) {
@@ -25805,7 +26182,7 @@ public class GT {
                         }
 
                         if (LOG.GT_LOG_TF) {
-                            GT.logt("Activity 切换方式");//在其他切换方式里，也应该调用 hiad 方法
+                            logt("Activity 切换方式");//在其他切换方式里，也应该调用 hiad 方法
                         }
                         transaction.add(fragmentId, fragment, fragmentName);
                         break;
@@ -25816,7 +26193,7 @@ public class GT {
 
                         if (fragmentName != null && stackTopFragmentName != null && fragmentName.equals(stackTopFragmentName)) {
                             if (LOG.GT_LOG_TF) {
-                                GT.logt("过滤掉相同的页面切换 Fragment");
+                                logt("过滤掉相同的页面切换 Fragment");
                             }
                             break;
                         }
@@ -25842,7 +26219,7 @@ public class GT {
                             }
                         }
                         if (LOG.GT_LOG_TF) {
-                            GT.logt("Fragment 切换方式");
+                            logt("Fragment 切换方式");
                         }
                         transaction.replace(fragmentId, fragment, fragmentName);
                         break;
@@ -25851,7 +26228,7 @@ public class GT {
                     case DIALOG:// Dialog 切换方式
                     {
                         if (LOG.GT_LOG_TF) {
-                            GT.logt("Dialog 切换方式:" + fragmentByTag);
+                            logt("Dialog 切换方式:" + fragmentByTag);
                         }
                         if (fragmentName != null && stackTopFragmentName != null && fragmentName.equals(stackTopFragmentName)) {
                             break;
@@ -25860,22 +26237,22 @@ public class GT {
                         //隐藏退出栈顶的
                         if (fragmentByTag != null) {
                             if (LOG.GT_LOG_TF) {
-                                GT.logt("准备隐藏的页面:" + fragmentByTag.getClass().getSimpleName());
+                                logt("准备隐藏的页面:" + fragmentByTag.getClass().getSimpleName());
                             }
 
                             Integer integer = fragmentType.get(fragmentByTag.getClass().getName());
                             if (LOG.GT_LOG_TF) {
-                                GT.logt("mainFragmentId:" + mainFragmentId);
-                                GT.logt("homeFragmentId:" + homeFragmentId);
-                                GT.logt("newFragmentId:" + fragmentId);
-                                GT.logt("oldFragmentId:" + oldFragmentId);
-                                GT.logt("integer:" + integer);
+                                logt("mainFragmentId:" + mainFragmentId);
+                                logt("homeFragmentId:" + homeFragmentId);
+                                logt("newFragmentId:" + fragmentId);
+                                logt("oldFragmentId:" + oldFragmentId);
+                                logt("integer:" + integer);
                             }
 
 
                             if (fragmentId == integer) {
                                 if (LOG.GT_LOG_TF) {
-                                    GT.logt("真实隐藏");
+                                    logt("真实隐藏");
                                 }
                                 transaction.hide(fragmentByTag);//真实隐藏
                                 if (fragmentByTag instanceof BaseFragment) {
@@ -25886,7 +26263,7 @@ public class GT {
                                 }
                             } else {
                                 if (LOG.GT_LOG_TF) {
-                                    GT.logt("过滤隐藏");
+                                    logt("过滤隐藏");
                                 }
                             }
                         }
@@ -25894,24 +26271,24 @@ public class GT {
                         //判断当前 Fragment 栈中是否存在当前要显示的Fragment
                         List<String> stackFragmentNames = getStackFragmentNames();
                         if (LOG.GT_LOG_TF) {
-                            GT.logt("获取栈中:" + stackFragmentNames.size() + " :" + stackFragmentNames);
-                            GT.logt("fragmentType:" + fragmentType);
+                            logt("获取栈中:" + stackFragmentNames.size() + " :" + stackFragmentNames);
+                            logt("fragmentType:" + fragmentType);
                         }
 
                         if (stackFragmentNames != null && stackFragmentNames.contains(fragmentName)) {
                             if (LOG.GT_LOG_TF) {
-                                GT.logt("存在:" + fragmentName);
+                                logt("存在:" + fragmentName);
                             }
                             Integer integer = fragmentType.get(fragmentName);
                             if (LOG.GT_LOG_TF) {
-                                GT.logt("现启动的FragmentID:" + integer);
+                                logt("现启动的FragmentID:" + integer);
                             }
                             //存在
                             Fragment stackFragment = getStackFragment(fragmentName);
                             if (stackFragment != null) {
 
                                 if (LOG.GT_LOG_TF) {
-                                    GT.logt("显示页面:" + stackFragment.getClass().getSimpleName());
+                                    logt("显示页面:" + stackFragment.getClass().getSimpleName());
                                 }
                                 transaction.show(stackFragment);
 
@@ -25934,13 +26311,13 @@ public class GT {
                                                     Integer integer1 = fragmentType.get(fragmentName2);
                                                     if (integer1 != null && integer != null && integer1.intValue() == integer.intValue()) {
                                                         if (LOG.GT_LOG_TF) {
-                                                            GT.logt("相等:" + fragmentName2 + ":" + integer1 + "=" + integer);
+                                                            logt("相等:" + fragmentName2 + ":" + integer1 + "=" + integer);
                                                         }
                                                         Fragment fragmentByTag1 = fragmentManager.findFragmentByTag(fragmentName2);//获取栈顶的 Fragment
                                                         if (stackFragment.getClass() == fragmentByTag1.getClass())
                                                             continue;
                                                         if (LOG.GT_LOG_TF) {
-                                                            GT.logt("准备隐藏的Fragment:" + fragmentByTag1);
+                                                            logt("准备隐藏的Fragment:" + fragmentByTag1);
                                                         }
                                                         transaction.hide(fragmentByTag1);//真实隐藏
                                                         if (fragmentByTag1 instanceof BaseFragment) {
@@ -25950,11 +26327,11 @@ public class GT {
                                                             fragmentByTag1.onStop();
                                                         }
                                                         if (LOG.GT_LOG_TF) {
-                                                            GT.logt("隐藏完毕的Fragment:" + fragmentByTag1);
+                                                            logt("隐藏完毕的Fragment:" + fragmentByTag1);
                                                         }
                                                     } else {
                                                         if (LOG.GT_LOG_TF) {
-                                                            GT.logt("不相等:" + fragmentName2 + ":" + integer1 + "=" + integer);
+                                                            logt("不相等:" + fragmentName2 + ":" + integer1 + "=" + integer);
                                                         }
                                                     }
                                                 }
@@ -25968,7 +26345,7 @@ public class GT {
                         } else {
                             //不存在
                             if (LOG.GT_LOG_TF) {
-                                GT.logt("不存在:" + fragmentByTag);
+                                logt("不存在:" + fragmentByTag);
                             }
                             transaction.addToBackStack(fragmentName);//加入到回退栈
                             if (fragment == null) {
@@ -26002,7 +26379,7 @@ public class GT {
                 }
 
                 if (LOG.GT_LOG_TF) {
-                    GT.logt("添加操作Fragment记录:" + fragmentName);
+                    logt("添加操作Fragment记录:" + fragmentName);
                 }
                 operatingFragmentRecord.add(fragmentName);//记录 操作的 Fragment 顺序
 
@@ -26010,19 +26387,19 @@ public class GT {
                 Fragment stackFragment = getStackFragment(fragmentName);
                 fragmentType.put(fragmentName, fragmentId);
                 if (LOG.GT_LOG_TF) {
-                    GT.logt("fragment:" + fragment);
-                    GT.logt("fragmentName:" + fragmentName);
-                    GT.logt("fragmentId:" + fragmentId);
-                    GT.logt("stackFragment:" + stackFragment);
+                    logt("fragment:" + fragment);
+                    logt("fragmentName:" + fragmentName);
+                    logt("fragmentId:" + fragmentId);
+                    logt("stackFragment:" + stackFragment);
                 }
 
                 //提交事物
                 try {
-                    if (LOG.GT_LOG_TF) GT.logt("提交事务 1号");
+                    if (LOG.GT_LOG_TF) logt("提交事务 1号");
                     activity = getActivity();
-                    if (LOG.GT_LOG_TF) GT.logt("提交事务 2号");
+                    if (LOG.GT_LOG_TF) logt("提交事务 2号");
                     if (activity != null && ApplicationUtils.isFrontDesk(activity)) {//判断是否在前台，如果是就正常提交事务
-                        if (LOG.GT_LOG_TF) GT.logt("提交事务 3号:" + isCommit);
+                        if (LOG.GT_LOG_TF) logt("提交事务 3号:" + isCommit);
                         if (isCommit) {
                             transaction.commit();
                         } else {
@@ -26030,12 +26407,12 @@ public class GT {
                         }
                     } else {//负责使用不推荐的方式提交
                         transaction.commitAllowingStateLoss();
-                        if (LOG.GT_LOG_TF) GT.logt("提交事务 4号");
+                        if (LOG.GT_LOG_TF) logt("提交事务 4号");
                     }
                 } catch (IllegalStateException e) {
                     GT.errs("e:" + e);
                     try {
-                        if (LOG.GT_LOG_TF) GT.logt("提交事务 5号");
+                        if (LOG.GT_LOG_TF) logt("提交事务 5号");
                         transaction.commitAllowingStateLoss();
                     } catch (Exception e1) {
                         GT.errs("e1:" + e1);
@@ -26043,10 +26420,10 @@ public class GT {
                 }
             } catch (Exception e) {
                 if (LOG.GT_LOG_TF) {
-                    GT.logt("e:" + e);
+                    logt("e:" + e);
                 }
             }
-            if (LOG.GT_LOG_TF) GT.logt("提交事务 6号");
+            if (LOG.GT_LOG_TF) logt("提交事务 6号");
             stackTopFragmentName = fragmentName;
 
         }
@@ -26231,7 +26608,7 @@ public class GT {
                     case MODE_STANDARD: //默认模式     该启动模式为Android默认启动模式，每当启动一个 fragment 就会在任务栈中创建一个
                     {
                         if (LOG.GT_LOG_TF) {
-                            GT.logt("默认模式");
+                            logt("默认模式");
                         }
                         START_MODE = MODE_STANDARD;//恢复默认模式
                         transaction.addToBackStack(name);//加入到回退栈
@@ -26241,7 +26618,7 @@ public class GT {
                     case MODE_HOME:  //主界面模式   该启动模式不将 Fragment 加入退回栈,一般用于APP首页
                     {
                         if (LOG.GT_LOG_TF) {
-                            GT.logt("主界面模式");
+                            logt("主界面模式");
                         }
                         START_MODE = MODE_STANDARD;//恢复默认模式
 
@@ -26258,7 +26635,7 @@ public class GT {
                     case MODE_SINGLE_TOP: //栈顶模式     该启动模式是在查看任务栈顶和你将要启动的 fragment 是否是同一个 fragment，是一个就直接复用，否则就新创一个实例
                     {
                         if (LOG.GT_LOG_TF) {
-                            GT.logt("栈顶模式");
+                            logt("栈顶模式");
                         }
                         START_MODE = MODE_STANDARD;//恢复默认模式
 
@@ -26274,13 +26651,13 @@ public class GT {
                     case MODE_SINGLE_TASK: //栈内复用模式 该启动模式是在任务栈中看是否有和你一样的 fragment，有则直接把该 fragment 之上的 fragment 全部弹出使之置于栈顶,如果当前即最顶端那就复用。
                     {
                         if (LOG.GT_LOG_TF) {
-                            GT.logt("栈内复用模式");
+                            logt("栈内复用模式");
                         }
                         START_MODE = MODE_STANDARD;//恢复默认模式
 
                         //当前栈中存在 Fragment 且 当前栈顶 Fragment 是当前要打开的 Fragment 就用直接复用
                         if (!isStackTop(fragmentClass)) {
-//                        GT.logt("返回 false");
+//                        logt("返回 false");
                             return false;
                         }
 
@@ -26301,7 +26678,7 @@ public class GT {
                     case MODE_ENTRANCE: {//  入口模式     弹出除栈底外所有 Fragment 再创建一个新的实例。常用于一个程序的入口处
 
                         if (LOG.GT_LOG_TF) {
-                            GT.logt("入口模式");
+                            logt("入口模式");
                         }
                         START_MODE = MODE_STANDARD;//恢复默认模式
 
@@ -26325,7 +26702,7 @@ public class GT {
                 }
             } catch (Exception e) {
                 if (LOG.GT_LOG_TF) {
-                    GT.logt("e:" + e);
+                    logt("e:" + e);
                 }
             }
             return false;
@@ -26347,9 +26724,9 @@ public class GT {
             String name = fragmentClass.getName();
             List<String> stringList = getFragmentFragments();
 
-//            GT.logt("判断是否栈顶");
-//            GT.logt("name:" + name);
-//            GT.logt("stackTopFragmentName:" + stackTopFragmentName);
+//            logt("判断是否栈顶");
+//            Glogt("name:" + name);
+//            logt("stackTopFragmentName:" + stackTopFragmentName);
 
             if (name.equals(stackTopFragmentName)) {//判断不加入回退栈的逻辑
                 operatingFragmentRecord.add(name);//记录 操作的 Fragment 顺序
@@ -26679,9 +27056,9 @@ public class GT {
             listener = new FragmentManager.OnBackStackChangedListener() {
                 @Override
                 public void onBackStackChanged() {
-//                    GT.logt("回退栈出现变动");
-//                    GT.logt("topFragmentName:" + topFragmentName);
-//                    GT.logt("stackTopFragmentName:" + stackTopFragmentName);
+//                    logt("回退栈出现变动");
+//                    logt("topFragmentName:" + topFragmentName);
+//                    logt("stackTopFragmentName:" + stackTopFragmentName);
 
 
                 }
@@ -26901,7 +27278,7 @@ public class GT {
                 }
             } catch (Exception e) {
                 if (LOG.GT_LOG_TF) {
-                    GT.logt("e:" + e);
+                    logt("e:" + e);
                 }
             }
             return this;
@@ -26918,11 +27295,11 @@ public class GT {
                 if (fragmentManager != null) {
                     fragmentManager.popBackStack();//将加入退回栈的最顶层 Fragment 进行退栈操作
                     startTopShow(time);
-//                    GT.logt("1号");
+//                    logt("1号");
                 }
             } catch (Exception e) {
                 if (LOG.GT_LOG_TF) {
-                    GT.logt("e:" + e);
+                    logt("e:" + e);
                 }
             }
             return this;
@@ -26954,12 +27331,12 @@ public class GT {
                 if (fragmentManager != null) {
                     fragmentManager.popBackStack();//将加入退回栈的最顶层 Fragment 进行退栈操作
                     startTopShow(time);
-//                    GT.logt("2号");
+//                    logt("2号");
                 }
 
             } catch (Exception e) {
                 if (LOG.GT_LOG_TF) {
-                    GT.logt("e:" + e);
+                    logt("e:" + e);
                 }
             }
 
@@ -26985,12 +27362,12 @@ public class GT {
                 if (fragmentManager != null) {
                     fragmentManager.popBackStack();//将加入退回栈的最顶层 Fragment 进行退栈操作
                     startTopShow(time);
-//                    GT.logt("3号");
+//                    logt("3号");
                 }
 
             } catch (Exception e) {
                 if (LOG.GT_LOG_TF) {
-                    GT.logt("e:" + e);
+                    logt("e:" + e);
                 }
             }
 
@@ -27023,11 +27400,11 @@ public class GT {
                 if (fragmentManager != null) {
                     fragmentManager.popBackStack();//将加入退回栈的最顶层 Fragment 进行退栈操作
                     startTopShow(time);
-//                    GT.logt("4号");
+//                    logt("4号");
                 }
             } catch (Exception e) {
                 if (LOG.GT_LOG_TF) {
-                    GT.logt("e:" + e);
+                    logt("e:" + e);
                 }
             }
             return this;
@@ -27052,11 +27429,11 @@ public class GT {
                 if (fragmentManager != null) {
                     fragmentManager.popBackStack();//将加入退回栈的最顶层 Fragment 进行退栈操作
                     startTopShow(time);
-//                    GT.logt("5号");
+//                    logt("5号");
                 }
             } catch (Exception e) {
                 if (LOG.GT_LOG_TF) {
-                    GT.logt("e:" + e);
+                    logt("e:" + e);
                 }
             }
             return this;
@@ -27075,11 +27452,11 @@ public class GT {
                 if (fragmentManager != null) {
                     fragmentManager.popBackStackImmediate(fragmentClass.getName(), FragmentManager.POP_BACK_STACK_INCLUSIVE);//将加入退回栈的最顶层 Fragment 进行退栈操作
                     startTopShow(time);
-//                    GT.logt("6号");
+//                    logt("6号");
                 }
             } catch (Exception e) {
                 if (LOG.GT_LOG_TF) {
-                    GT.logt("e:" + e);
+                    logt("e:" + e);
                 }
             }
             return this;
@@ -27097,11 +27474,11 @@ public class GT {
                 if (fragmentManager != null) {
                     fragmentManager.popBackStackImmediate(fragmentName, FragmentManager.POP_BACK_STACK_INCLUSIVE);//将加入退回栈的最顶层 Fragment 进行退栈操作
                     startTopShow(time);
-//                    GT.logt("7号");
+//                    logt("7号");
                 }
             } catch (Exception e) {
                 if (LOG.GT_LOG_TF) {
-                    GT.logt("e:" + e);
+                    logt("e:" + e);
                 }
             }
             return this;
@@ -27124,11 +27501,11 @@ public class GT {
                         fragmentManager.popBackStackImmediate(fragmentClass.getName(), 0);//将加入退回栈的最顶层 Fragment 进行退栈操作
                     }
                     startTopShow(time);
-//                    GT.logt("8号");
+//                    logt("8号");
                 }
             } catch (Exception e) {
                 if (LOG.GT_LOG_TF) {
-                    GT.logt("e:" + e);
+                    logt("e:" + e);
                 }
             }
             return this;
@@ -27151,11 +27528,11 @@ public class GT {
                         fragmentManager.popBackStackImmediate(fragmentName, 0);//将加入退回栈的最顶层 Fragment 进行退栈操作 只关闭自己以上所有的 Fragment
                     }
                     startTopShow(time);
-//                    GT.logt("9号");
+//                    logt("9号");
                 }
             } catch (Exception e) {
                 if (LOG.GT_LOG_TF) {
-                    GT.logt("e:" + e);
+                    logt("e:" + e);
                 }
             }
             return this;
@@ -27183,22 +27560,22 @@ public class GT {
                     try {
                         if (fragmentManager == null) return;
                         List<Fragment> fragments = fragmentManager.getFragments();
-//                        GT.logt("栈内Fragment:" + getGT_Fragment().getStackFragmentSimpleNames());
+//                        logt("栈内Fragment:" + getGT_Fragment().getStackFragmentSimpleNames());
                         if (fragments != null && fragments.size() > 0) {
                             Fragment fragment = fragments.get(fragments.size() - 1);
-//                            GT.logt("启动Fragment:" + fragment.getClass().getSimpleName());
+//                            logt("启动Fragment:" + fragment.getClass().getSimpleName());
 //                            stackTopFragmentName = fragment.getClass().getName();//将上个页面设置到最顶端栈
 
                             //栈顶游标 始终指向 可见的最顶端 Fragment 页面
                             if (operatingFragmentRecord.size() != 0) {
                                 operatingFragmentRecord.remove(operatingFragmentRecord.get(operatingFragmentRecord.size() - 1));
                                 String fragmentStr = operatingFragmentRecord.get(operatingFragmentRecord.size() - 1);
-//                                GT.logt("fragmentStr:" + fragmentStr);
+//                                logt("fragmentStr:" + fragmentStr);
                                 stackTopFragmentName = fragmentStr;
                             }
 
-//                            GT.logt("记录:" + operatingFragmentRecord);
-//                            GT.logt("赋值给最顶端栈：" + stackTopFragmentName);
+//                            logt("记录:" + operatingFragmentRecord);
+//                            logt("赋值给最顶端栈：" + stackTopFragmentName);
                             if (fragment instanceof BaseFragment) {
                                 BaseFragment baseFragment = (BaseFragment) fragment;
                                 Thread.runAndroid(new Runnable() {
@@ -31268,9 +31645,9 @@ public class GT {
              * Uri uri = Uri.parse(url);
              * if ( uri.getScheme().equals("js")) {
              * if (uri.getAuthority().equals("webview")) {
-             * GT.logt("js调用了Android的方法");
+             * logt("js调用了Android的方法");
              * Set<String> collection = uri.getQueryParameterNames();
-             * GT.logt("collection:" + collection);
+             * logt("collection:" + collection);
              * }
              * return true;
              * }
@@ -32465,7 +32842,7 @@ public class GT {
 
                 @Override
                 public void onReceive(Context context, Intent intent) {
-//                    GT.logt("接收到广播:" + intent.getAction());
+//                    logt("接收到广播:" + intent.getAction());
                     onClickView(view, intent);
                 }
             };
@@ -33168,11 +33545,11 @@ public class GT {
                 if ("false".equals(state)) {
                     GT.errs("View 与 ViewMode 自动绑定失败，请手动绑定");
                     if (LOG.GT_LOG_TF) {
-                        GT.logt("classStr:" + classStr);
-                        GT.logt("反射出来的类：" + obj);
-                        GT.logt("被操作的类:" + obj);
-                        GT.logt("自适应返回值类型:" + thisObj);
-                        GT.logt("反射赋值的方法:setBindingData");
+                        logt("classStr:" + classStr);
+                        logt("反射出来的类：" + obj);
+                        logt("被操作的类:" + obj);
+                        logt("自适应返回值类型:" + thisObj);
+                        logt("反射赋值的方法:setBindingData");
                     }
                 }
 
@@ -33210,7 +33587,7 @@ public class GT {
                         view = ((View) mView1).findViewById(viewBean.getViewId());
                     }
 
-//                    GT.logt("view:" + view);
+//                    logt("view:" + view);
                     try {
                         if (mView1 != null && view != null) field.set(bean, view);
                     } catch (Exception e) {
@@ -33283,7 +33660,7 @@ public class GT {
                     String idName = context.getResources().getResourceEntryName(viewGroup.getId());
                     viewBean.setViewName(idName);
                 }
-//                GT.logt("views:" + view + ":" + view.getId());
+//                logt("views:" + view + ":" + view.getId());
                 viewBeanList.put(viewBean.getViewName(), viewBean);
                 for (int index = 0; index < viewGroup.getChildCount(); index++) {
                     analysisLayout(context, viewGroup.getChildAt(index));//回调解析
@@ -35343,11 +35720,11 @@ public class GT {
                     if ("false".equals(state)) {
                         GT.err("ViewMode 与 Model 自动绑定失败，请手动绑定");
                         if (LOG.GT_LOG_TF) {
-                            GT.logt("classStr:" + classStr);
-                            GT.logt("反射出来的类：" + obj);
-                            GT.logt("被操作的类:" + obj);
-                            GT.logt("自适应返回值类型:" + this);
-                            GT.logt("反射赋值的方法:setBindingData");
+                            logt("classStr:" + classStr);
+                            logt("反射出来的类：" + obj);
+                            logt("被操作的类:" + obj);
+                            logt("自适应返回值类型:" + this);
+                            logt("反射赋值的方法:setBindingData");
                         }
                     }
                     bindingModel = obj;
@@ -35798,7 +36175,7 @@ public class GT {
              * @Override protected void getPosition(float xAngle, float yAngle) {
              * super.getPosition(xAngle, yAngle);
              * int mobilePosition = getMobilePosition(xAngle, yAngle);
-             * GT.logt("mobilePosition:" + mobilePosition);
+             * logt("mobilePosition:" + mobilePosition);
              * if(mobilePosition == 3){
              * onClickAdapterListener.onClickAdapter("横屏");
              * }else{
@@ -37070,16 +37447,12 @@ public class GT {
                         hibernate.setTransaction(IsTransaction);
                         //如果用户没有自己设置映射的表那就扫描标注Bean,Entity的类做表
                         if (classes.length == 0) {
-                            classObject = hibernate.
-                                    initSQL(sqlName, sqlVersion, null, ApplicationUtils.getPackageName(getActivity()));
+                            classObject = hibernate.initSQL(sqlName, sqlVersion, null, ApplicationUtils.getPackageName(getActivity()));
                         } else {
-                            classObject = hibernate.
-                                    initSQL(sqlName, sqlVersion, null, classes);
+                            classObject = hibernate.initSQL(sqlName, sqlVersion, null, classes);
                         }
-
                         //存入缓存
                         GT_Cache.putHibernate(sqlName, hibernate);
-
                         //实例注入
                         try {
                             field.setAccessible(true);
@@ -37087,7 +37460,6 @@ public class GT {
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
-
                     }
 
                 }
@@ -37554,11 +37926,11 @@ public class GT {
                                     Method m = view2.getClass().getMethod(listenerSetter, listenerType);//获取方法
                                     m.invoke(view2, object2);//调用方法
                                 } catch (Exception e) {
-//                                    GT.logt("e:" + e);
+//                                    logt("e:" + e);
                                 }
                             }
                         } catch (Exception e) {
-//                            GT.logt("e:" + e);
+//                            logt("e:" + e);
                             e.printStackTrace();
                         }
                     }
@@ -37599,7 +37971,7 @@ public class GT {
                                         Method m = view2.getClass().getMethod(listenerSetter, listenerType);//获取方法
                                         m.invoke(view2, object2);//调用方法
                                     } catch (Exception e) {
-//                                       GT.logt("e:" + e);
+//                                       logt("e:" + e);
                                     }
                                 }
                             } else if (view != null) {
@@ -37609,12 +37981,12 @@ public class GT {
                                         Method m = view2.getClass().getMethod(listenerSetter, listenerType);//获取方法
                                         m.invoke(view2, object2);//调用方法
                                     } catch (Exception e) {
-//                                        GT.logt("e:" + e);
+//                                        logt("e:" + e);
                                     }
                                 }
                             }
                         } catch (Exception e) {
-//                            GT.logt("e:" + e);
+//                            logt("e:" + e);
                             e.printStackTrace();
                         }
                     }
@@ -37821,8 +38193,7 @@ public class GT {
 
         }
 
-        //================================   下面是 Fragment 的注解内容   ==========================
-
+        //================================   下面是其他注解内容   ==========================
 
         /**
          * 注入 ContextView
@@ -38301,16 +38672,16 @@ public class GT {
                     GT_Socket.TCP tcp = null;
 
                     tcp = GT_Cache.getSocketTCP(iP + port);
-//                    GT.logt("缓存TCP:" + tcp);
+//                    logt("缓存TCP:" + tcp);
 
                     if (tcp == null && activity != null) {
                         //获取注解的值
                         GT_Socket.isLog = initBuild.isLog();
                         if (iP == null || "null".equals(iP)) {
-//                            GT.logt("创建服务器");
+//                            logt("创建服务器");
                             tcp = new GT_Socket.TCP(port);
                         } else {
-//                            GT.logt("创建客户端");
+//                            logt("创建客户端");
                             tcp = new GT_Socket.TCP(iP, port);
                         }
                         GT_Cache.putSocketTCP(iP + port, tcp);
@@ -38897,6 +39268,7 @@ public class GT {
             return annotationAssist;
         }
 
+        //================================   下面是 注解工具方法   ==========================
 
         public AnnotationAssist() {
         }
@@ -39075,31 +39447,31 @@ public class GT {
          */
         public static <T> T setReflectMethodValue(Object setObj, String setMethodName, Class<T> returnType, Class<?> setValueTypeClass, Object... setValue) {
 
-//            GT.logt("进入反射:" + setObj);
-//            GT.logt("被调用的方法名:" + setMethodName);
-//            GT.logt("设置值的类型:" + setValueTypeClass);
+//            logt("进入反射:" + setObj);
+//            logt("被调用的方法名:" + setMethodName);
+//            logt("设置值的类型:" + setValueTypeClass);
 
             Method m = null;
             try {
                 m = setObj.getClass().getMethod(setMethodName, setValueTypeClass);
                 m.setAccessible(true);
-//                GT.logt("被设置操作的类:" + setObj);
-//                GT.logt("设置的值:" + setValue);
+//                logt("被设置操作的类:" + setObj);
+//                logt("设置的值:" + setValue);
                 T invoke = (T) m.invoke(setObj, setValue);//调用方法
-//                GT.logt("该方法返回值的类型:" + returnType);
+//                logt("该方法返回值的类型:" + returnType);
                 if (returnType != null) {
-//                    GT.logt("进入 if");
+//                    logt("进入 if");
                     return invoke;
                 } else {
-//                    GT.logt("进入 else");
+//                    logt("进入 else");
                     return (T) "true";
                 }
             } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
-//                GT.logt("e:" + e);
+//                logt("e:" + e);
                 e.printStackTrace();
             }
 
-//            GT.logt("进入异常返回处理:" + returnType);
+//            logt("进入异常返回处理:" + returnType);
             if (returnType != null) {
                 return null;
             } else {
@@ -39460,6 +39832,33 @@ public class GT {
                 Field file = obj.getClass().getDeclaredField(reflectVariableName); // 通过反射获取mMessageView对象，这是类中的成员变量名
                 file.setAccessible(true); //私有变量需要使用此方法
                 T t = (T) file.get(obj); // 获取textView实例，mBootMsgDialog为具体实例
+                return t;
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            return null;
+        }
+
+        /**
+         * ContentValues 转 实体类
+         *
+         * @param contentValues
+         * @param tClass
+         * @param <T>
+         * @return
+         */
+        public static <T> T contentValuesToObject(ContentValues contentValues, Class<T> tClass) {
+            try {
+                T t = tClass.newInstance();
+                Field[] fields = tClass.getDeclaredFields();
+                for (Field field : fields) {
+                    String valueName = field.getName();
+                    field.setAccessible(true);
+                    Object obj = contentValues.get(valueName);
+                    if (obj != null) {
+                        field.set(t, obj);
+                    }
+                }
                 return t;
             } catch (Exception e) {
                 e.printStackTrace();
@@ -40426,7 +40825,7 @@ public class GT {
         void onListener(T... obj);
     }
 
-//=========================================== GT 大满贯 =========================================
+//=========================================== GT 桶 =========================================
 
     public static class GTApplication extends Application {
 
@@ -40589,7 +40988,7 @@ public class GT {
                     startActivityForResult(intentVideo, CODE_VIDEO);//开启摄像机
                     break;
                 default:
-                    GT.logt("非法参数！");
+                    logt("非法参数！");
                     GT.EventBus.posts(new Intent(), feedBack);
                     GT.EventBus.posts(Uri.parse(""), feedBack);
                     GT.EventBus.posts(Bitmap.createBitmap(1, 1, Bitmap.Config.ALPHA_8), feedBack);
@@ -40621,10 +41020,10 @@ public class GT {
         @Override
         protected void onActivityResult(int requestCode, int resultCode, Intent intent) {
             super.onActivityResult(requestCode, resultCode, intent);
-        /*    GT.logt("requestCode:" + requestCode);
-            GT.logt("resultCode:" + resultCode);
-            GT.logt("RESULT_OK:" + RESULT_OK);
-            GT.logt("intent:" + intent);*/
+        /*    logt("requestCode:" + requestCode);
+            logt("resultCode:" + resultCode);
+            logt("RESULT_OK:" + RESULT_OK);
+            logt("intent:" + intent);*/
 
             if (intent == null) {
                 intent = new Intent();
@@ -40661,7 +41060,7 @@ public class GT {
                     }
                     break;
                 default:
-                    GT.logt("非法参数！");
+                    logt("非法参数！");
                     finish();
                     break;
             }
@@ -40692,7 +41091,7 @@ public class GT {
                     GT_WebView.BaseWebView.initShowFileChoosers(uri, this);
                     break;
                 default:
-                    GT.logt("非法参数！");
+                    logt("非法参数！");
                     break;
             }
 
