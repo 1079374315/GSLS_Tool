@@ -326,7 +326,7 @@ import dalvik.system.PathClassLoader;
  * GSLS_Tool
  * <p>
  * <p>
- * 更新时间:2023.4.22
+ * 更新时间:2023.4.23
  * 更新内容 v1.4.2.8 版本：大爆料：数据库Hibernate 新增索引功能
  * CSDN 博客/官网教程:https://blog.csdn.net/qq_39799899
  * GitHub https://github.com/1079374315/GT
@@ -341,11 +341,7 @@ import dalvik.system.PathClassLoader;
  * 2.优化日志 调用方法
  * 3.优化 GT_WebView googleplay 报错 onReceivedSslError 的问题
  * 4.优化 使用串口工具 SerialPortUtils 时，缺少 libserial_port.so 文件的问题
- * 5.
- * 6.
- * 7.
- * 8.
- * 9.
+ * 5.遗弃的方法 readWritePermission()
  * <p>
  * <p>
  * 小提示：(用于 AndroidStudio )
@@ -23797,34 +23793,6 @@ public class GT {
      * APP 权限管理 类
      */
     public static final class AppAuthorityManagement {
-
-        //下面是权限简易申请
-
-        //android6.0之后要动态获取权限 读写权限
-        public static void readWritePermission(Activity activity) {
-            final int REQUEST_EXTERNAL_STORAGE = 1;
-            String[] PERMISSIONS_STORAGE = {
-                    Manifest.permission.READ_EXTERNAL_STORAGE,
-                    Manifest.permission.WRITE_EXTERNAL_STORAGE};
-
-            try {
-                //检测是否有写的权限
-                int permission = ActivityCompat.checkSelfPermission(activity,
-                        "android.permission.WRITE_EXTERNAL_STORAGE");
-                if (permission != PackageManager.PERMISSION_GRANTED) {
-                    if (LOG.isGtLogTf()) {
-                        err(getLineInfo(1), "读写获取权限失败");
-                    }
-                    // 没有写的权限，去申请写的权限，会弹出对话框
-                    ActivityCompat.requestPermissions(activity, PERMISSIONS_STORAGE, REQUEST_EXTERNAL_STORAGE);
-                }
-            } catch (Exception e) {
-                if (LOG.isGtLogTf()) {
-                    err(getLineInfo(1), "读写获取权限报错");
-                }
-                e.printStackTrace();
-            }
-        }
 
         /**
          * @功能：申请白名单 需要添加权限：<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
