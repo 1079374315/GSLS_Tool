@@ -331,7 +331,7 @@ import dalvik.system.PathClassLoader;
  * CSDN 博客/官网教程:https://blog.csdn.net/qq_39799899
  * GitHub https://github.com/1079374315/GT
  * 更新内容如下：
- * 1.优化 Hibernate 数据库
+ * 1.优化 Hibernate 数据库（具体使用教程请参考：https://blog.csdn.net/qq_39799899/article/details/105935756?spm=1001.2014.3001.5502）
  * (1)新增索引功能：单列索引、组合索引、唯一索引
  * (2)新增 数据库Hibernate 使用 接口的方式调用管理数据库API
  * (3)将数据库注解 @GT.Hibernate.GT_Property 改为了 @GT.Hibernate.GT_Column
@@ -5096,8 +5096,8 @@ public class GT {
             String GENERAL_INDEX = "CREATE INDEX index_name ON tableName (column);";//单列索引或组合索引
             String UNIQUE_INDEX = "CREATE UNIQUE INDEX index_name on tableName (column);";//唯一索引
             String DEFAULT_INDEX = "UNIQUE NOT NULL";//默认索引
-
-            String setIndex() default DEFAULT_INDEX; //索引信息
+            
+            String setIndex() default ""; //索引信息
 
         }
 
