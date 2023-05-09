@@ -194,6 +194,9 @@ import androidx.fragment.app.FragmentActivity;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
 import androidx.lifecycle.ViewModel;
+import androidx.lifecycle.ViewModelProvider;
+import androidx.lifecycle.ViewModelStore;
+import androidx.lifecycle.ViewModelStoreOwner;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.recyclerview.widget.StaggeredGridLayoutManager;
@@ -512,7 +515,7 @@ public class GT {
     public static void logt(Object mg, int lineInfoIndex, String... tag) {
         if (LOG.LOG_TF) {
             String prefix = "";
-            if (lineInfoIndex >= 0) {
+            if (lineInfoIndex <= 0) {
                 prefix = LOG.getPrefixT(LOG.lineInfoIndex);
             } else {
                 prefix = LOG.getPrefixT(lineInfoIndex);
@@ -1794,8 +1797,8 @@ public class GT {
     public static class EventBus {
 
         /**
-         * TODO 注意:在自定义 evenKey 时请不要写入 "_GT_" 字符,该字符为关键字
-         * TODO 彩蛋 发布事件后可接收到订阅者返回值,但如果订阅者与发布者不在同一线程中或发布的事件中有两个订阅者,将无法在发布事件的线程接收到订阅者的返回值
+         * 注意:在自定义 evenKey 时请不要写入 "_GT_" 字符,该字符为关键字
+         * 彩蛋 发布事件后可接收到订阅者返回值,但如果订阅者与发布者不在同一线程中或发布的事件中有两个订阅者,将无法在发布事件的线程接收到订阅者的返回值
          * 发布事件 方式一:纯 eventData
          * 将该事件发布到整个 订阅者管理器
          * <p>
@@ -1843,7 +1846,7 @@ public class GT {
 
         /**
          * 发布事件
-         * TODO 注意:在自定义 evenKey 时请不要写入 "_GT_" 字符,该字符为关键字
+         * 注意:在自定义 evenKey 时请不要写入 "_GT_" 字符,该字符为关键字
          *
          * @param <T>       返回类型 (发布事件后可接收到订阅者返回值,但如果订阅者与发布者不在同一线程中或发布的事件中有两个订阅者,将无法在发布事件的线程接收到订阅者的返回值)
          * @param eventData 发布的事件 (参数仅支持一个,若需要传多参数可传递 Bundle,List,Map,实体类Bean等等)
@@ -1856,7 +1859,7 @@ public class GT {
 
         /**
          * 发布粘性事件
-         * TODO 注意:在自定义 evenKey 时请不要写入 "_GT_" 字符,该字符为关键字
+         * 注意:在自定义 evenKey 时请不要写入 "_GT_" 字符,该字符为关键字
          *
          * @param <T>       返回类型 (发布事件后可接收到订阅者返回值,但如果订阅者与发布者不在同一线程中或发布的事件中有两个订阅者,将无法在发布事件的线程接收到订阅者的返回值)
          * @param eventData 发布的事件 (参数仅支持一个,若需要传多参数可传递 Bundle,List,Map,实体类Bean等等)
@@ -1869,7 +1872,7 @@ public class GT {
 
         /**
          * 发布跨进程 事件
-         * TODO 注意:在自定义 evenKey 时请不要写入 "_GT_" 字符,该字符为关键字
+         * 注意:在自定义 evenKey 时请不要写入 "_GT_" 字符,该字符为关键字
          *
          * @param 无法返回数据
          * @param eventData 发布的事件 (参数仅支持一个的基本类型)
@@ -2265,7 +2268,7 @@ public class GT {
 
         /**
          * 发布事件
-         * TODO 注意:在自定义 evenKey 时请不要写入 "_GT_" 字符,该字符为关键字
+         * 注意:在自定义 evenKey 时请不要写入 "_GT_" 字符,该字符为关键字
          *
          * @param <T>       返回类型 (发布事件后可接收到订阅者返回值,但如果订阅者与发布者不在同一线程中或发布的事件中有两个订阅者,将无法在发布事件的线程接收到订阅者的返回值)
          * @param eventData 发布的事件 (参数仅支持一个,若需要传多参数可传递 Bundle,List,Map,实体类Bean等等)
@@ -2395,7 +2398,7 @@ public class GT {
 
         /**
          * 发布粘性事件
-         * TODO 注意:在自定义 evenKey 时请不要写入 "_GT_" 字符,该字符为关键字
+         * 注意:在自定义 evenKey 时请不要写入 "_GT_" 字符,该字符为关键字
          *
          * @param <T>       返回类型 (发布事件后可接收到订阅者返回值,但如果订阅者与发布者不在同一线程中或发布的事件中有两个订阅者,将无法在发布事件的线程接收到订阅者的返回值)
          * @param eventData 发布的事件 (参数仅支持一个,若需要传多参数可传递 Bundle,List,Map,实体类Bean等等)
@@ -2932,7 +2935,7 @@ public class GT {
             public EventBusService() {
             }
 
-            //TODO 返回server_messager的代理人，便于客户端获取服务端信使
+            // 返回server_messager的代理人，便于客户端获取服务端信使
             @Override
             public IBinder onBind(Intent intent) {
                 return new Messenger(new Handler(Looper.myLooper()) {
@@ -4939,7 +4942,7 @@ public class GT {
 
     /**
      * @Hibernate SQL
-     * TODO 注意：SQL好像可以直接"增加列"与"修改列名"，且不会导致数据丢失
+     * 注意：SQL好像可以直接"增加列"与"修改列名"，且不会导致数据丢失
      * hibernate.sqLiteDatabase2.execSQL("ALTER TABLE 表名 ADD COLUMN 新增加的列名 int");//测试成功
      * hibernate.sqLiteDatabase2.execSQL("ALTER TABLE 表名 RENAME COLUMN 旧表名 TO 新表名");//测试成功
      */
@@ -5023,7 +5026,7 @@ public class GT {
 
             Class<?>[] setSqlTables() default {};//数据库默认加载的数据库,如果设置了映射的表那就不再扫描bean与entity标注的类
 
-            boolean setIsThread() default false;//是否使用线程创建数据库：TODO 注意，如果在线程中创建数据库就不能直接创建就引用数据库对象，需要触发使用
+            boolean setIsThread() default false;//是否使用线程创建数据库： 注意，如果在线程中创建数据库就不能直接创建就引用数据库对象，需要触发使用
 
             String setPassWord() default Hibernate.DATABASE_PASSWORD;//默认的数据库加密密码
 
@@ -5096,7 +5099,7 @@ public class GT {
             String GENERAL_INDEX = "CREATE INDEX index_name ON tableName (column);";//单列索引或组合索引
             String UNIQUE_INDEX = "CREATE UNIQUE INDEX index_name on tableName (column);";//唯一索引
             String DEFAULT_INDEX = "UNIQUE NOT NULL";//默认索引
-            
+
             String setIndex() default ""; //索引信息
 
         }
@@ -5292,7 +5295,7 @@ public class GT {
                 createSQL(sqLiteDatabase);
             }
 
-            private void createSQL(SQLiteDatabase sqLiteDatabase){
+            private void createSQL(SQLiteDatabase sqLiteDatabase) {
                 scanTable(SCAN_TABLE); //设置创建或更新升级的数据库表
                 sqLiteDatabase2 = sqLiteDatabase;
                 //如果设置了 独自的 SQL 语句代码就用单独设置的
@@ -6845,7 +6848,7 @@ public class GT {
 
                     //存储实体类
                     else {
-                        //TODO 装换实体类需要用规则的创建，构造、set、get、toString、都有才行
+                        // 装换实体类需要用规则的创建，构造、set、get、toString、都有才行
                         String jsonStr = JSON.toJson2(val);//将 bean 转为 json
                         //如果现有的JSON解析无效，那就使用更高级的JSON进行解析
 //                        if (val != null && jsonStr == null || "null".equals(jsonStr) || jsonStr.length() == 0) {
@@ -9580,7 +9583,7 @@ public class GT {
                     String[] checkValuesLength = gt_Key.setCheckValues();    //获取限定数据，仅String字段使用
                     double max = gt_Key.setMax();                  //最大值
                     double min = gt_Key.setMin();                  //最小值
-                    if (checkValuesLength.length != 0) {//TODO 男女的还不行,如果是这种就完犊子了 (你，我，他，其他)
+                    if (checkValuesLength.length != 0) {// 男女的还不行,如果是这种就完犊子了 (你，我，他，其他)
                         fieldPropertyCode = " CHECK(";
                         //遍历添加限制值
                         for (int i = 0; i < checkValuesLength.length; i++) {
@@ -12177,6 +12180,44 @@ public class GT {
      */
     public static class GT_Cache {
 
+        private volatile static Map<Class<ViewModel>, ViewModel> vewiModelMap = new HashMap<>();//HttpCall 存储缓存
+
+        public static void addViewModel(Class<ViewModel> viewModelClass, ViewModel viewModel) {
+            /*Set<Class<ViewModel>> key = vewiModelMap.keySet();
+            if (!key.contains(viewModelClass)) {
+                vewiModelMap.put(viewModelClass, viewModel);
+            }*/
+        }
+
+        public static ViewModel getViewModel(Class<ViewModel> viewModelClass) {
+            return vewiModelMap.get(viewModelClass);
+        }
+
+        public static void updateViewModel(Class<ViewModel> viewModelClass, ViewModel viewModel) {
+            Set<Class<ViewModel>> key = vewiModelMap.keySet();
+            if (key.contains(viewModelClass)) {
+                vewiModelMap.put(viewModelClass, viewModel);
+            }
+        }
+
+        public static void deleteViewModel(Class<ViewModel> viewModelClass) {
+            Set<Class<ViewModel>> key = vewiModelMap.keySet();
+            if (key.contains(viewModelClass)) {
+                vewiModelMap.remove(viewModelClass);
+            }
+        }
+
+        public static void emptyViewModel() {
+            Set<Class<ViewModel>> key = vewiModelMap.keySet();
+            for (Class<ViewModel> classz : key) {
+                ViewModel viewModel = vewiModelMap.get(classz);
+                viewModel = null;
+                vewiModelMap.remove(viewModel);
+            }
+            vewiModelMap.clear();
+        }
+
+
         private static Context context;
         private static SoftReference softReference;
 
@@ -12577,7 +12618,7 @@ public class GT {
 
     /**
      * JSON 接口解析 json 与 Bean 互转
-     * TODO 装换实体类需要用规则的创建，构造、set、get、toString、都有才行
+     * 装换实体类需要用规则的创建，构造、set、get、toString、都有才行
      */
     public static class JSON {
 
@@ -12594,7 +12635,7 @@ public class GT {
 
         /**
          * 将对象转换成Json字符串
-         * TODO 装换实体类需要用规则的创建，构造、set、get、toString、都有才行
+         * 装换实体类需要用规则的创建，构造、set、get、toString、都有才行
          *
          * @param obj
          * @return json类型字符串
@@ -21680,7 +21721,7 @@ public class GT {
 
                 if (!file.exists()) return null;
 
-                //TODO 检测到文件太大，就需要做压缩处理
+                // 检测到文件太大，就需要做压缩处理
                 Bitmap bitmap = BitmapFactory.decodeStream(new FileInputStream(file));
                 return bitmap;
             } catch (Exception e) {
@@ -21698,7 +21739,7 @@ public class GT {
             if (file == null) return null;
             try {
                 if (!file.exists()) return null;
-                //TODO 检测到文件太大，就需要做压缩处理
+                // 检测到文件太大，就需要做压缩处理
                 Bitmap bitmap = BitmapFactory.decodeStream(new FileInputStream(file));
                 return bitmap;
             } catch (Exception e) {
@@ -25777,6 +25818,30 @@ public class GT {
                 super.onDestroy();
                 Runtime.getRuntime().gc();
             }
+
+            public boolean onKeyDown(int keyCode, KeyEvent event) {
+                if (gt_fragment != null) {
+                    List<String> fragmentFragments = gt_fragment.getFragmentFragments();
+                    List<Fragment> stackFragments = gt_fragment.getStackFragments();
+                    for (Fragment fragment : stackFragments) {
+                        //如果当前 不是 退出黑名单中的 那就进行返回退出
+                        if (!GT_Fragment.backFragmentList.contains(fragment.getClass().getName())) {
+                            return super.onKeyDown(keyCode, event);
+                        }
+
+                    }
+                }
+                //TODO 有问题，需要处理返回事件，不然无法正常退出
+                return true;
+            }
+
+            public void addNotBack(Class<?> classz) {
+                String fragmentName = classz.getName();
+                if (!GT_Fragment.backFragmentList.contains(fragmentName)) {
+                    GT_Fragment.backFragmentList.add(fragmentName);
+                }
+            }
+
         }
 
         /**
@@ -25919,6 +25984,7 @@ public class GT {
         //===================================================== GT_Fragment 成员变量 ====================================
 
         private static GT_Fragment gt_fragment = new GT_Fragment();//GT_Fragment 实例化
+        private static List<String> backFragmentList = new ArrayList<>();//添加拦截返回键的页面
         private static FragmentManager fragmentManager; //Fragment 管理器
         private static int homeFragmentId = 0;//Home首页页面FragmentID
         private static int mainFragmentId = 0;//Main主页面FragmentID
@@ -25952,6 +26018,18 @@ public class GT {
 
         public static void setGt_fragment(GT_Fragment gt_fragment) {
             GT_Fragment.gt_fragment = gt_fragment;
+        }
+
+        /**
+         * 添加 Fragment 回退栈黑名单
+         *
+         * @param fragment
+         */
+        public static void addNotBack(Class<?> classz) {
+            String fragmentName = classz.getName();
+            if (!backFragmentList.contains(fragmentName)) {
+                backFragmentList.add(fragmentName);
+            }
         }
 
         /**
@@ -26133,7 +26211,7 @@ public class GT {
 //                            transaction.hide(fragmentByTag);//真实隐藏
                             if (fragmentByTag instanceof BaseFragment) {
                                 BaseFragment baseFragment = (BaseFragment) fragmentByTag;
-                                baseFragment.hide();//调用隐藏api通知
+                                baseFragment.hide();//调用隐藏api通知 1
                             } else {
                                 fragmentByTag.onStop();
                             }
@@ -26171,7 +26249,7 @@ public class GT {
 //                            transaction.hide(fragmentByTag);//真实隐藏
                             if (fragmentByTag instanceof BaseFragment) {
                                 BaseFragment baseFragment = (BaseFragment) fragmentByTag;
-                                baseFragment.hide();//调用隐藏api通知
+                                baseFragment.hide();//调用隐藏api通知 2
                             } else {
                                 fragmentByTag.onStop();
                             }
@@ -26225,7 +26303,7 @@ public class GT {
                                 transaction.hide(fragmentByTag);//真实隐藏
                                 if (fragmentByTag instanceof BaseFragment) {
                                     BaseFragment baseFragment = (BaseFragment) fragmentByTag;
-                                    baseFragment.hide();//调用隐藏api通知
+                                    baseFragment.hide();//调用隐藏api通知 3
                                 } else {
                                     fragmentByTag.onStop();
                                 }
@@ -26267,6 +26345,7 @@ public class GT {
                                     stackFragment.onStart();//调用显示告知开发者
                                 }
 
+                                //下面的就是再循环一遍 Fragment 进行隐藏
                                 GT.Thread.getInstance(0).execute(new Runnable() {
                                     @Override
                                     public void run() {
@@ -26288,9 +26367,11 @@ public class GT {
                                                             logt("准备隐藏的Fragment:" + fragmentByTag1);
                                                         }
                                                         transaction.hide(fragmentByTag1);//真实隐藏
+
+                                                        //循环 隐藏所有页面
                                                         if (fragmentByTag1 instanceof BaseFragment) {
                                                             BaseFragment baseFragment = (BaseFragment) fragmentByTag1;
-                                                            baseFragment.hide();//调用隐藏api通知
+//                                                            baseFragment.hide();//调用隐藏api通知 4
                                                         } else {
                                                             fragmentByTag1.onStop();
                                                         }
@@ -26585,6 +26666,11 @@ public class GT {
 
                     case MODE_HOME:  //主界面模式   该启动模式不将 Fragment 加入退回栈,一般用于APP首页
                     {
+                        //将主界面的所有页面都加入 回退栈 黑名单当中
+                        if (!backFragmentList.contains(name)) {
+                            backFragmentList.add(name);
+                        }
+
                         if (LOG.GT_LOG_TF) {
                             logt("主界面模式");
                         }
@@ -26595,7 +26681,7 @@ public class GT {
                         }
 
                         if (SWITCHING_MODE == ACTIVITY) {//如果当前切换的方法是 Activity 那就需要加入回退栈，不给与Activity切换模式 Home 启动模式
-//                        transaction.addToBackStack(name);//TODO Home 始终指向首页,故不加入回退栈  加入到回退栈 是否需要加入回退栈，待定
+//                        transaction.addToBackStack(name);// Home 始终指向首页,故不加入回退栈  加入到回退栈 是否需要加入回退栈，待定
                         }
                         return true;
                     }
@@ -27117,6 +27203,7 @@ public class GT {
          * @return
          */
         public <T> GT_Fragment startFragmentHome(Class<T> fragmentClass) {
+            switchingMode(GT.GT_Fragment.DIALOG);
 
             //设置本次 Fragment 的启动模式
             startMode(MODE_HOME);
@@ -27126,6 +27213,9 @@ public class GT {
             if (modeManagement(transaction, fragmentClass)) {
                 fragmentSwitchingModeManagement(homeFragmentId, transaction, null, fragmentClass);
             }
+
+            startMode(GT.GT_Fragment.MODE_SINGLE_TOP);
+            switchingMode(GT.GT_Fragment.ACTIVITY);
             return this;
         }
 
@@ -27814,11 +27904,14 @@ public class GT {
             }
 
             /**
-             * @param toFragment
-             * @跳转 Fragment
+             * @param toFragment   //跳转
+             * @param isAddNotBack //是否加入 回退栈 黑名单
              */
-            public void startFragment(Class<?> toFragment) {
+            public void startFragment(Class<?> toFragment, boolean... isAddNotBack) {
                 if (GT_Fragment.gt_fragment != null) {
+                    if (isAddNotBack != null && isAddNotBack.length > 0 && isAddNotBack[0]) {
+                        addNotBack(toFragment);
+                    }
                     GT_Fragment.gt_fragment.startFragment(toFragment);
                 }
             }
@@ -28175,6 +28268,13 @@ public class GT {
 
             }
 
+            public void addNotBack(Class<?> classz) {
+                String fragmentName = classz.getName();
+                if (!GT_Fragment.backFragmentList.contains(fragmentName)) {
+                    GT_Fragment.backFragmentList.add(fragmentName);
+                }
+            }
+
         }
 
         /**
@@ -28261,7 +28361,6 @@ public class GT {
             }
 
         }
-
 
     }
 
@@ -28745,6 +28844,20 @@ public class GT {
             public void onViewModeFeedback(Object... obj) {
 
             }
+
+            @NonNull
+            @Override
+            public ViewModelStore getViewModelStore() {
+                return super.getViewModelStore();
+            }
+
+            /**
+             * @NonNull
+             * @Override public ViewModelStore getViewModelStore() {
+             * return null;
+             * }
+             */
+
 
             public Activity activity;
             public GT_Fragment gt_fragment;
@@ -29327,6 +29440,14 @@ public class GT {
                 super.onDestroy();
                 Runtime.getRuntime().gc();
             }
+
+            public void addNotBack(Class<?> classz) {
+                String fragmentName = classz.getName();
+                if (!GT_Fragment.backFragmentList.contains(fragmentName)) {
+                    GT_Fragment.backFragmentList.add(fragmentName);
+                }
+            }
+
         }
 
         /**
@@ -29383,6 +29504,7 @@ public class GT {
 
         }
 
+
     }
 
     /**
@@ -29416,7 +29538,12 @@ public class GT {
 
             public View getView(int position, View convertView, ViewGroup parent) {
                 this.position = position;
-                View layout = LayoutInflater.from(getContext()).inflate(loadLayout(), parent, false);
+                View layout = null;
+                if (convertView == null) {
+                    layout = LayoutInflater.from(getContext()).inflate(loadLayout(), parent, false);
+                } else {
+                    layout = convertView;
+                }
                 initView(layout, getItem(position));
                 initView(layout, getItem(position), convertView, parent);
                 return layout;
@@ -29958,7 +30085,7 @@ public class GT {
     public static class GT_FloatingWindow implements SaveObject.SaveBean {
 
         /**
-         * TODO 必看事项
+         * 必看事项
          * 悬浮窗需要注意以下问题：
          * 1.申请悬浮窗权限：
          * <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
@@ -29988,6 +30115,12 @@ public class GT {
             @Override
             public void onViewModeFeedback(Object... obj) {
 
+            }
+
+            @NonNull
+            @Override
+            public ViewModelStore getViewModelStore() {
+                return new ViewModelStore();
             }
 
             public Context context;                           //上下活动
@@ -30211,7 +30344,7 @@ public class GT {
             }
 
             /**
-             * TODO 注意：用户在xml布局中用“比重的方式”设置宽高可能会出现问题，
+             * 注意：用户在xml布局中用“比重的方式”设置宽高可能会出现问题，
              * 如果使用悬浮窗自适应设置窗口大小的就不用担心bug问题
              * 推荐使用 以下方式来设置宽高
              * android:layout_width="300dp"
@@ -30470,6 +30603,13 @@ public class GT {
                 }
             }
 
+            public void addNotBack(Class<?> classz) {
+                String fragmentName = classz.getName();
+                if (!GT_Fragment.backFragmentList.contains(fragmentName)) {
+                    GT_Fragment.backFragmentList.add(fragmentName);
+                }
+            }
+
         }
 
         /**
@@ -30545,6 +30685,12 @@ public class GT {
             @Override
             public void onViewModeFeedback(Object... obj) {
 
+            }
+
+            @NonNull
+            @Override
+            public ViewModelStore getViewModelStore() {
+                return new ViewModelStore();
             }
 
             private PopupWindow popWindow;
@@ -30700,6 +30846,13 @@ public class GT {
                 Runtime.getRuntime().gc();
             }
 
+            public void addNotBack(Class<?> classz) {
+                String fragmentName = classz.getName();
+                if (!GT_Fragment.backFragmentList.contains(fragmentName)) {
+                    GT_Fragment.backFragmentList.add(fragmentName);
+                }
+            }
+
         }
 
         //封装第二代 PopupWindow
@@ -30780,6 +30933,12 @@ public class GT {
             @Override
             public void onViewModeFeedback(Object... obj) {
 
+            }
+
+            @NonNull
+            @Override
+            public ViewModelStore getViewModelStore() {
+                return new ViewModelStore();
             }
 
             private View view;
@@ -30877,6 +31036,13 @@ public class GT {
                     Runtime.getRuntime().gc();
                 } catch (Exception e) {
 
+                }
+            }
+
+            public void addNotBack(Class<?> classz) {
+                String fragmentName = classz.getName();
+                if (!GT_Fragment.backFragmentList.contains(fragmentName)) {
+                    GT_Fragment.backFragmentList.add(fragmentName);
                 }
             }
 
@@ -30995,6 +31161,12 @@ public class GT {
             @Override
             public void onViewModeFeedback(Object... obj) {
 
+            }
+
+            @NonNull
+            @Override
+            public ViewModelStore getViewModelStore() {
+                return new ViewModelStore();
             }
 
             public Context context;
@@ -32363,6 +32535,11 @@ public class GT {
 
             }
 
+            @Override
+            public ViewModelStore getViewModelStore() {
+                return new ViewModelStore();
+            }
+
             private Object tag;
             protected int layout1;
             protected int layout2;
@@ -32642,7 +32819,6 @@ public class GT {
                             remoteViews1 = new RemoteViews(context.getPackageName(), layout1);
                             remoteViews2 = new RemoteViews(context.getPackageName(), layout2);
 
-                            //TODO 还需要做恢复UI的操作
                             for (int id : mapUIImage.keySet()) {
                                 Object resObj = mapUIImage.get(id);
                                 if (resObj instanceof Integer) {
@@ -33492,38 +33668,64 @@ public class GT {
         public static <T> T dataBinding(Object thisObj) {
             if (thisObj == null) return null;
             T obj = null;
+
             try {
-                //如果没有手动设置Model 那就从ViewModel类中智能取泛型model
-                Type[] actualTypeArguments = AnnotationAssist.getClassGenericType(thisObj);
-                if (actualTypeArguments == null || actualTypeArguments.length == 0) return null;
-                Type actualTypeArgument = actualTypeArguments[actualTypeArguments.length - 1];
-
-                String classStr = actualTypeArgument.toString();
-
-                if (classStr.indexOf("<") != -1) {
-                    classStr = classStr.substring(0, classStr.indexOf("<"));
-                }
-
-                //根据 class 反射出实体类
-                obj = (T) new AnnotationAssist().classToObject(classStr);
-
-                //将当前的 ViewModel 设置进入 Model中
-                Object state = AnnotationAssist.setReflectMethodValue(obj, "setBindingData", String.class, Object.class, thisObj);
-
-                if ("false".equals(state)) {
-                    GT.errs("View 与 ViewMode 自动绑定失败，请手动绑定");
-                    if (LOG.GT_LOG_TF) {
-                        logt("classStr:" + classStr);
-                        logt("反射出来的类：" + obj);
-                        logt("被操作的类:" + obj);
-                        logt("自适应返回值类型:" + thisObj);
-                        logt("反射赋值的方法:setBindingData");
+                boolean isCache = false;
+                Class<ViewModel> classStr = (Class<ViewModel>) AnnotationAssist.getGenericityClass(thisObj);
+                if (classStr != null) {
+                    ViewModel viewModel = GT_Cache.getViewModel(classStr);
+                    if (viewModel != null && viewModel instanceof ViewModel) {
+                        obj = (T) viewModel;
+                        isCache = true;
                     }
                 }
 
+                if (obj == null) {
+                    //如果没有手动设置Model 那就从ViewModel类中智能取泛型model
+                    if (classStr != null && thisObj instanceof ViewModelStoreOwner) {
+                        ViewModelStoreOwner viewModelStoreOwner = (ViewModelStoreOwner) thisObj;
+                        try {
+                            obj = (T) new ViewModelProvider(viewModelStoreOwner).get(classStr);
+                        } catch (Exception e) {
+                            obj = (T) new AnnotationAssist().getGenericityObject(thisObj);
+                        }
+                    } else {
+                        obj = (T) new AnnotationAssist().getGenericityObject(thisObj);
+                    }
+
+                    if (obj != null && obj instanceof ViewModel) {
+                        GT_Cache.addViewModel(classStr, (ViewModel) obj);
+                    }
+                }
+
+                if (!isCache) {//如果不是缓存，那就调用初始化方法
+                    //关联 onViewModeFeedback 方法触发
+                    Object state = AnnotationAssist.setReflectMethodValue(obj, "setBindingData", String.class, Object.class, thisObj);
+                    if ("false".equals(state)) {
+                        GT.errs("View 与 ViewMode 自动绑定失败，请手动绑定");
+                        if (LOG.GT_LOG_TF) {
+                            logt("反射出来的类：" + obj);
+                            logt("被操作的类:" + obj);
+                            logt("自适应返回值类型:" + thisObj);
+                            logt("反射赋值的方法");
+                        }
+                    }
+                } else {//如果是缓存，那就仅仅加载 bindingView
+                    Object state = AnnotationAssist.setReflectMethodValue(obj, "loadBindingView", String.class, Object.class, thisObj);
+                    if ("false".equals(state)) {
+                        GT.errs("View 与 ViewMode 自动绑定失败，请手动绑定");
+                        if (LOG.GT_LOG_TF) {
+                            logt("反射出来的类：" + obj);
+                            logt("被操作的类:" + obj);
+                            logt("自适应返回值类型:" + thisObj);
+                            logt("反射赋值的方法");
+                        }
+                    }
+                }
 
             } catch (Exception e) {
-                GT.errs("View 与 ViewMode 自动绑定失败，请手动绑定:" + e);
+                GT.errt("thisObj:" + thisObj);
+                GT.errt("View 与 ViewMode 自动绑定失败，请手动绑定:" + e);
             }
             return obj;
         }
@@ -35621,6 +35823,22 @@ public class GT {
             protected V bindingData;
             protected M bindingModel;
 
+            public void loadBindingView(V bindingData) {
+                this.bindingData = bindingData;
+                bindingView = bindingData.getClass().getSuperclass().getSuperclass().toString().contains("class com.gsls.gt.GT$") &&
+                        bindingData.getClass().getSuperclass().getSuperclass().toString().contains("$DataBinding") ?
+                        (VM) bindingData : DataBindingUtil.setContentView(bindingData);
+            }
+
+            public void initBindingView(V bindingData) {
+                this.bindingData = bindingData;
+                bindingView = bindingData.getClass().getSuperclass().getSuperclass().toString().contains("class com.gsls.gt.GT$") &&
+                        bindingData.getClass().getSuperclass().getSuperclass().toString().contains("$DataBinding") ?
+                        (VM) bindingData : DataBindingUtil.setContentView(bindingData);
+                initView();
+                loadData();
+            }
+
             public void setBindingData(V bindingData) {
                 this.bindingData = bindingData;
                 setModel(bindingData);
@@ -35659,46 +35877,50 @@ public class GT {
                 this.bindingData = bindingData;
                 bindingModel = setBindingModel();//获取手动设置的Model
                 if (bindingModel != null) return;//如果没有手动设置Model那就智能生成Model
+                M obj = null;
+
                 try {
-                    //如果没有手动设置Model 那就从ViewModel类中智能取泛型model
-                    Type[] actualTypeArguments = AnnotationAssist.getClassGenericType(this);
-                    if (actualTypeArguments == null || actualTypeArguments.length == 0) return;
-                    Type actualTypeArgument = actualTypeArguments[actualTypeArguments.length - 1];
-
-                    String classStr = "";
-
-                    //在 jdk 1.7 的情况，编译会报错 不支持 getTypeName 方法
-                    /*try{
-                        classStr = actualTypeArgument.getTypeName();
-                    }catch (Exception e){
-                        classStr = actualTypeArgument.toString();
-                    }*/
-
-                    classStr = actualTypeArgument.toString();
-
-                    if (classStr.indexOf("<") != -1) {
-                        classStr = classStr.substring(0, classStr.indexOf("<"));
+                    Class<ViewModel> classStr = (Class<ViewModel>) AnnotationAssist.getGenericityClass(this);
+                    if (classStr != null) {
+                        ViewModel viewModel = GT_Cache.getViewModel(classStr);
+                        if (viewModel != null && viewModel instanceof ViewModel) {
+                            obj = (M) viewModel;
+                        }
                     }
 
-                    //根据 class 反射出实体类
-                    M obj = (M) new AnnotationAssist().classToObject(classStr);
+                    if (obj == null) {
+                        //如果没有手动设置Model 那就从ViewModel类中智能取泛型model
+                        //转为 ViewModel
+                        if (classStr != null && this instanceof ViewModelStoreOwner) {
+                            ViewModelStoreOwner viewModelStoreOwner = (ViewModelStoreOwner) this;
+                            try {
+                                obj = (M) new ViewModelProvider(viewModelStoreOwner).get(classStr);
+                            } catch (Exception e) {
+                                obj = (M) new AnnotationAssist().getGenericityObject(this);
+                            }
+                        } else {
+                            obj = (M) new AnnotationAssist().getGenericityObject(this);
+                        }
+                        if (obj != null && obj instanceof ViewModel) {
+                            GT_Cache.addViewModel(classStr, (ViewModel) obj);
+                        }
+                    }
 
                     //将当前的 ViewModel 设置进入 Model中
                     Object state = AnnotationAssist.setReflectMethodValue(obj, "setBindingView", String.class, Object.class, this);
                     if ("false".equals(state)) {
                         GT.err("ViewMode 与 Model 自动绑定失败，请手动绑定");
                         if (LOG.GT_LOG_TF) {
-                            logt("classStr:" + classStr);
                             logt("反射出来的类：" + obj);
                             logt("被操作的类:" + obj);
                             logt("自适应返回值类型:" + this);
-                            logt("反射赋值的方法:setBindingData");
+                            logt("反射赋值的方法");
                         }
                     }
                     bindingModel = obj;
 
                 } catch (Exception e) {
-                    GT.err("ViewMode 与 Model 自动绑定失败，请手动绑定:" + e);
+                    GT.errt("View 与 ViewMode 自动绑定失败，请手动绑定:" + e);
                 }
             }
 
@@ -35715,7 +35937,7 @@ public class GT {
          * ViewModel:继承自 GT_BindingViewModel (展示层/衔接):负责通过Model存取数据，连接View和Model，从Model中取出数据交给View
          * 关系图：View ←→ GT_BindingViewModel , GT_BindingViewModel ←→ GT_BindingModel (View与Model完全隔离)
          * <p>
-         * //TODO 有两种方式 初始化 ViewModel:
+         * // 有两种方式 初始化 ViewModel:
          * 1.通过泛类进行 映射实例化 实例化的ViewModel 需要有无参构造方法 或 有参与无参构造方法可同在
          * 如：public class MainActivity extends MainActivityBinding<MainViewModel> {
          * <p>
@@ -35760,13 +35982,15 @@ public class GT {
         }
 
         //反馈
-        public abstract static interface ViewModelFeedback {
+        public abstract static interface ViewModelFeedback extends ViewModelStoreOwner {
             /**
              * 内容由 ViewModel 层去提供数据 给到 View 层
              *
              * @param obj
              */
             public void onViewModeFeedback(Object... obj);
+
+            public ViewModelStore getViewModelStore();
         }
 
     }
@@ -38503,6 +38727,7 @@ public class GT {
 
                     if (activity != null) {
                         if (aClass != GT_Fragment.Build.class) {
+                            GT_Fragment.gt_fragment.addNotBack(aClass);
                             GT_Fragment.gt_fragment = GT_Fragment.Build((FragmentActivity) activity, layoutHome, layoutMain, aClass, activity.getIntent().getExtras(), startMode, switchingMode);
                         } else {
                             GT_Fragment.gt_fragment = GT_Fragment.Build((FragmentActivity) activity, layoutHome, layoutMain, null, activity.getIntent().getExtras(), startMode, switchingMode);
@@ -39320,7 +39545,7 @@ public class GT {
         }
 
         /**
-         * 解析文件 反射 Object
+         * 解析class 反射 Object
          *
          * @param obj
          * @return
@@ -39357,6 +39582,27 @@ public class GT {
 //                e.printStackTrace();
             }
             return obj;
+        }
+
+        /**
+         * 解析 class 反射 Object
+         *
+         * @param clazz
+         * @param <T>
+         * @return
+         */
+        public static <T> Object classToObject(Class<T> clazz) {
+            try {
+                if (clazz == null) return null;
+                return clazz.newInstance();
+            } catch (IllegalAccessException e) {
+                GT.errt("e:" + e);
+//                e.printStackTrace();
+            } catch (InstantiationException e) {
+                GT.errt("e:" + e);
+//                e.printStackTrace();
+            }
+            return null;
         }
 
         /**
@@ -39400,6 +39646,46 @@ public class GT {
 //                GT.errs("e:" + e);
             }
             return actualTypeArguments;
+        }
+
+        /**
+         * 获取泛型实体
+         *
+         * @param thisObj
+         * @param <T>
+         * @return
+         */
+        public static <T> T getGenericityObject(Object thisObj) {
+            Class<?> classStr = AnnotationAssist.getGenericityClass(thisObj);
+            //根据 class 反射出实体类
+            return (T) new AnnotationAssist().classToObject(classStr);
+        }
+
+        /**
+         * 获取当前类的泛型class
+         *
+         * @param obj
+         * @return
+         */
+        public static Class<?> getGenericityClass(Object obj) {
+            if (obj == null) return null;
+            try {
+                Type[] classGenericType = getClassGenericType(obj);
+                if (classGenericType != null && classGenericType.length > 0) {
+                    Type type = classGenericType[classGenericType.length - 1];
+                    if (type != null) {
+                        String classStr = type.getTypeName();
+                        if (classStr.indexOf("<") != -1) {
+                            classStr = classStr.substring(0, classStr.indexOf("<"));
+                        }
+                        Class<?> aClass = stringToClass(classStr);
+                        return aClass;
+                    }
+                }
+            } catch (Exception e) {
+
+            }
+            return null;
         }
 
         /**

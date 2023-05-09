@@ -14,11 +14,13 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.GSLS_Tool"
         tools:targetApi="31">
-
+        <activity
+            android:name=".MainKTActivity"
+            android:exported="false" />
         <activity
             android:name=".MainActivity"
-            android:launchMode="singleInstance"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleInstance">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 

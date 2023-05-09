@@ -13,4 +13,6 @@ open class GTK {
     private val fragmentActivity: FragmentActivity? = null//弱引用 当前动态的 上下文对象
     //================================== 提供访问 GT 属性的接口======================================
 
+
+
 }
