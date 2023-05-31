@@ -17,12 +17,15 @@ import java.util.Set;
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.Processor;
 import javax.annotation.processing.RoundEnvironment;
+import javax.annotation.processing.SupportedSourceVersion;
+import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
 import javax.tools.JavaFileObject;
 
 
 @AutoService(Processor.class)//编译时运行这个类
+@SupportedSourceVersion(SourceVersion.RELEASE_8)
 public class GT_DataBindingMain extends AbstractProcessor {
 
     /**
