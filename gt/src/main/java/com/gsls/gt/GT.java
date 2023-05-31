@@ -338,15 +338,26 @@ import dalvik.system.PathClassLoader;
  * <p>
  * <p>
  * 更新时间:2023.5.31
- * 更新内容 v1.4.3.5 版本：
+ * 更新内容 v1.4.3.7 版本：
  * CSDN 博客/官网教程:https://blog.csdn.net/qq_39799899
  * GitHub https://github.com/1079374315/GT
- * 更新内容如下：完成 Kotlin 新版，具体新增那些请参考官网教程
- * 1.增加 GT.Res 资源工具类
- * 2.新增 @GT_R_Build("资源文件名")解决多模块中无法使用注解绑定组件ID的情况 具体使用教程，请参考官网教程：
- * 3.新增线程池封装类管理 map,增多获取简洁线程池 api
- * 4.适配 kotlin 版 gt-DataBinding 注解
- * 5.新增强大 kotlin 扩展函数库 库名为 GTE.kt
+ * 更新内容如下：
+ * 1.优化 Hibernate 数据库（具体使用教程请参考：[第9章：Hibernate(热度推荐：✪✪✪✪✪✪)]）
+ * (1)新增索引功能：单列索引、组合索引、唯一索引
+ * (2)新增 数据库Hibernate 使用 接口的方式调用管理数据库API
+ * (3)将数据库注解 @GT.Hibernate.GT_Property 改为了 @GT.Hibernate.GT_Column
+ * (4)数据库新增 读写锁，线程操作更安全
+ * (5)增强数据库 保存全部数据saveAll() 的功能(之前最多一次性能保存50万条，增强后内存足够的情况下，无上限)
+ * 2.优化日志 调用方法
+ * 3.优化 GT_WebView googleplay 报错 onReceivedSslError 的问题
+ * 4.优化 使用串口工具 SerialPortUtils 时，缺少 libserial_port.so 文件的问题
+ * 5.遗弃的方法 readWritePermission()
+ * 6.完成 Kotlin 新版，具体新增那些请参考官网教程
+ * 7.增加 GT.Res 资源工具类
+ * 8.新增 @GT_R_Build("资源文件名")解决多模块中无法使用注解绑定组件ID的情况 具体使用教程，请参考官网教程：
+ * 9.新增线程池封装类管理 map,增多获取简洁线程池 api
+ * 10.适配 kotlin 版 gt-DataBinding 注解
+ * 11.新增简易强大 kotlin 扩展函数库 库名为 GTE.kt
  * <p>
  * <p>
  * 小提示：(用于 AndroidStudio )
