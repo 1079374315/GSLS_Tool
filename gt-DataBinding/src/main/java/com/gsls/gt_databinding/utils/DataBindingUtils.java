@@ -35,8 +35,8 @@ public class DataBindingUtils {
     }
 
     public static void log(Object msg) {
-        if (isLog)
-            System.out.println(msg);
+        if (!isLog) return;
+        System.out.println(msg);
     }
 
     public static void closeLog(ProcessingEnvironment PE) {
@@ -84,8 +84,8 @@ public class DataBindingUtils {
 //            int layoutIndex = xmlData.indexOf("layout=\"@layout/");
 
             //去掉xml布局中 被注释的代码
-            if(xmlData.contains("<!--")){
-                String start= xmlData.substring(0, xmlData.indexOf("<!--"));
+            if (xmlData.contains("<!--")) {
+                String start = xmlData.substring(0, xmlData.indexOf("<!--"));
                 String end = xmlData.substring(xmlData.indexOf("-->") + 3);
                 xmlData = start + end;
             }

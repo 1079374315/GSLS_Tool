@@ -158,7 +158,7 @@
 -keepattributes JavascriptInterface
 
 #--------(实体Model不能混淆，否则找不到对应的属性获取不到值)-----#
--keep class com.gsls.gt_toolkit.** { *; }
+-keep class com.gsls.toolkit.** { *; }
 
 
 

@@ -1,4 +1,4 @@
-package com.gsls.gt_toolkit;
+package com.gsls.toolkit;
 
 import android.content.Context;
 import android.view.LayoutInflater;

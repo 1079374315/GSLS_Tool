@@ -25,8 +25,6 @@ import javax.tools.JavaFileObject;
 @AutoService(Processor.class)//编译时运行这个类
 public class GT_DataBindingMain extends AbstractProcessor {
 
-    private List<String> filtrationList;
-
     /**
      * 必须要的
      *
@@ -42,7 +40,7 @@ public class GT_DataBindingMain extends AbstractProcessor {
         DataBindingUtils.log("GSLS_King");
         DataBindingUtils.log("roundEnv" + roundEnv);
 
-        filtrationList = Arrays.asList(DataBindingUtils.filtrationArray);
+        List<String> filtrationList = Arrays.asList(DataBindingUtils.filtrationArray);
         DataBindingUtils.log("filtrationList:" + filtrationList);
         DataBindingUtils.log("filtrationListSize:" + filtrationList.size());
 

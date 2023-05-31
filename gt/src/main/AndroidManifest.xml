@@ -10,7 +10,7 @@
 
         <!-- 注册GT悬浮窗 -->
         <service
-            android:name="com.gsls.gt_toolkit.GT_Floating"
+            android:name="com.gsls.toolkit.GT_Floating"
             android:exported="true" />
 
         <service

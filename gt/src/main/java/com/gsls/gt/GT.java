@@ -47,6 +47,7 @@ import android.content.res.AssetManager;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.content.res.TypedArray;
+import android.content.res.XmlResourceParser;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
@@ -177,9 +178,17 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.AnimatorRes;
+import androidx.annotation.ArrayRes;
+import androidx.annotation.ColorRes;
+import androidx.annotation.DimenRes;
+import androidx.annotation.DrawableRes;
+import androidx.annotation.IdRes;
+import androidx.annotation.LayoutRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
+import androidx.annotation.StringRes;
 import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.AppCompatImageView;
@@ -211,7 +220,7 @@ import com.github.mjdev.libaums.partition.Partition;
 import com.google.gson.Gson;
 import com.gsls.gt_databinding.annotation.GT_DaoBuild;
 import com.gsls.gt_databinding.annotation.GT_HttpCallBuild;
-import com.gsls.gt_toolkit.GT_Floating;
+import com.gsls.toolkit.GT_Floating;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -292,7 +301,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
 import java.util.TimeZone;
@@ -329,22 +337,16 @@ import dalvik.system.PathClassLoader;
  * GSLS_Tool
  * <p>
  * <p>
- * 更新时间:2023.4.23
- * 更新内容 v1.4.2.8 版本：大爆料：数据库Hibernate 新增索引功能
+ * 更新时间:2023.5.31
+ * 更新内容 v1.4.3 版本：
  * CSDN 博客/官网教程:https://blog.csdn.net/qq_39799899
  * GitHub https://github.com/1079374315/GT
- * 更新内容如下：
- * 1.优化 Hibernate 数据库（具体使用教程请参考：https://blog.csdn.net/qq_39799899/article/details/105935756?spm=1001.2014.3001.5502）
- * (1)新增索引功能：单列索引、组合索引、唯一索引
- * (2)新增 数据库Hibernate 使用 接口的方式调用管理数据库API
- * (3)将数据库注解 @GT.Hibernate.GT_Property 改为了 @GT.Hibernate.GT_Column
- * (4)数据库新增 读写锁，线程操作更安全
- * (5)增强数据库 保存全部数据saveAll() 的功能(之前最多一次性能保存50万条，增强后内存足够的情况下，上无上限)
- * <p>
- * 2.优化日志 调用方法
- * 3.优化 GT_WebView googleplay 报错 onReceivedSslError 的问题
- * 4.优化 使用串口工具 SerialPortUtils 时，缺少 libserial_port.so 文件的问题
- * 5.遗弃的方法 readWritePermission()
+ * 更新内容如下：完成 Kotlin 新版，具体新增那些请参考官网教程
+ * 1.增加 GT.Res 资源工具类
+ * 2.新增 @GT_R_Build("资源文件名")解决多模块中无法使用注解绑定组件ID的情况 具体使用教程，请参考官网教程：
+ * 3.新增线程池封装类管理 map,增多获取简洁线程池 api
+ * 4.适配 kotlin 版 gt-DataBinding 注解
+ * 5.新增强大 kotlin 扩展函数库 库名为 GTE.kt
  * <p>
  * <p>
  * 小提示：(用于 AndroidStudio )
@@ -466,26 +468,7 @@ public class GT {
     public static void log(Object msg, String... tag) {
         if (LOG.LOG_TF) {
             LOG.setLogData(String.valueOf(msg));
-            Log.d(tag.length != 0 ? tag[0] : LOG.LOG_TAG, String.valueOf(msg));
-        }
-    }
-
-    /**
-     * @param mg
-     * @详细提示消息
-     */
-    public static void logs(Object mg, String... tag) {
-        if (LOG.LOG_TF) {
-            String prefix = "";
-            prefix = LOG.getPrefix(LOG.lineInfoIndex);
-            LOG.setLogData(prefix + mg);
-            Log.d(tag.length != 0 ? tag[0] : LOG.LOG_TAG, prefix + mg);
-            if (LOG.LOG_FILE_TF) {// 打印到sd卡
-                if (TextUtils.isEmpty(prefix)) {
-                    prefix = LOG.getPrefix(LOG.lineInfoIndex);
-                }
-                LOG.writeToSdCard(LOG.path, prefix, mg);
-            }
+            Log.d((tag.length != 0 && tag[0].length() != 0) ? tag[0] : LOG.LOG_TAG, String.valueOf(msg));
         }
     }
 
@@ -498,7 +481,7 @@ public class GT {
             String prefix = "";
             prefix = LOG.getPrefixT(LOG.lineInfoIndex);
             LOG.setLogData(prefix + mg);
-            Log.d(tag.length != 0 ? tag[0] : LOG.LOG_TAG, prefix + mg);
+            Log.d((tag.length != 0 && tag[0].length() != 0) ? tag[0] : LOG.LOG_TAG, prefix + mg);
             if (LOG.LOG_FILE_TF) {// 打印到sd卡
                 if (TextUtils.isEmpty(prefix)) {
                     prefix = LOG.getPrefix(LOG.lineInfoIndex);
@@ -521,66 +504,13 @@ public class GT {
                 prefix = LOG.getPrefixT(lineInfoIndex);
             }
             LOG.setLogData(prefix + mg);
-            Log.d(tag.length != 0 ? tag[0] : LOG.LOG_TAG, prefix + mg);
+            Log.d((tag.length != 0 && tag[0].length() != 0) ? tag[0] : LOG.LOG_TAG, prefix + mg);
             if (LOG.LOG_FILE_TF) {// 打印到sd卡
                 if (TextUtils.isEmpty(prefix)) {
                     prefix = LOG.getPrefix(LOG.lineInfoIndex);
                 }
                 LOG.writeToSdCard(LOG.path, prefix, mg);
             }
-        }
-    }
-
-    public static void logl(Object mg, String... tag) {
-        if (LOG.LOG_TF) {
-            String prefix = "";
-            prefix = LOG.getPrefixT(LOG.lineInfoIndex);
-            LOG.setLogData(prefix + mg);
-            Log.d(tag.length != 0 ? tag[0] : LOG.LOG_TAG, prefix + mg);
-            if (LOG.LOG_FILE_TF) {// 打印到sd卡
-                if (TextUtils.isEmpty(prefix)) {
-                    prefix = LOG.getPrefix(LOG.lineInfoIndex);
-                }
-                LOG.writeToSdCard(LOG.path, prefix, mg);
-            }
-        }
-    }
-
-    /**
-     * 打印所有提示消息 Log
-     *
-     * @param msg object 类型的消息
-     */
-    public static void logAll(Object msg, String... tag) {
-        if (LOG.LOG_TF) {
-            String strMsg = msg.toString();
-            if (strMsg.length() > LOG.logMaxLength) {
-                while (true) {
-                    String substring = strMsg.substring(0, LOG.logMaxLength);
-                    LOG.setLogData("--- " + substring);
-                    Log.d(tag.length != 0 ? tag[0] : LOG.LOG_TAG, "--- " + substring);
-                    strMsg = strMsg.substring(LOG.logMaxLength);
-                    if (strMsg.length() <= LOG.logMaxLength) {
-                        LOG.setLogData(strMsg);
-                        Log.d(tag.length != 0 ? tag[0] : LOG.LOG_TAG, strMsg);
-                        break;
-                    }
-                }
-            } else {
-                LOG.setLogData(String.valueOf(msg));
-                Log.d(tag.length != 0 ? tag[0] : LOG.LOG_TAG, String.valueOf(msg));
-            }
-        }
-    }
-
-    /**
-     * 提示消息 Log
-     *
-     * @param msg object 类型的消息
-     */
-    public static void err(Object msg) {
-        if (LOG.LOG_TF) {
-            Log.e(LOG.LOG_TAG + "e", String.valueOf(msg));
         }
     }
 
@@ -588,11 +518,12 @@ public class GT {
      * @param mg
      * @详细提示消息
      */
-    public static void errs(Object mg) {
+    public static void logs(Object mg, String... tag) {
         if (LOG.LOG_TF) {
             String prefix = "";
             prefix = LOG.getPrefix(LOG.lineInfoIndex);
-            Log.e("GT_e", prefix + mg);
+            LOG.setLogData(prefix + mg);
+            Log.d((tag.length != 0 && tag[0].length() != 0) ? tag[0] : LOG.LOG_TAG, prefix + mg);
             if (LOG.LOG_FILE_TF) {// 打印到sd卡
                 if (TextUtils.isEmpty(prefix)) {
                     prefix = LOG.getPrefix(LOG.lineInfoIndex);
@@ -604,43 +535,23 @@ public class GT {
 
     /**
      * @param mg
-     * @标记日志
+     * @详细提示消息
      */
-    public static void errt(Object mg) {
+    public static void logs(Object mg, int lineInfoIndex, String... tag) {
         if (LOG.LOG_TF) {
             String prefix = "";
-            prefix = LOG.getPrefixT(LOG.lineInfoIndex);
-            Log.e("GT_e", prefix + mg);
+            if (lineInfoIndex <= 0) {
+                prefix = LOG.getPrefix(LOG.lineInfoIndex);
+            } else {
+                prefix = LOG.getPrefix(lineInfoIndex);
+            }
             LOG.setLogData(prefix + mg);
+            Log.d((tag.length != 0 && tag[0].length() != 0) ? tag[0] : LOG.LOG_TAG, prefix + mg);
             if (LOG.LOG_FILE_TF) {// 打印到sd卡
                 if (TextUtils.isEmpty(prefix)) {
                     prefix = LOG.getPrefix(LOG.lineInfoIndex);
                 }
                 LOG.writeToSdCard(LOG.path, prefix, mg);
-            }
-        }
-    }
-
-    /**
-     * 打印所有提示消息 Log
-     *
-     * @param msg object 类型的消息
-     */
-    public static void errAll(Object msg) {
-        if (LOG.LOG_TF) {
-            String strMsg = msg.toString();
-            if (strMsg.length() > LOG.logMaxLength) {
-                while (true) {
-                    String substring = strMsg.substring(0, LOG.logMaxLength);
-                    Log.e(LOG.LOG_TAG + "e", "--- " + substring);
-                    strMsg = strMsg.substring(LOG.logMaxLength);
-                    if (strMsg.length() <= LOG.logMaxLength) {
-                        Log.e(LOG.LOG_TAG + "e", strMsg);
-                        break;
-                    }
-                }
-            } else {
-                Log.e(LOG.LOG_TAG + "e", String.valueOf(msg));
             }
         }
     }
@@ -659,7 +570,7 @@ public class GT {
                     "" + msg + "\n" +
                     "---------------------" + title + "------------------------\n\n" +
                     "--- Close");
-            Log.d(tag.length != 0 ? tag[0] : LOG.LOG_TAG,
+            Log.d((tag.length != 0 && tag[0].length() != 0) ? tag[0] : LOG.LOG_TAG,
                     "--- Run" +
                             "\n\n---------------------" + title + "------------------------\n" +
                             "" + msg + "\n" +
@@ -678,28 +589,122 @@ public class GT {
     public static void logAll(Object title, Object msg, String... tag) {
         if (LOG.LOG_TF) {
             LOG.setLogData("Run ----- " + title + " ---------");
-            Log.d(tag.length != 0 ? tag[0] : LOG.LOG_TAG, "Run ----- " + title + " ---------");
+            Log.d((tag.length != 0 && tag[0].length() != 0) ? tag[0] : LOG.LOG_TAG, "Run ----- " + title + " ---------");
             String strMsg = msg.toString();
             if (strMsg.length() > LOG.logMaxLength) {
                 while (true) {
                     String substring = strMsg.substring(0, LOG.logMaxLength);
                     LOG.setLogData("--- " + substring);
-                    Log.d(tag.length != 0 ? tag[0] : LOG.LOG_TAG, "--- " + substring);
+                    Log.d((tag.length != 0 && tag[0].length() != 0) ? tag[0] : LOG.LOG_TAG, "--- " + substring);
                     strMsg = strMsg.substring(LOG.logMaxLength);
                     if (strMsg.length() <= LOG.logMaxLength) {
                         LOG.setLogData(strMsg);
-                        Log.d(tag.length != 0 ? tag[0] : LOG.LOG_TAG, strMsg);
+                        Log.d((tag.length != 0 && tag[0].length() != 0) ? tag[0] : LOG.LOG_TAG, strMsg);
                         break;
                     }
                 }
             } else {
                 LOG.setLogData(String.valueOf(msg));
-                Log.d(tag.length != 0 ? tag[0] : LOG.LOG_TAG, String.valueOf(msg));
+                Log.d((tag.length != 0 && tag[0].length() != 0) ? tag[0] : LOG.LOG_TAG, String.valueOf(msg));
             }
 
             LOG.setLogData("----- " + title + " ----- Close");
-            Log.d(tag.length != 0 ? tag[0] : LOG.LOG_TAG, "----- " + title + " ----- Close");
+            Log.d((tag.length != 0 && tag[0].length() != 0) ? tag[0] : LOG.LOG_TAG, "----- " + title + " ----- Close");
 
+        }
+    }
+
+    /**
+     * 提示消息 Log
+     *
+     * @param msg object 类型的消息
+     */
+    public static void err(Object msg, String... tag) {
+        if (LOG.LOG_TF) {
+            Log.e((tag.length != 0 && tag[0].length() != 0) ? tag[0] : LOG.LOG_TAG, String.valueOf(msg));
+        }
+    }
+
+    /**
+     * @param mg
+     * @详细提示消息
+     */
+    public static void errs(Object mg, String... tag) {
+        if (LOG.LOG_TF) {
+            String prefix = "";
+            prefix = LOG.getPrefix(LOG.lineInfoIndex);
+            Log.e((tag.length != 0 && tag[0].length() != 0) ? tag[0] : LOG.LOG_TAG, prefix + mg);
+            if (LOG.LOG_FILE_TF) {// 打印到sd卡
+                if (TextUtils.isEmpty(prefix)) {
+                    prefix = LOG.getPrefix(LOG.lineInfoIndex);
+                }
+                LOG.writeToSdCard(LOG.path, prefix, mg);
+            }
+        }
+    }
+
+
+    /**
+     * @param mg
+     * @详细提示消息
+     */
+    public static void errs(Object mg, int lineInfoIndex, String... tag) {
+        if (LOG.LOG_TF) {
+            String prefix = "";
+            if (lineInfoIndex <= 0) {
+                prefix = LOG.getPrefix(LOG.lineInfoIndex);
+            } else {
+                prefix = LOG.getPrefix(lineInfoIndex);
+            }
+            Log.e((tag.length != 0 && tag[0].length() != 0) ? tag[0] : LOG.LOG_TAG, prefix + mg);
+            if (LOG.LOG_FILE_TF) {// 打印到sd卡
+                if (TextUtils.isEmpty(prefix)) {
+                    prefix = LOG.getPrefix(LOG.lineInfoIndex);
+                }
+                LOG.writeToSdCard(LOG.path, prefix, mg);
+            }
+        }
+    }
+
+    /**
+     * @param mg
+     * @标记日志
+     */
+    public static void errt(Object mg, String... tag) {
+        if (LOG.LOG_TF) {
+            String prefix = "";
+            prefix = LOG.getPrefixT(LOG.lineInfoIndex);
+            Log.e((tag.length != 0 && tag[0].length() != 0) ? tag[0] : LOG.LOG_TAG, prefix + mg);
+            LOG.setLogData(prefix + mg);
+            if (LOG.LOG_FILE_TF) {// 打印到sd卡
+                if (TextUtils.isEmpty(prefix)) {
+                    prefix = LOG.getPrefix(LOG.lineInfoIndex);
+                }
+                LOG.writeToSdCard(LOG.path, prefix, mg);
+            }
+        }
+    }
+
+    /**
+     * @param mg
+     * @标记日志
+     */
+    public static void errt(Object mg, int lineInfoIndex, String... tag) {
+        if (LOG.LOG_TF) {
+            String prefix = "";
+            if (lineInfoIndex <= 0) {
+                prefix = LOG.getPrefixT(LOG.lineInfoIndex);
+            } else {
+                prefix = LOG.getPrefixT(lineInfoIndex);
+            }
+            Log.e((tag.length != 0 && tag[0].length() != 0) ? tag[0] : LOG.LOG_TAG, prefix + mg);
+            LOG.setLogData(prefix + mg);
+            if (LOG.LOG_FILE_TF) {// 打印到sd卡
+                if (TextUtils.isEmpty(prefix)) {
+                    prefix = LOG.getPrefix(LOG.lineInfoIndex);
+                }
+                LOG.writeToSdCard(LOG.path, prefix, mg);
+            }
         }
     }
 
@@ -709,14 +714,14 @@ public class GT {
      * @param title 日志标题
      * @param msg   日志消息
      */
-    public static void err(Object title, Object msg) {
+    public static void err(Object title, Object msg, String... tag) {
         if (LOG.LOG_TF) {
             LOG.setLogData("--- Run" +
                     "\n\n---------------------" + title + "------------------------\n" +
                     "" + msg + "\n" +
                     "---------------------" + title + "------------------------\n\n" +
                     "--- Close");
-            Log.e(LOG.LOG_TAG + "e",
+            Log.e((tag.length != 0 && tag[0].length() != 0) ? tag[0] : LOG.LOG_TAG,
                     "--- Run" +
                             "\n\n---------------------" + title + "------------------------\n" +
                             "" + msg + "\n" +
@@ -732,29 +737,89 @@ public class GT {
      *
      * @param msg object 类型的消息
      */
-    public static void errAll(Object title, Object msg) {
+    public static void errAll(Object title, Object msg, String... tag) {
         if (LOG.LOG_TF) {
             LOG.setLogData("Run ----- " + title + " ---------");
-            Log.e(LOG.LOG_TAG + "e", "Run ----- " + title + " ---------");
+            Log.e((tag.length != 0 && tag[0].length() != 0) ? tag[0] : LOG.LOG_TAG, "Run ----- " + title + " ---------");
             String strMsg = msg.toString();
             if (strMsg.length() > LOG.logMaxLength) {
                 while (true) {
                     String substring = strMsg.substring(0, LOG.logMaxLength);
-                    Log.e(LOG.LOG_TAG + "e", "--- " + substring);
+                    Log.e((tag.length != 0 && tag[0].length() != 0) ? tag[0] : LOG.LOG_TAG, "--- " + substring);
                     strMsg = strMsg.substring(LOG.logMaxLength);
                     if (strMsg.length() <= LOG.logMaxLength) {
-                        Log.e(LOG.LOG_TAG + "e", strMsg);
+                        Log.e((tag.length != 0 && tag[0].length() != 0) ? tag[0] : LOG.LOG_TAG, strMsg);
                         break;
                     }
                 }
             } else {
                 LOG.setLogData(String.valueOf(msg));
-                Log.e(LOG.LOG_TAG + "e", String.valueOf(msg));
+                Log.e((tag.length != 0 && tag[0].length() != 0) ? tag[0] : LOG.LOG_TAG, String.valueOf(msg));
             }
 
             LOG.setLogData("----- " + title + " ----- Close");
-            Log.e(LOG.LOG_TAG + "e", "----- " + title + " ----- Close");
+            Log.e((tag.length != 0 && tag[0].length() != 0) ? tag[0] : LOG.LOG_TAG, "----- " + title + " ----- Close");
 
+        }
+    }
+
+    /**
+     * @param content
+     * @标准Toast
+     */
+    public static void toast(Object message) {
+        if (getActivity() != null) {
+            if (GT.Thread.isMainThread()) {
+                Toast toast = null;
+                if (toast == null) {
+                    toast = Toast.makeText(getActivity(), message.toString(), Toast.LENGTH_SHORT);
+                } else {
+                    toast.setText(message.toString());
+                }
+                toast.show();
+            } else {
+                GT.Thread.runAndroid(new Runnable() {
+                    @Override
+                    public void run() {
+                        Toast toast = null;
+                        if (toast == null) {
+                            toast = Toast.makeText(getActivity(), message.toString(), Toast.LENGTH_SHORT);
+                        } else {
+                            toast.setText(message.toString());
+                        }
+                        toast.show();
+                    }
+                });
+            }
+
+        } else {
+            log(getLineInfo(1), "当前没有赋值 Context 无法显示 Toast ");
+        }
+
+    }
+
+    public static void toast(Context context, Object content) {
+        if (GT.Thread.isMainThread()) {
+            Toast toast = null;
+            if (toast == null) {
+                toast = Toast.makeText(getActivity(), content.toString(), Toast.LENGTH_SHORT);
+            } else {
+                toast.setText(content.toString());
+            }
+            toast.show();
+        } else {
+            GT.Thread.runAndroid(new Runnable() {
+                @Override
+                public void run() {
+                    Toast toast = null;
+                    if (toast == null) {
+                        toast = Toast.makeText(getActivity(), content.toString(), Toast.LENGTH_SHORT);
+                    } else {
+                        toast.setText(content.toString());
+                    }
+                    toast.show();
+                }
+            });
         }
     }
 
@@ -876,7 +941,6 @@ public class GT {
      */
     public static void toast_time(Context context, Object msg, int time) {
         if (TOAST.TOAST_TF) {
-
             if (GT.Thread.isMainThread()) {
                 final Toast toast = Toast.makeText(context, String.valueOf(msg), Toast.LENGTH_LONG);
                 final Timer timer = new Timer();
@@ -917,61 +981,6 @@ public class GT {
             }
 
 
-        }
-    }
-
-    /**
-     * @param content
-     * @标准Toast
-     */
-    public static void toast(Object message) {
-        if (getActivity() != null) {
-            if (GT.Thread.isMainThread()) {
-                Toast toast = null;
-                if (toast == null) {
-                    toast = Toast.makeText(getActivity(), message.toString(), Toast.LENGTH_SHORT);
-                } else {
-                    toast.setText(message.toString());
-                }
-                toast.show();
-            } else {
-                Toast toast = null;
-                if (toast == null) {
-                    toast = Toast.makeText(getActivity(), message.toString(), Toast.LENGTH_SHORT);
-                } else {
-                    toast.setText(message.toString());
-                }
-                toast.show();
-            }
-
-        } else {
-            log(getLineInfo(1), "当前没有赋值 Context 无法显示 Toast ");
-        }
-
-    }
-
-    public static void toast(Context context, Object content) {
-        if (GT.Thread.isMainThread()) {
-            Toast toast = null;
-            if (toast == null) {
-                toast = Toast.makeText(getActivity(), content.toString(), Toast.LENGTH_SHORT);
-            } else {
-                toast.setText(content.toString());
-            }
-            toast.show();
-        } else {
-            GT.Thread.runAndroid(new Runnable() {
-                @Override
-                public void run() {
-                    Toast toast = null;
-                    if (toast == null) {
-                        toast = Toast.makeText(getActivity(), content.toString(), Toast.LENGTH_SHORT);
-                    } else {
-                        toast.setText(content.toString());
-                    }
-                    toast.show();
-                }
-            });
         }
     }
 
@@ -1019,13 +1028,13 @@ public class GT {
      * @param dialogFragment
      * @跳转其他的 DialogFragment
      */
-    public static void startDialogFragment(Context context, DialogFragment dialogFragment) {
-        dialogFragment.show(getFragmentActivity().getSupportFragmentManager(), dialogFragment.getClass().toString());// 弹出退出提示
+    public static void startDialogFragment(AppCompatActivity activity, DialogFragment dialogFragment) {
+        dialogFragment.show(activity.getSupportFragmentManager(), dialogFragment.getClass().toString());// 弹出退出提示
     }
 
-    public static void startDialogFragment(Context context, Fragment fragment, DialogFragment dialogFragment) {
+    public static void startDialogFragment(AppCompatActivity activity, Fragment fragment, DialogFragment dialogFragment) {
         dialogFragment.setTargetFragment(fragment, 1);
-        dialogFragment.show(getFragmentActivity().getSupportFragmentManager(), dialogFragment.getClass().toString());// 弹出退出提示
+        dialogFragment.show(activity.getSupportFragmentManager(), dialogFragment.getClass().toString());// 弹出退出提示
     }
 
     /**
@@ -1041,9 +1050,7 @@ public class GT {
      * @跳转其他的 DialogFragment
      */
     public static void startDialogFragment(Class<?> dialogFragmentClass, FragmentManager fragmentManager) {
-
         DialogFragment fragment = null;
-
         try {
             fragment = (DialogFragment) dialogFragmentClass.newInstance();
         } catch (IllegalAccessException e) {
@@ -1051,7 +1058,6 @@ public class GT {
         } catch (InstantiationException e) {
             e.printStackTrace();
         }
-
         fragment.show(fragmentManager, fragment.getClass().toString());// 弹出退出提示
     }
 
@@ -1060,10 +1066,8 @@ public class GT {
         dialogFragment.show(supportFragmentManager, dialogFragment.getClass().toString());// 弹出退出提示
     }
 
-    public static void startDialogFragment(Context context, Class<?> dialogFragmentClass) {
-
+    public static void startDialogFragment(AppCompatActivity activity, Class<?> dialogFragmentClass) {
         DialogFragment fragment = null;
-
         try {
             fragment = (DialogFragment) dialogFragmentClass.newInstance();
         } catch (IllegalAccessException e) {
@@ -1071,11 +1075,10 @@ public class GT {
         } catch (InstantiationException e) {
             e.printStackTrace();
         }
-
-        fragment.show(getFragmentActivity().getSupportFragmentManager(), fragment.getClass().toString());// 弹出退出提示
+        fragment.show(activity.getSupportFragmentManager(), fragment.getClass().toString());// 弹出退出提示
     }
 
-    public static void startDialogFragment(Context context, Fragment fragment, Class<?> dialogFragmentClass) {
+    public static void startDialogFragment(AppCompatActivity activity, Fragment fragment, Class<?> dialogFragmentClass) {
         DialogFragment dialogFragment = null;
         try {
             dialogFragment = (DialogFragment) dialogFragmentClass.newInstance();
@@ -1085,8 +1088,7 @@ public class GT {
         } catch (InstantiationException e) {
             e.printStackTrace();
         }
-
-        dialogFragment.show(getFragmentActivity().getSupportFragmentManager(), fragment.getClass().toString());// 弹出退出提示
+        dialogFragment.show(activity.getSupportFragmentManager(), fragment.getClass().toString());// 弹出退出提示
     }
 
     public static GT_View.BaseView startView(ViewGroup viewGroup, GT_View.BaseView view) {
@@ -1277,7 +1279,7 @@ public class GT {
         public static boolean GT_LOG_TF = false;    //控制内部所有的 Log 显示
         public static String LOG_TAG = "GT_";       //控制日志 TAG 值
         public static int logMaxLength = 3900;      //日志打印最大长度 默认是 3900 可修改
-        private static int lineInfoIndex = 5;       //日志当前属于的层数,默认是5级返回层级
+        public static int lineInfoIndex = 5;       //日志当前属于的层数,默认是5级返回层级
 
         public static int getLineInfoIndex() {
             return lineInfoIndex;
@@ -1407,7 +1409,22 @@ public class GT {
                 prefix = String.format(prefix, caller.getLineNumber()).trim(); // 替换
             } catch (Exception e) {
 //                errs("获取日志层级出现错误e:" + e);
-                getPrefix(--number);
+                getPrefixT(--number);
+            }
+            return prefix;
+        }
+
+        public static String getClassName(int number) {
+            if (number < 0) {
+                return "log Hierarchy error ";
+            }
+            String prefix = "";
+            try {
+                StackTraceElement caller = java.lang.Thread.currentThread().getStackTrace()[number];// new Throwable().getStackTrace()[number];
+                prefix = caller.getFileName();//初始化
+            } catch (Exception e) {
+//                errs("获取日志层级出现错误e:" + e);
+                getClassName(--number);
             }
             return prefix;
         }
@@ -2291,6 +2308,7 @@ public class GT {
                     //按照订阅者实体类中的线程大小进行从小到大排序
                     priorityList.sort(Comparator.comparing(EventBusBean::getPriority));
 
+                    GT.logt("eventKey:" + eventKeys);
                     //如果有指定订阅者类型,那就进行分类
                     if (eventKeys != null && eventKeys.length != 0) {
                         //给指定或筛选后的订阅者发布该事件
@@ -2310,7 +2328,14 @@ public class GT {
 
                     //类型匹配后进行向订阅者按照线程优先级进行遍历 发布事件
                     for (EventBusBean eventBusBean : priorityList) {
-
+                        GT.logt("eventBusBean:" + eventBusBean);
+                        GT.logt("eventKeys:" + eventKeys);
+                        if (eventKeys != null) {
+                            GT.logt("eventKeysSize:" + eventKeys.length);
+                            for (Object str : eventKeys) {
+                                GT.logt("str:" + str);
+                            }
+                        }
                         //如果有指定订阅者类型,那就进行过滤筛选
                         if (eventKeys != null && eventKeys.length != 0) {
                             if (!eventBusBean.eventKey.contains(SEPARATOR)) continue;
@@ -2330,7 +2355,7 @@ public class GT {
                         }
 
                         //按照订阅者的线程类型进行处理
-//                    logt("eventBusBean.threadMode:" + eventBusBean.threadMode);
+                        GT.logt("eventBusBean.threadMode:" + eventBusBean.threadMode);
                         switch (eventBusBean.threadMode) {
                             case ThreadMode.POSTING://默认使用发布事件的当前线程
                                 t = setMethodValue(eventBusBean, eventData);
@@ -2467,7 +2492,7 @@ public class GT {
          */
         private <T> T setMethodValue(EventBusBean eventBusBean, Object eventData) {
             try {
-//                logt(eventBusBean.object + ":" + eventBusBean.methodName + ":" + eventBusBean.returnType + ":" + eventBusBean.parameterTypes);
+                GT.logt(eventBusBean.object + ":" + eventBusBean.methodName + ":" + eventBusBean.returnType + ":" + eventBusBean.parameterTypes);
                 return (T) AnnotationAssist.setReflectMethodValue(eventBusBean.object, eventBusBean.methodName, eventBusBean.returnType, eventBusBean.parameterTypes, eventData == null ? "null" : eventData);
             } catch (Exception e) {
                 if (LOG.GT_LOG_TF) {
@@ -9538,6 +9563,11 @@ public class GT {
                     return this;
                 }
 
+                //如果没有指定 主键，那就默认创建自增主键
+                if(KeySqlCode == null || KeySqlCode.length() == 0){
+                    KeySqlCode = tableName + "_ID INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL";
+                }
+
                 creationTableNameList.add(tableSqlCode + KeySqlCode + sqlChar + ")");//添加在创建表时需要执行的
             }
 
@@ -11844,7 +11874,7 @@ public class GT {
          * @param msg
          */
         private static void log(Object msg, String... tag) {
-            Log.d(tag.length != 0 ? tag[0] : LOG.LOG_TAG, msg.toString());
+            Log.d((tag.length != 0 && tag[0].length() != 0) ? tag[0] : LOG.LOG_TAG, msg.toString());
             DataSendReception.sendUpdateUiBroadcast(SerialPortUtils.class.getName(), msg.toString());
         }
 
@@ -11879,7 +11909,7 @@ public class GT {
             Configuration configuration = resources.getConfiguration();//获得设置对象
             configuration.setLocale(locale);//设置语言
             DisplayMetrics dm = resources.getDisplayMetrics();//获得屏幕参数：主要是分辨率，像素等。
-            resources.updateConfiguration(configuration, dm);//更新语言
+            resources.updateConfiguration(configuration, dm);//更新语言,更新完后重启即可
         }
 
 
@@ -12624,10 +12654,33 @@ public class GT {
 
         private static Gson gson = new Gson();
 
+        /**
+         * 临时解决方法
+         *
+         * @return
+         */
+        public static Gson getGson() {
+            return gson;
+        }
+
+        /**
+         * 临时解决方法
+         *
+         * @param obj
+         * @return
+         */
         public static String toJson2(Object obj) {
             return gson.toJson(obj);
         }
 
+        /**
+         * 临时解决方法
+         *
+         * @param jsonStr
+         * @param clazz
+         * @param <T>
+         * @return
+         */
         public static <T> T fromJson2(String jsonStr, Class<T> clazz) {
             return gson.fromJson(jsonStr, clazz);
         }
@@ -15802,6 +15855,7 @@ public class GT {
          * @return
          */
         public Glide placeholder(Object resource) {
+            if (resource == null) return glide;
             if (glideBean == null) {
                 glideBean = new GlideBean();
             }
@@ -15884,6 +15938,8 @@ public class GT {
         }
 
         /**
+         * 设置圆角
+         *
          * @param topLeft     左上圆角
          * @param topRight    右上圆角
          * @param bottomLeft  左下圆角
@@ -15976,6 +16032,20 @@ public class GT {
          * @param isAutomaticPauses 是否自动暂停
          * @return
          */
+        public Glide asGif(boolean isGif) {
+            if (glideBean == null) {
+                glideBean = new GlideBean();
+            }
+            glideBean.isGIF = isGif;
+            return glide;
+        }
+
+        /**
+         * 是否动态图
+         *
+         * @param isAutomaticPauses 是否自动暂停
+         * @return
+         */
         public Glide asGif() {
             if (glideBean == null) {
                 glideBean = new GlideBean();
@@ -15996,6 +16066,7 @@ public class GT {
          * @return
          */
         public Glide error(Object resource) {
+            if (resource == null) return glide;
             if (glideBean == null) {
                 glideBean = new GlideBean();
             }
@@ -17831,6 +17902,19 @@ public class GT {
      */
     public static class GT_Date {
 
+        public static long startTime() {
+            return System.currentTimeMillis();
+        }
+
+        public static long endTime(long... startTimes) {
+            long endTime = System.currentTimeMillis();
+            if (startTimes != null && startTimes.length > 0 && startTimes[0] != 0) {
+                endTime -= startTimes[0];
+            }
+            return endTime;
+        }
+
+
         /**
          * 使用案例
          * long currentTimeMillis = System.currentTimeMillis();
@@ -18249,7 +18333,7 @@ public class GT {
         }
 
         /**
-         * 离现在有多少 年 月 日 ，时 分 秒 (加强版)
+         * 离现在有多少 年 月 日 ，时 分 秒
          * 仅仅支持 这种格式的时间(yyyy-MM-dd HH:mm:ss)或者时间戳
          *
          * @param time2
@@ -18355,6 +18439,23 @@ public class GT {
             }
             return time2;
         }
+
+
+        /**
+         * 时间戳转 时分秒
+         *
+         * @param time
+         * @return
+         */
+        public static String secondsToHMS(int time) {
+            if (time <= 0) return "00:00";
+            else if (time < 60) return String.format(Locale.getDefault(), "00:%02d", time % 60);
+            else if (time < 3600)
+                return String.format(Locale.getDefault(), "%02d:%02d", time / 60, time % 60);
+            else
+                return String.format(Locale.getDefault(), "%02d:%02d:%02d", time / 3600, time % 3600 / 60, time % 60);
+        }
+
 
         /**
          * 获取最大的时间 可以时间与 时间戳，时间格式仅仅支持 yyyy-MM-dd HH:mm:ss
@@ -20984,6 +21085,65 @@ public class GT {
             }
             return data;
         }
+
+    }
+
+    //App 资源工具类
+    public static class Res {
+        private static Context getContext(Context context) {
+            if (context == null) {
+                context = GT.getActivity();
+            }
+            return context;
+        }
+
+        public static String string(Context context, @StringRes int id) {
+            return getContext(context).getResources().getString(id);
+        }
+
+        public static int color(Context context, @ColorRes int id) {
+            return ContextCompat.getColor(getContext(context), id);
+        }
+
+        public static Drawable drawable(Context context, @DrawableRes int id) {
+            return ContextCompat.getDrawable(getContext(context), id);
+        }
+
+        public static float dimen(Context context, @DimenRes int id) {
+            return getContext(context).getResources().getDimension(id);
+        }
+
+        public static XmlResourceParser animation(Context context, @AnimatorRes int id) {
+            return getContext(context).getResources().getAnimation(id);
+        }
+
+        public static <T> T inflate(Context context, @LayoutRes int id) {
+            return (T) LayoutInflater.from(getContext(context)).inflate(id, null);
+        }
+
+        public static <T> T view(Object findObject, @IdRes int id) {
+            findObject = GT.AnnotationAssist.returnActivityOrView(findObject)[0];
+            if (findObject instanceof Activity) {
+                return (T) ((Activity) findObject).findViewById(id);
+            } else if (findObject instanceof View) {
+                return (T) ((View) findObject).findViewById(id);
+            } else {
+                return null;
+            }
+        }
+
+        public static String[] stringArray(Context context, @ArrayRes int id) {
+            return getContext(context).getResources().getStringArray(id);
+        }
+
+        public static int[] intArray(Context context, @ArrayRes int id) {
+            return getContext(context).getResources().getIntArray(id);
+        }
+
+        public static String[] assetLocales(Context context) {
+            return getContext(context).getResources().getAssets().getLocales();
+        }
+
 
     }
 
@@ -23886,10 +24046,9 @@ public class GT {
             }
 
             public Permission permissions(OnPermissionListener onPermissionListener) {
-                Thread.runJava(new Runnable() {
+                GT.Thread.getInstance(0).execute(new Runnable() {
                     @Override
                     public void run() {
-
                         Thread.runAndroid(new Runnable() {
                             @Override
                             public void run() {
@@ -23920,11 +24079,8 @@ public class GT {
 
                             }
                         });
-
                     }
                 });
-
-
                 return Permission;
             }
 
@@ -24072,16 +24228,14 @@ public class GT {
                         //调用授权说明对话框
                         onPermissionListener.onExplainRequestReason(permissionDescription);
 
-                        Thread.runJava(new Runnable() {
+                        GT.Thread.getInstance(0).execute(new Runnable() {
                             @Override
                             public void run() {
-
                                 int i = 0;
                                 //等待结束申请说明
                                 while (!permissionDescription.isCloseAcceptAdvice()) {
                                     Thread.sleep(300);
                                 }
-
                                 if (permissionDescription.isValidClose()) {//判断是否有效关闭
                                     if (permissionDescription.isAcceptAdvice()) {//判断用户是否同意授权
                                         if (permission != null && permission.length != 0) {
@@ -24961,7 +25115,6 @@ public class GT {
             return rotationZ;
         }
 
-
         /**
          * @param alpha       初始透明度
          * @param toAlpha     最终透明度
@@ -25069,7 +25222,6 @@ public class GT {
             return rotationX;
         }
 
-
         /**
          * @param annotationList
          * @param view
@@ -25118,36 +25270,12 @@ public class GT {
             try {
                 WindowUtils.light(activity);//屏幕常亮
                 WindowUtils.immersionMode(activity);//沉浸式模式
-                WindowUtils.Close_virtualButton(activity);//关闭虚拟按钮
+                WindowUtils.closeVirtualButton(activity);//关闭虚拟按钮
                 WindowUtils.hideActionBar((AppCompatActivity) activity);//隐藏 ActionBar
             } catch (Exception e) {
                 if (LOG.isGtLogTf())
                     GT.err(getLineInfo(1), "请去掉调用该方法前面所有关于 沉浸式 关闭虚拟按钮 隐藏 ActionBar 等类似的代码");
             }
-        }
-
-        /**
-         * 开启永久的游戏窗口模式
-         * 开启线程去一直开启全屏模式
-         * 除非必要，否则勿用该方法
-         *
-         * @param activity
-         */
-        public static void startGameWindowUtilss(final Activity activity) {
-            Thread.runJava(new Runnable() {
-                @Override
-                public void run() {
-                    while (true) {
-                        Thread.sleep(1000);
-                        Thread.runAndroid(new Runnable() {
-                            @Override
-                            public void run() {
-                                startGameWindow(activity);//开启游戏窗口
-                            }
-                        });
-                    }
-                }
-            });
         }
 
         /**
@@ -25174,7 +25302,7 @@ public class GT {
          *
          * @param activity
          */
-        public static void Close_virtualButton(Activity activity) {
+        public static void closeVirtualButton(Activity activity) {
             View decorView = activity.getWindow().getDecorView();
             int uiOptions = View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                     | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_FULLSCREEN;
@@ -25299,7 +25427,6 @@ public class GT {
             }
         }
 
-
         /**
          * 隐藏ActionBar
          *
@@ -25356,7 +25483,6 @@ public class GT {
                 activity.getWindow().setStatusBarColor(Color.TRANSPARENT);
             }
         }
-
 
         /**
          * 沉浸式模式 (隐藏状态栏，去掉ActionBar，隐藏导航栏)
@@ -25439,7 +25565,6 @@ public class GT {
 
 
         }
-
 
     }
 
@@ -25775,6 +25900,12 @@ public class GT {
             public void onActivityResult(int requestCode, int resultCode, @Nullable Intent intent) {
                 super.onActivityResult(requestCode, resultCode, intent);
                 onResultData(requestCode, resultCode, intent);
+            }
+
+            @Override
+            public void onActivityReenter(int resultCode, Intent data) {
+                super.onActivityReenter(resultCode, data);
+                onResultData(resultCode, resultCode, data);
             }
 
             /**
@@ -26847,20 +26978,22 @@ public class GT {
             }
             fragmentNames.clear();//清空数据
 
-            for (int i = 0; i < fragmentManager.getBackStackEntryCount(); i++) {
-                String[] fragmentDataArray = fragmentManager.getBackStackEntryAt(i).toString().split(" ");
-                try {
-                    String fragmentName = fragmentDataArray[2].substring(0, fragmentDataArray[2].length() - 1);//fragment名称
-                    fragmentNames.add(fragmentName);
-                } catch (Exception e) {
-                    errs(getLineInfo() + "报错:" + e);
+            if(fragmentManager != null){
+                for (int i = 0; i < fragmentManager.getBackStackEntryCount(); i++) {
+                    String[] fragmentDataArray = fragmentManager.getBackStackEntryAt(i).toString().split(" ");
+                    try {
+                        String fragmentName = fragmentDataArray[2].substring(0, fragmentDataArray[2].length() - 1);//fragment名称
+                        fragmentNames.add(fragmentName);
+                    } catch (Exception e) {
+                        errs(getLineInfo() + "报错:" + e);
+                    }
                 }
-            }
 
-            //判断当前栈中的 Fragment 数量是否有变化，如果有变化就清空 指向栈顶的值 用于监听用户按下返回键 去掉 Home Fragment 但栈顶名称还是没变
-            if (!saveStackData.equals(fragmentNames.toString())) {
+                //判断当前栈中的 Fragment 数量是否有变化，如果有变化就清空 指向栈顶的值 用于监听用户按下返回键 去掉 Home Fragment 但栈顶名称还是没变
+                if (!saveStackData.equals(fragmentNames.toString())) {
 //                topFragmentName = "";
-                saveStackData = fragmentNames.toString();//保存本次栈信息
+                    saveStackData = fragmentNames.toString();//保存本次栈信息
+                }
             }
 
             return fragmentNames;
@@ -27382,8 +27515,10 @@ public class GT {
                 }
 
                 //如果传递的值不为null 那就传递
-                if (intent != null && activity != null) {
+                if (intent != null && activity != null && activity instanceof GT_Activity.BaseActivity) {
                     ((GT_Activity.BaseActivity) activity).onActivityResult(1, 1, intent);
+                } else {
+                    activity.onActivityReenter(1, intent);
                 }
 
                 if (fragmentManager != null) {
@@ -27413,8 +27548,10 @@ public class GT {
 
             try {
                 //如果传递的值不为null 那就传递
-                if (intent != null && activity != null) {
+                if (intent != null && activity != null && activity instanceof GT_Activity.BaseActivity) {
                     ((GT_Activity.BaseActivity) activity).onActivityResult(1, 1, intent);
+                } else {
+                    activity.onActivityReenter(1, intent);
                 }
 
                 if (fragmentManager != null) {
@@ -27451,8 +27588,10 @@ public class GT {
                 }
 
                 //如果传递的值不为null 那就传递
-                if (intent != null && activity != null) {
-                    ((GT_Activity.BaseActivity) activity).onActivityResult(requestCode, resultCode, intent);
+                if (intent != null && activity != null && activity instanceof GT_Activity.BaseActivity) {
+                    ((GT_Activity.BaseActivity) activity).onActivityResult(1, 1, intent);
+                } else {
+                    activity.onActivityReenter(1, intent);
                 }
 
                 if (fragmentManager != null) {
@@ -27480,8 +27619,10 @@ public class GT {
 
             try {
                 //如果传递的值不为null 那就传递
-                if (intent != null && activity != null) {
-                    ((GT_Activity.BaseActivity) activity).onActivityResult(requestCode, resultCode, intent);
+                if (intent != null && activity != null && activity instanceof GT_Activity.BaseActivity) {
+                    ((GT_Activity.BaseActivity) activity).onActivityResult(1, 1, intent);
+                } else {
+                    activity.onActivityReenter(1, intent);
                 }
 
                 if (fragmentManager != null) {
@@ -28574,7 +28715,7 @@ public class GT {
                 progressDialog.setCancelable(isCancelable);
                 progressDialog.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
 
-                Thread.runJava(new Runnable() {
+                GT.Thread.getInstance(0).execute(new Runnable() {
                     @Override
                     public void run() {
                         boolean isStart = false;        //是否开始加载
@@ -28862,6 +29003,53 @@ public class GT {
             public Activity activity;
             public GT_Fragment gt_fragment;
             public View view;
+            public Window window;
+            public Dialog dialog;
+
+
+            @Override
+            public void onCreate(@Nullable Bundle savedInstanceState) {
+                super.onCreate(savedInstanceState);
+                if (setLeftAndRightFilling()) {
+                    setStyle(STYLE_NO_TITLE, R.style.Dialog);
+                }
+            }
+
+            @Override
+            public void onStart() {
+                super.onStart();
+                dialog = getDialog();
+                if (dialog == null) return;
+                window = dialog.getWindow();
+                if (window == null) return;
+                //设置充满宽高
+                WindowManager.LayoutParams attributes = window.getAttributes();
+                attributes.gravity = setGravity();
+                window.setAttributes(attributes);
+                window.setLayout(setWidth(), setHeight());
+                window.setWindowAnimations(setWindowAnimations());//设置打开和关闭动画
+            }
+
+            //设置显示动画与退出动画
+            protected int setWindowAnimations() {
+                return R.style.bottomDialogAnimation;
+            }
+
+            //设置对话框宽度
+            protected int setWidth() {
+                return ViewGroup.LayoutParams.MATCH_PARENT;
+            }
+
+            //设置对话框高度
+            protected int setHeight() {
+                return ViewGroup.LayoutParams.WRAP_CONTENT;
+            }
+
+
+            //设置对话框 显示位置
+            protected int setGravity() {
+                return Gravity.CENTER;
+            }
 
             @Override
             public void onAttach(Context context) {
@@ -28893,21 +29081,18 @@ public class GT {
             }
 
             /**
-             * 注意： 本方法建议在 onResume 方法中使用 设置充满全屏
+             * 注意： 设置左右填充,左右不留间隔
              */
-            protected void setFullScreen() {
-                Objects.requireNonNull(Objects.requireNonNull(getDialog()).getWindow()).setLayout(-1, -2);
+            protected boolean setLeftAndRightFilling() {
+                return false;
             }
 
             /**
              * 设置弹出对话框时是否隐藏虚拟按键
              */
             protected void setHideBottomNav() {
-                Dialog dialog = getDialog();
-                Window window = dialog.getWindow();
-                if (window == null || window.getDecorView() == null) {
-                    return;
-                }
+                if (dialog == null) return;
+                if (window == null || window.getDecorView() == null) return;
                 //不加FLAG_NOT_FOCUSABLE，dialog显示时就会显示虚拟按键
                 window.addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE);
                 dialog.setOnShowListener(d -> {
@@ -28915,10 +29100,10 @@ public class GT {
                     window.clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE);
                 });
                 //隐藏虚拟按键
-                hideBottomNavInner(dialog);
+                hideBottomNavInner();
                 window.getDecorView().setOnSystemUiVisibilityChangeListener(visibility -> {
                     //从后台重新进入时，要再次隐藏虚拟按键
-                    hideBottomNavInner(dialog);
+                    hideBottomNavInner();
                 });
             }
 
@@ -28927,8 +29112,8 @@ public class GT {
              *
              * @param dialog
              */
-            private static void hideBottomNavInner(Dialog dialog) {
-                View decorView = dialog.getWindow().getDecorView();
+            private void hideBottomNavInner() {
+                View decorView = getDialog().getWindow().getDecorView();
                 int vis = decorView.getSystemUiVisibility();
                 vis |= View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                         | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
@@ -28990,9 +29175,7 @@ public class GT {
              * @return
              */
             public void finish(Intent intent) {
-
                 if (intent != null) {
-
                     Fragment targetFragment = getTargetFragment();//判断打开该页面的是 Activity 还是 Fragment
                     if (targetFragment != null) {
                         //向 Fragment 反馈数据
@@ -29001,21 +29184,24 @@ public class GT {
                         //向 Activity 反馈数据
                         //抢救一下 activity 为空的情况
                         if (activity == null) {
-                            activity = getActivity();//从当前Fragment 中获取Activity
+                            activity = requireActivity();
+                            if (activity == null) {
+                                activity = getActivity();//从当前Fragment 中获取Activity
+                            }
                             if (activity == null) {
                                 activity = gt_fragment.getActivity();//紧急情况使用 gt 内部获取Activity
                             }
                         }
 
                         //如果传递的值不为null 那就传递
-                        if (activity != null) {
+                        if (activity != null && activity instanceof GT_Activity.BaseActivity) {
                             ((GT_Activity.BaseActivity) activity).onActivityResult(1, 1, intent);
+                        } else {
+                            activity.onActivityReenter(1, intent);
                         }
                     }
                 }
-
                 dismiss();
-
             }
 
             /**
@@ -29029,7 +29215,6 @@ public class GT {
             public void finish(Activity activity, Intent intent) {
 
                 if (intent != null) {
-
                     Fragment targetFragment = getTargetFragment();//判断打开该页面的是 Activity 还是 Fragment
                     if (targetFragment != null) {
                         //向 Fragment 反馈数据
@@ -29038,15 +29223,19 @@ public class GT {
                         //向 Activity 反馈数据
                         //抢救一下 activity 为空的情况
                         if (activity == null) {
-                            activity = getActivity();//从当前Fragment 中获取Activity
+                            activity = requireActivity();
+                            if (activity == null) {
+                                activity = getActivity();//从当前Fragment 中获取Activity
+                            }
                             if (activity == null) {
                                 activity = gt_fragment.getActivity();//紧急情况使用 gt 内部获取Activity
                             }
                         }
-
                         //如果传递的值不为null 那就传递
-                        if (activity != null) {
+                        if (activity != null && activity instanceof GT_Activity.BaseActivity) {
                             ((GT_Activity.BaseActivity) activity).onActivityResult(1, 1, intent);
+                        } else {
+                            activity.onActivityReenter(1, intent);
                         }
                     }
                 }
@@ -29063,9 +29252,7 @@ public class GT {
              * @return
              */
             public void finish(Intent intent, int requestCode, int resultCode) {
-
                 if (intent != null) {
-
                     Fragment targetFragment = getTargetFragment();//判断打开该页面的是 Activity 还是 Fragment
                     if (targetFragment != null) {
                         //向 Fragment 反馈数据
@@ -29081,8 +29268,11 @@ public class GT {
                         }
 
                         //如果传递的值不为null 那就传递
-                        if (activity != null) {
-                            ((GT_Activity.BaseActivity) activity).onActivityResult(requestCode, resultCode, intent);
+                        //如果传递的值不为null 那就传递
+                        if (activity != null && activity instanceof GT_Activity.BaseActivity) {
+                            ((GT_Activity.BaseActivity) activity).onActivityResult(1, 1, intent);
+                        } else {
+                            activity.onActivityReenter(1, intent);
                         }
                     }
                 }
@@ -29100,9 +29290,7 @@ public class GT {
              * @return
              */
             public void finish(Activity activity, Intent intent, int requestCode, int resultCode) {
-
                 if (intent != null) {
-
                     Fragment targetFragment = getTargetFragment();//判断打开该页面的是 Activity 还是 Fragment
                     if (targetFragment != null) {
                         //向 Fragment 反馈数据
@@ -29111,15 +29299,19 @@ public class GT {
                         //向 Activity 反馈数据
                         //抢救一下 activity 为空的情况
                         if (activity == null) {
-                            activity = getActivity();//从当前Fragment 中获取Activity
+                            activity = requireActivity();
+                            if (activity == null) {
+                                activity = getActivity();//从当前Fragment 中获取Activity
+                            }
                             if (activity == null) {
                                 activity = gt_fragment.getActivity();//紧急情况使用 gt 内部获取Activity
                             }
                         }
-
                         //如果传递的值不为null 那就传递
-                        if (activity != null) {
-                            ((GT_Activity.BaseActivity) activity).onActivityResult(requestCode, resultCode, intent);
+                        if (activity != null && activity instanceof GT_Activity.BaseActivity) {
+                            ((GT_Activity.BaseActivity) activity).onActivityResult(1, 1, intent);
+                        } else {
+                            activity.onActivityReenter(1, intent);
                         }
                     }
                 }
@@ -29145,9 +29337,7 @@ public class GT {
              * @跳转其他的 DialogFragment
              */
             public void startDialogFragment(Class<?> dialogFragmentClass) {
-
                 DialogFragment fragment = null;
-
                 try {
                     fragment = (DialogFragment) dialogFragmentClass.newInstance();
                 } catch (IllegalAccessException e) {
@@ -29155,7 +29345,6 @@ public class GT {
                 } catch (java.lang.InstantiationException e) {
                     e.printStackTrace();
                 }
-
                 fragment.show(getFragmentManager(), fragment.getClass().toString());// 弹出退出提示
             }
 
@@ -29318,7 +29507,7 @@ public class GT {
                 initView(view, savedInstanceState);// 主要方法
                 loadData();
                 // 监听单击返回键无效
-                getDialog().setOnKeyListener(new Dialog.OnKeyListener() {
+                dialog.setOnKeyListener(new Dialog.OnKeyListener() {
 
                     @Override
                     public boolean onKey(DialogInterface dialog, int keyCode, KeyEvent event) {
@@ -29333,7 +29522,7 @@ public class GT {
                 //是否解决 EditText bug
                 if (isSolveEditTextBug) {
                     //给EditText 组件设置返回事件
-                    Thread.runJava(new Runnable() {
+                    GT.Thread.getInstance(0).execute(new Runnable() {
                         @Override
                         public void run() {
                             setViewBackListener(view);
@@ -30082,7 +30271,7 @@ public class GT {
     /**
      * 封装了集合类
      */
-    public static class GT_FloatingWindow implements SaveObject.SaveBean {
+    public static class FloatingWindow implements SaveObject.SaveBean {
 
         /**
          * 必看事项
@@ -30456,6 +30645,30 @@ public class GT {
             }
 
             /**
+             * 设置累加位置
+             *
+             * @param x
+             * @param y
+             */
+            public void setLayoutParamsXY(int x, int y) {
+                layoutParams.x = layoutParams.x + x;
+                layoutParams.y = layoutParams.y + y;
+                windowManager.updateViewLayout(view, layoutParams);
+            }
+
+            /**
+             * 设置绝对位置
+             *
+             * @param x
+             * @param y
+             */
+            public void setXY(int x, int y) {
+                layoutParams.x = x;
+                layoutParams.y = y;
+                windowManager.updateViewLayout(view, layoutParams);
+            }
+
+            /**
              * 注意:次方法不会销毁悬浮窗
              * 是否显示悬浮窗
              */
@@ -30697,6 +30910,10 @@ public class GT {
             private View view;
             protected int layout;
             public Context context;
+
+            public View getView() {
+                return view;
+            }
 
             protected void buildData() {
             }
@@ -32528,7 +32745,7 @@ public class GT {
          *
          * @return
          */
-        public static abstract class NotificationBase implements SaveObject.SaveBean, GT.Frame.ViewModelFeedback {
+        public static abstract class BaseNotification implements SaveObject.SaveBean, GT.Frame.ViewModelFeedback {
 
             @Override
             public void onViewModeFeedback(Object... obj) {
@@ -32613,12 +32830,12 @@ public class GT {
             protected void bingData() {
             }
 
-            public NotificationBase() {
+            public BaseNotification() {
                 this.context = getActivity();
                 builder = new NotificationCompat.Builder(context);
             }
 
-            public NotificationBase(Context context) {
+            public BaseNotification(Context context) {
                 this.context = context;
                 builder = new NotificationCompat.Builder(context);
                 bingData();
@@ -32737,7 +32954,7 @@ public class GT {
              * @param isCommit 是否自动提交刷新UI
              * @return
              */
-            public NotificationBase setImageRes(int imageId, int resource) {
+            public BaseNotification setImageRes(int imageId, int resource) {
                 if (imageId < 0 || resource == 0) return this;
                 remoteViews1.setImageViewResource(imageId, resource);
                 remoteViews2.setImageViewResource(imageId, resource);
@@ -32756,7 +32973,7 @@ public class GT {
              * @param isCommit 是否自动提交刷新UI
              * @return
              */
-            public NotificationBase setImageUrl(int imageId, Object resource) {
+            public BaseNotification setImageUrl(int imageId, Object resource) {
                 if (imageId < 0 || resource == null) return this;
                 this.imageId = imageId;
                 this.resource = resource;
@@ -32778,7 +32995,7 @@ public class GT {
              * @param isCommit 是否自动提交刷新UI
              * @return
              */
-            public NotificationBase setTextViewText(int tvId, String text) {
+            public BaseNotification setTextViewText(int tvId, String text) {
                 if (tvId < 0) return this;
                 if (text != null) {
                     remoteViews1.setTextViewText(tvId, text);
@@ -32795,7 +33012,7 @@ public class GT {
              * @param builders
              * @return
              */
-            public NotificationBase commit(NotificationCompat.Builder... builders) {
+            public BaseNotification commit(NotificationCompat.Builder... builders) {
                 if (builders.length > 0) {
                     builder = builders[0];
                 }
@@ -32895,7 +33112,7 @@ public class GT {
         }
 
         //封装的第二代 通知 (非服务端开启，想在服务里启动的话自己加)
-        public static abstract class AnnotationNotification extends NotificationBase {
+        public static abstract class AnnotationNotification extends BaseNotification {
 
             public AnnotationNotification() {
                 super();
@@ -32947,7 +33164,7 @@ public class GT {
             }
 
             @Override
-            public NotificationBase commit(NotificationCompat.Builder... builders) {
+            public BaseNotification commit(NotificationCompat.Builder... builders) {
                 super.commit(builders);
                 return this;
             }
@@ -33119,9 +33336,12 @@ public class GT {
 
             //是否隐藏
             if (isHide && builder.getPriority() != NotificationCompat.PRIORITY_DEFAULT) {
-                Thread.runJava(() -> {
-                    Thread.sleep(1000);
-                    builder.setPriority(NotificationCompat.PRIORITY_DEFAULT);
+                GT.Thread.getInstance(0).execute(new Runnable() {
+                    @Override
+                    public void run() {
+                        Thread.sleep(1000);
+                        builder.setPriority(NotificationCompat.PRIORITY_DEFAULT);
+                    }
                 });
             }
 
@@ -33434,7 +33654,7 @@ public class GT {
          *
          * @param builder
          */
-        public static NotificationBase startNotification(NotificationBase notificationBase) {
+        public static BaseNotification startNotification(BaseNotification notificationBase) {
             notificationManagerCompat.notify(NOTIFYID, notificationBase.builder.build());
             return notificationBase;
         }
@@ -33668,7 +33888,6 @@ public class GT {
         public static <T> T dataBinding(Object thisObj) {
             if (thisObj == null) return null;
             T obj = null;
-
             try {
                 boolean isCache = false;
                 Class<ViewModel> classStr = (Class<ViewModel>) AnnotationAssist.getGenericityClass(thisObj);
@@ -33702,8 +33921,8 @@ public class GT {
                     //关联 onViewModeFeedback 方法触发
                     Object state = AnnotationAssist.setReflectMethodValue(obj, "setBindingData", String.class, Object.class, thisObj);
                     if ("false".equals(state)) {
-                        GT.errs("View 与 ViewMode 自动绑定失败，请手动绑定");
                         if (LOG.GT_LOG_TF) {
+                            GT.errs("View 与 ViewMode 自动绑定失败，请手动绑定");
                             logt("反射出来的类：" + obj);
                             logt("被操作的类:" + obj);
                             logt("自适应返回值类型:" + thisObj);
@@ -33713,8 +33932,8 @@ public class GT {
                 } else {//如果是缓存，那就仅仅加载 bindingView
                     Object state = AnnotationAssist.setReflectMethodValue(obj, "loadBindingView", String.class, Object.class, thisObj);
                     if ("false".equals(state)) {
-                        GT.errs("View 与 ViewMode 自动绑定失败，请手动绑定");
                         if (LOG.GT_LOG_TF) {
+                            GT.errs("View 与 ViewMode 自动绑定失败，请手动绑定");
                             logt("反射出来的类：" + obj);
                             logt("被操作的类:" + obj);
                             logt("自适应返回值类型:" + thisObj);
@@ -34816,7 +35035,6 @@ public class GT {
                 }
             };
 
-
             public interface OnTriggerValue {
                 void onTriggerValue(String str);
             }
@@ -35909,8 +36127,8 @@ public class GT {
                     //将当前的 ViewModel 设置进入 Model中
                     Object state = AnnotationAssist.setReflectMethodValue(obj, "setBindingView", String.class, Object.class, this);
                     if ("false".equals(state)) {
-                        GT.err("ViewMode 与 Model 自动绑定失败，请手动绑定");
                         if (LOG.GT_LOG_TF) {
+                            GT.err("ViewMode 与 Model 自动绑定失败，请手动绑定");
                             logt("反射出来的类：" + obj);
                             logt("被操作的类:" + obj);
                             logt("自适应返回值类型:" + this);
@@ -36503,34 +36721,10 @@ public class GT {
      */
     public static class GT_MediaPlayer {
 
-        /**
-         * 本类使用案列：
-         * GT.GT_MediaPlayer mediaPlayer = new GT.GT_MediaPlayer(this);//实例化对象
-         * mediaPlayer.loadMusic(R.raw.bg_music);  //加载 或 更新 将要播放的 音频， 此方法可用于 更新接下来要播放的音频
-         * mediaPlayer.play_pause();//暂停 或 播放
-         * mediaPlayer.stop();//停止播放
-         * mediaPlayer.close();//释放资源
-         * <p>
-         * 相关属性设置
-         * int getDuration()：获取流媒体的总播放时长，单位是毫秒。
-         * int getCurrentPosition()：获取当前流媒体的播放的位置，单位是毫秒。
-         * void seekTo(int msec)：设置当前MediaPlayer的播放位置，单位是毫秒。
-         * void setLooping(boolean looping)：设置是否循环播放。
-         * boolean isLooping()：判断是否循环播放。
-         * boolean  isPlaying()：判断是否正在播放。
-         * void prepare()：同步的方式装载流媒体文件。
-         * void prepareAsync()：异步的方式装载流媒体文件。
-         * void release ()：回收流媒体资源。
-         * void setAudioStreamType(int streamtype)：设置播放流媒体类型。
-         * void setWakeMode(Context context, int mode)：设置CPU唤醒的状态。
-         * setNextMediaPlayer(MediaPlayer next)：设置当前流媒体播放完毕，下一个播放的MediaPlayer。
-         */
         private boolean isPlay = true;    //定义是否为可播放状态
-        private Activity activity;
         private MediaPlayer mediaPlayer;
         private int resid = 0;
         private String url = null;
-
 
         /**
          * 获取 mediaPlayer 组件
@@ -36541,57 +36735,53 @@ public class GT {
             return mediaPlayer;
         }
 
-        /**
-         * 初始化音频播放的上下文
-         *
-         * @param activity
-         */
-        public GT_MediaPlayer(Activity activity) {
-            this.activity = activity;
-        }//初始化 上下文
+        public GT_MediaPlayer() {
+        }
 
         /**
-         * 加载 res 目录下的资源文件
+         * 加载或切换 res 目录下的资源文件
          *
+         * @param activity
          * @param resid
          * @return
          */
-        public GT_MediaPlayer loadMusic(int resid) {
+        public GT_MediaPlayer loadMusic(Activity activity, int resid) {
             this.resid = resid;
             if (!isPlay) {       //停止过播放
-                if (mediaPlayer.isPlaying()) {//如果属于播放状态
+                if (mediaPlayer != null && mediaPlayer.isPlaying()) {//如果属于播放状态
                     mediaPlayer.stop();//停止播放
                     mediaPlayer.release();//释放资源
                 }
             }
-            mediaPlayer = null;//清空内存中对象
+            if (mediaPlayer != null) {
+                mediaPlayer.stop();
+                mediaPlayer.release();
+                mediaPlayer = null;//清空内存中对象
+            }
             mediaPlayer = MediaPlayer.create(activity, resid);    //初始化 MediaPlayer 对象
             isPlay = true;//恢复可播放状态
             return this;
         }//加载 res 目录下的资源文件
 
         /**
-         * 获取 网络 或 SD 上的的音频资源
+         * 加载或切换
          *
          * @param url
          * @return
          */
         public GT_MediaPlayer loadMusic(String url) {
             this.url = url;
-            if (!isPlay) {       //停止过播放
-                if (mediaPlayer.isPlaying()) {//如果属于播放状态
-                    mediaPlayer.stop();//停止播放
-                }
-                mediaPlayer.release();//释放资源
-            }
-            mediaPlayer = null;//清空内存中对象
-            mediaPlayer = new MediaPlayer();
             try {
+                if (mediaPlayer != null && mediaPlayer.isPlaying()) {
+                    mediaPlayer.stop();
+                    mediaPlayer.release();
+                    mediaPlayer = null;//清空内存中对象
+                }
+                mediaPlayer = new MediaPlayer();
                 mediaPlayer.setDataSource(url);
                 mediaPlayer.prepare();//预加载音频
             } catch (IOException e) {
-                //                e.printStackTrace();
-                GT.err(getLineInfo(1), "你的音频资源可能 需要添加 网络或访问SD卡的读取权限，否则无法进行有效的获取资源 url:" + url);
+                GT.errt("你的音频资源可能 需要添加 网络或访问SD卡的读取权限，否则无法进行有效的获取资源 url:" + url);
             }
             isPlay = true;//恢复可播放状态
             return this;
@@ -36602,9 +36792,9 @@ public class GT {
          *
          * @return
          */
-        public GT_MediaPlayer play() {
+        public GT_MediaPlayer play(Activity activity) {
             if (mediaPlayer != null) {
-                recover_play();//如果音频被停止了就恢复音频可播放，在进行 start
+                recover_play(activity);//如果音频被停止了就恢复音频可播放，在进行 start
                 mediaPlayer.start();
             }
             return this;
@@ -36625,19 +36815,93 @@ public class GT {
         /**
          * 播放 与 暂停
          *
+         * @param activity   上下文
+         * @param onLoadData 播放监听
+         * @param times      进度刷新间隔(毫秒)
          * @return
          */
-        public GT_MediaPlayer play_pause() {
-            if (mediaPlayer != null) {
-                recover_play();//如果音频被停止了就恢复音频可播放，在进行 start
-                if (!mediaPlayer.isPlaying()) {        //如果当前的 mediaPlayer 处于暂停状态  且 播放状态为 false 没有在播放
-                    mediaPlayer.start();//继续播放
-                } else {  //当前处于音乐暂停状态
-                    mediaPlayer.pause();//暂停音乐
-                }
+        private boolean isPlayEnd = false;//是否播放完成
+
+        /**
+         * 添加监听
+         *
+         * @param onLoadData
+         * @param times
+         * @return
+         */
+        public GT_MediaPlayer addListener(OnLoadData onLoadData, long... times) {
+            if (onLoadData == null) return this;
+            long time = 1000;//默认1秒刷新
+            if (times != null && times.length > 0) {
+                time = times[0];
+            }
+            try {
+                long finalTime = time;
+                GT.Thread.getInstance(0).execute(() -> {
+                    boolean isStart = false;//是否开始播放
+                    while (mediaPlayer != null && mediaPlayer.isPlaying()) {
+                        int currentPosition = mediaPlayer.getCurrentPosition();
+                        if (currentPosition != 0) {
+                            if (!isStart) {//是否开始播放
+                                isStart = true;
+                                onLoadData.onPlayStart(mediaPlayer);
+                                mediaPlayer.setOnCompletionListener(mp -> {
+                                    isPlayEnd = true;
+                                    GT.Thread.runAndroid(() -> onLoadData.onPlayProgress(mediaPlayer.getDuration(), mediaPlayer.getCurrentPosition(), 100, mp));
+                                    GT.Thread.sleep(finalTime);
+                                    GT.Thread.runAndroid(() -> onLoadData.onPlayEnd(mp));
+                                });
+                            }
+                            if (!isPlayEnd) {//是否结束播放
+                                int mProgress = (int) (((float) mediaPlayer.getCurrentPosition() / mediaPlayer.getDuration()) * 100);
+                                onLoadData.onPlayProgress(mediaPlayer.getDuration(), currentPosition, mProgress, mediaPlayer);
+                            }
+                        }
+                        GT.Thread.sleep(finalTime);//进度监听间隔
+                    }
+                });
+
+            } catch (Exception e) {
+                onLoadData.onPlayFailed(e);
             }
             return this;
-        }//播放 与 暂停
+        }
+
+        public GT_MediaPlayer play_pause(Activity activity, MediaPlayer.OnCompletionListener onCompletionListener, long... times) {
+            if (activity == null) return this;
+       /* long time = 1000;//默认1秒刷新
+        if (times != null && times.length > 0) {
+            time = times[0];
+        }*/
+            try {
+                if (mediaPlayer != null) {
+                    recover_play(activity);//如果音频被停止了就恢复音频可播放，在进行 start
+                    if (!mediaPlayer.isPlaying()) { //如果当前的 mediaPlayer 处于暂停状态  且 播放状态为 false 没有在播放
+                        mediaPlayer.start();//继续播放
+//                    addListener(onLoadData, time);
+                        if (onCompletionListener != null)
+                            mediaPlayer.setOnCompletionListener(onCompletionListener);
+                    } else {  //当前处于音乐暂停状态
+                        mediaPlayer.pause();//暂停音乐
+                    }
+                }
+            } catch (Exception e) {
+//            if (onLoadData != null) onLoadData.onPlayFailed(e);
+            }
+            return this;
+        }
+
+        /**
+         * 获取是否还在播放
+         *
+         * @return
+         */
+        public boolean isPlaying() {
+            if (mediaPlayer != null) {
+                return mediaPlayer.isPlaying();
+            }
+            return false;
+        }
 
         /**
          * 停止音乐
@@ -36657,7 +36921,7 @@ public class GT {
          *
          * @return
          */
-        private GT_MediaPlayer recover_play() {
+        private GT_MediaPlayer recover_play(Activity activity) {
             if (mediaPlayer != null) {
                 if (!isPlay) {       //停止过播放
                     if (mediaPlayer.isPlaying()) {//如果属于播放状态
@@ -36673,7 +36937,7 @@ public class GT {
                             mediaPlayer.setDataSource(url);
                             mediaPlayer.prepare();//预加载音频
                         } catch (IOException e) {
-                            GT.err(getLineInfo(1), "你的音频资源可能 需要添加 网络或访问SD卡的读取权限，否则无法进行有效的获取资源 url:" + url);
+                            GT.errt("你的音频资源可能 需要添加 网络或访问SD卡的读取权限，否则无法进行有效的获取资源 url:" + url);
                         }
                     }
                     isPlay = true;//恢复可播放状态
@@ -36694,6 +36958,40 @@ public class GT {
                 mediaPlayer = null;
             }
         }//释放资源
+
+
+        //增强版请求接口
+        public static abstract class OnLoadData {
+            /**
+             * 开始播放
+             */
+            public void onPlayStart(MediaPlayer mediaPlayer) {
+            }
+
+            /**
+             * 下载进度
+             *
+             * @param max             当前播放进度最大值
+             * @param currentPosition 当前播放进度
+             * @param progress        播放百分比
+             * @param mediaPlayer     当前播放控制
+             */
+            public void onPlayProgress(int max, int currentPosition, int progress, MediaPlayer mediaPlayer) {
+            }
+
+            /**
+             * 播放完毕
+             */
+            public void onPlayEnd(MediaPlayer mediaPlayer) {
+            }
+
+            /**
+             * 播放异常
+             */
+            public void onPlayFailed(Exception e) {
+            }
+
+        }
 
 
     }
@@ -37014,13 +37312,14 @@ public class GT {
 
     /**
      * 注解类
+     * 注意:如果app项目中无法使用注解，那就需要在 gradle.properties 文件中 加入以下代码：android.nonFinalResIds=false
      */
     public static class Annotations {
 
         /**
          * 为给 Activity 类 标的注解 用法如下：
          *
-         * @Activity(R.layout.activity_main) public class DemoActivity extends AppCompatActivity {....}
+         * @Activity(R.layout.activity_***) public class DemoActivity extends AppCompatActivity {....}
          */
         @Target(ElementType.TYPE)
         @Retention(RetentionPolicy.RUNTIME)
@@ -37372,6 +37671,12 @@ public class GT {
             @Target(ElementType.FIELD)
             @Retention(RetentionPolicy.RUNTIME)
             @interface GT_Layout {
+                int value();
+            }
+
+            @Target(ElementType.FIELD)
+            @Retention(RetentionPolicy.RUNTIME)
+            @interface GT_Index {
                 int value();
             }
 
@@ -39503,7 +39808,6 @@ public class GT {
          * @return
          */
         public static Object[] returnActivityOrView(Object obj) {
-
             Context activity = null;
             View view = null;
             if (obj instanceof Activity) {
@@ -39516,8 +39820,8 @@ public class GT {
                 view = fragment.getView();
             } else if (obj instanceof View) {
                 view = (View) obj;
-            } else if (obj instanceof GT_FloatingWindow.BaseFloatingWindow) {
-                GT_FloatingWindow.BaseFloatingWindow fwb = (GT_FloatingWindow.BaseFloatingWindow) obj;
+            } else if (obj instanceof FloatingWindow.BaseFloatingWindow) {
+                FloatingWindow.BaseFloatingWindow fwb = (FloatingWindow.BaseFloatingWindow) obj;
                 view = fwb.getView();
             } else if (obj instanceof GT_View.BaseView) {
                 GT_View.BaseView baseView = (GT_View.BaseView) obj;
@@ -39531,13 +39835,12 @@ public class GT {
             } else if (obj instanceof RecyclerView.ViewHolder) {
                 RecyclerView.ViewHolder baseView = (RecyclerView.ViewHolder) obj;
                 view = baseView.itemView;
-            } else if (obj instanceof GT_Notification.NotificationBase) {
-                GT_Notification.NotificationBase baseView = (GT_Notification.NotificationBase) obj;
+            } else if (obj instanceof GT_Notification.BaseNotification) {
+                GT_Notification.BaseNotification baseView = (GT_Notification.BaseNotification) obj;
                 activity = baseView.context;
             } else {
                 GT.err("暂不支持该组件注解：" + obj);
             }
-
             Object[] objArray = new Object[2];
             objArray[0] = activity;
             objArray[1] = view;
@@ -39700,7 +40003,7 @@ public class GT {
          * @return 如果返回值类型为null则默认返回 true:设置值成功 false:设置值失败
          */
         public static <T> T setReflectMethodValue(Object setObj, String setMethodName, Class<T> returnType, Class<?> setValueTypeClass, Object... setValue) {
-
+            if (setObj == null) return (T) "false";
 //            logt("进入反射:" + setObj);
 //            logt("被调用的方法名:" + setMethodName);
 //            logt("设置值的类型:" + setValueTypeClass);
@@ -39890,11 +40193,13 @@ public class GT {
         public static Map<String, Object> getReflectVariateValueAll(Object classz) {
             Map<String, Object> map = new HashMap<>();
             Class aClass = null;
+            Object obj = null;
             if (classz instanceof Class) {//class 类
                 aClass = (Class) classz;
             } else if (classz instanceof String) {//类包名
                 aClass = stringToClass(classz.toString());
             } else {//实体类
+                obj = classz;
                 aClass = classz.getClass();
             }
             if (aClass == null) return null;
@@ -39902,7 +40207,8 @@ public class GT {
             for (Field field : f) {
                 field.setAccessible(true);//设置可以读取 private 值
                 try {
-                    map.put(field.getName(), field.get(aClass.newInstance()));
+                    if(obj == null) obj = aClass.newInstance();
+                    map.put(field.getName(), field.get(obj));
                 } catch (IllegalAccessException e) {
                     e.printStackTrace();
                 } catch (InstantiationException e) {
@@ -40499,6 +40805,52 @@ public class GT {
         private static ExecutorService executorSize;
         //这也是一个定长的线程池，但是可以支持周期性的任务,以下例子表示延迟一秒过后，每两秒执行一次。
         private static ScheduledExecutorService scheduledThreadPool;
+        //创建线程池集合
+        private static Map<Object, ExecutorService> mapExecutorService = new HashMap<>();
+
+        /**
+         * @param name 当前线程池的名称
+         * @return
+         */
+        public synchronized static ExecutorService getInstance(Object name) {
+            //如果改名称的线程池已存在 那就直接返回使用
+            if (mapExecutorService.keySet().contains(name)) return mapExecutorService.get(name);
+            //否则创建一个新的 线程池进入缓存里再返回使用
+            ExecutorService instance = getInstance(0);
+            mapExecutorService.put(name, instance);
+            return instance;
+        }
+
+
+        /**
+         * 获取一个新的且自定义线程数的 线程池
+         *
+         * @param threadSize 获取线程池内线程数量
+         * @param name       当前线程池的名称
+         * @return
+         */
+        public synchronized static ExecutorService getInstance(int threadSize, String name) {
+            //如果改名称的线程池已存在 那就直接返回使用
+            if (mapExecutorService.keySet().contains(name)) return mapExecutorService.get(name);
+            //否则创建一个新的 线程池进入缓存里再返回使用
+            ExecutorService instance = getInstance(threadSize);
+            mapExecutorService.put(name, instance);
+            return instance;
+        }
+
+        /**
+         * @param threadSize 获取线程池内线程数量
+         * @return
+         */
+        public synchronized static ExecutorService getInstance(int threadSize) {
+            if (threadSize <= 0) {
+                return Executors.newCachedThreadPool();
+            } else if (threadSize == 1) {
+                return Executors.newSingleThreadExecutor();
+            } else {
+                return Executors.newFixedThreadPool(threadSize);
+            }
+        }
 
         /**
          * 获取不同类型的线程池
@@ -40525,6 +40877,7 @@ public class GT {
                 return executorSize;
             }
         }
+
 
         /**
          * 获取特殊的循环线程池
@@ -41085,9 +41438,8 @@ public class GT {
 
         public static Application application;//全局 Context
         public static Context context;//全局 Context
-        public static ExecutorService instance;//线程池
+        public static ExecutorService thread;//普通逻辑 线程池
         public static GT_SharedPreferences sp;//sp存储
-        public static final GT_Date gt_date = new GT_Date();//日期工具
         public static final GT_Animation animation = new GT_Animation();//动画
         public static int height, width;//屏幕宽高
         public static boolean isOneInstall;//是否第一次安卓
@@ -41099,7 +41451,7 @@ public class GT {
             super.onCreate();
             application = this;
             context = getApplicationContext();//全局 Context
-            instance = Thread.getInstance(0);//获取唯一线程池
+            thread = Thread.getInstance(0);//获取唯一线程池
             sp = new GT_SharedPreferences(context, context.getPackageName(), true);//sp存储
             LOG.LOG_TF = ApplicationUtils.isApkInDebug(this);//设置在测试的时候才会打开日志
             if ("0".equals(String.valueOf(sp.query("isOneInstall")))) { //判断是否第一次安装
@@ -41118,7 +41470,6 @@ public class GT {
 
             init(context);
             loadData(context);
-
         }
 
         public void init(Context context) {
