@@ -25969,8 +25969,8 @@ public class GT {
 
                     if(stackFragments != null && stackFragments.size() > 0){
                         Fragment fragment = stackFragments.get(stackFragments.size() - 1);
-                        GT.logt("当前页面:" + fragment.getClass().getName());
-                        GT.logt("黑名单:" + GT_Fragment.backFragmentList);
+//                        GT.logt("当前页面:" + fragment.getClass().getName());
+//                        GT.logt("黑名单:" + GT_Fragment.backFragmentList);
                         if (!GT_Fragment.backFragmentList.contains(fragment.getClass().getName())) {
                             gt_fragment.finish();
                             return super.onKeyDown(keyCode, event);
