@@ -223,7 +223,6 @@ public class GT_DataBindingMain extends AbstractProcessor {
 
                             .append("import android.content.*;\n")
                             .append("import android.database.*;\n")
-                            .append("import android.os.*;\n")
                             .append("import android.accessibilityservice.*;\n")
                             .append("import android.animation.*;\n")
                             .append("import android.app.*;\n")

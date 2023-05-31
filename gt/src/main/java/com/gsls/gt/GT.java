@@ -338,7 +338,7 @@ import dalvik.system.PathClassLoader;
  * <p>
  * <p>
  * 更新时间:2023.5.31
- * 更新内容 v1.4.3 版本：
+ * 更新内容 v1.4.3.5 版本：
  * CSDN 博客/官网教程:https://blog.csdn.net/qq_39799899
  * GitHub https://github.com/1079374315/GT
  * 更新内容如下：完成 Kotlin 新版，具体新增那些请参考官网教程
