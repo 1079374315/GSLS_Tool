@@ -17,15 +17,12 @@ import java.util.Set;
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.Processor;
 import javax.annotation.processing.RoundEnvironment;
-import javax.annotation.processing.SupportedSourceVersion;
-import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
 import javax.tools.JavaFileObject;
 
 
 @AutoService(Processor.class)//编译时运行这个类
-@SupportedSourceVersion(SourceVersion.RELEASE_8)
 public class GT_DataBindingMain extends AbstractProcessor {
 
     /**
@@ -42,6 +39,8 @@ public class GT_DataBindingMain extends AbstractProcessor {
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
         DataBindingUtils.log("GSLS_King");
         DataBindingUtils.log("roundEnv" + roundEnv);
+
+        boolean isKT = false;//是否为 KT
 
         List<String> filtrationList = Arrays.asList(DataBindingUtils.filtrationArray);
         DataBindingUtils.log("filtrationList:" + filtrationList);
@@ -105,6 +104,7 @@ public class GT_DataBindingMain extends AbstractProcessor {
 
                     //Java
                     if (FileUtils.fileExist(classPath)) {
+                        isKT = false;
                         DataBindingUtils.log("Yes:" + classPath);
                         bindingBean.setJavaLibraryName(libraryName);
                         bindingBean.setClassPath(classPath);
@@ -129,6 +129,7 @@ public class GT_DataBindingMain extends AbstractProcessor {
 
                     //Kotlin
                     if (FileUtils.fileExist(classPath2)) {
+                        isKT = true;
                         DataBindingUtils.log("Yes:" + classPath2);
                         bindingBean.setJavaLibraryName(libraryName);
                         bindingBean.setClassPath(classPath2);
@@ -198,14 +199,52 @@ public class GT_DataBindingMain extends AbstractProcessor {
 
                 //生成包名
                 StringBuilder builder = new StringBuilder();
-                builder.append("package " + bindingBean.getPackName() + ";\n\n")
-                        .append("import android.os.*;\n")
-                        .append("import android.view.*;\n")
-                        .append("import android.webkit.*;\n")
-                        .append("import com.*;\n")
-                        .append("import androidx.*;\n")
-                        .append("import com.gsls.gt.*;\n")
-                        .append("import android.widget.*;\n");
+
+                if(!isKT){//是 java
+                    builder.append("package " + bindingBean.getPackName() + ";\n\n")
+                            .append("import android.os.*;\n")
+                            .append("import android.view.*;\n")
+                            .append("import android.webkit.*;\n")
+                            .append("import " + bindingBean.getPackName() + ".*;\n")
+                            .append("import androidx.*;\n")
+                            .append("import android.*;\n")
+                            .append("import com.gsls.gt.*;\n")
+                            .append("import android.widget.*;\n");
+                }else{//是 kt
+                    builder.append("package " + bindingBean.getPackName() + ";\n\n")
+                            .append("import " + bindingBean.getPackName() + ".*;\n")
+
+                            .append("import androidx.annotation.*;\n")
+                            .append("import androidx.appcompat.*;\n")
+                            .append("import androidx.core.*;\n")
+                            .append("import androidx.fragment.*;\n")
+                            .append("import androidx.lifecycle.*;\n")
+                            .append("import androidx.recyclerview.*;\n")
+
+                            .append("import android.content.*;\n")
+                            .append("import android.database.*;\n")
+                            .append("import android.os.*;\n")
+                            .append("import android.accessibilityservice.*;\n")
+                            .append("import android.animation.*;\n")
+                            .append("import android.app.*;\n")
+                            .append("import android.graphics.*;\n")
+                            .append("import android.hardware.*;\n")
+                            .append("import android.media.*;\n")
+                            .append("import android.net.*;\n")
+                            .append("import android.provider.*;\n")
+                            .append("import android.renderscript.*;\n")
+                            .append("import android.telephony.*;\n")
+                            .append("import android.text.*;\n")
+                            .append("import android.util.*;\n")
+                            .append("import android.view.*;\n")
+                            .append("import android.os.*;\n")
+                            .append("import android.view.*;\n")
+                            .append("import android.webkit.*;\n")
+                            .append("import android.widget.*;\n")
+
+                            .append("import com.gsls.gt.*;\n");
+                }
+
 
                 //导入特定的包
                 switch (bindingBean.getBingingType()) {

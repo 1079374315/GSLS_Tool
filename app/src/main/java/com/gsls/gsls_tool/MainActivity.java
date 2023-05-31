@@ -4,8 +4,9 @@ import android.os.Bundle;
 import android.view.View;
 
 import com.gsls.gt.GT;
+import com.gsls.gt_databinding.annotation.GT_DataBinding;
 
-//@GT_DataBinding(setLayout = "activity_main", setBindingType = GT_DataBinding.Activity)
+@GT_DataBinding(setLayout = "activity_main", setBindingType = GT_DataBinding.Activity)
 @GT.Annotations.GT_AnnotationActivity(R.layout.activity_main)
 public class MainActivity extends GT.GT_Activity.AnnotationActivity {
 
@@ -20,14 +21,7 @@ public class MainActivity extends GT.GT_Activity.AnnotationActivity {
             }
         });
 
-        /*JSONObject jsonObject = new JSONObject();
-        try {
-            jsonObject.put("name","123456");
-        } catch (JSONException e) {
-            throw new RuntimeException(e);
-        }*/
 
-//        TestEntity testEntity = (TestEntity)JSONObject.toBean(jsonObject, TestEntity.class);
 
     }
 
