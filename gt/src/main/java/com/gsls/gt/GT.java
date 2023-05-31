@@ -2320,7 +2320,6 @@ public class GT {
                     //按照订阅者实体类中的线程大小进行从小到大排序
                     priorityList.sort(Comparator.comparing(EventBusBean::getPriority));
 
-                    GT.logt("eventKey:" + eventKeys);
                     //如果有指定订阅者类型,那就进行分类
                     if (eventKeys != null && eventKeys.length != 0) {
                         //给指定或筛选后的订阅者发布该事件
@@ -2340,14 +2339,6 @@ public class GT {
 
                     //类型匹配后进行向订阅者按照线程优先级进行遍历 发布事件
                     for (EventBusBean eventBusBean : priorityList) {
-                        GT.logt("eventBusBean:" + eventBusBean);
-                        GT.logt("eventKeys:" + eventKeys);
-                        if (eventKeys != null) {
-                            GT.logt("eventKeysSize:" + eventKeys.length);
-                            for (Object str : eventKeys) {
-                                GT.logt("str:" + str);
-                            }
-                        }
                         //如果有指定订阅者类型,那就进行过滤筛选
                         if (eventKeys != null && eventKeys.length != 0) {
                             if (!eventBusBean.eventKey.contains(SEPARATOR)) continue;
@@ -2367,7 +2358,6 @@ public class GT {
                         }
 
                         //按照订阅者的线程类型进行处理
-                        GT.logt("eventBusBean.threadMode:" + eventBusBean.threadMode);
                         switch (eventBusBean.threadMode) {
                             case ThreadMode.POSTING://默认使用发布事件的当前线程
                                 t = setMethodValue(eventBusBean, eventData);
@@ -25965,12 +25955,8 @@ public class GT {
             public boolean onKeyDown(int keyCode, KeyEvent event) {
                 if (gt_fragment != null) {
                     List<Fragment> stackFragments = gt_fragment.getStackFragments();
-//                    GT.logt("当前栈里的:" + gt_fragment.getStackFragmentSimpleNames());
-
                     if(stackFragments != null && stackFragments.size() > 0){
                         Fragment fragment = stackFragments.get(stackFragments.size() - 1);
-//                        GT.logt("当前页面:" + fragment.getClass().getName());
-//                        GT.logt("黑名单:" + GT_Fragment.backFragmentList);
                         if (!GT_Fragment.backFragmentList.contains(fragment.getClass().getName())) {
                             gt_fragment.finish();
                             return super.onKeyDown(keyCode, event);
@@ -25983,15 +25969,12 @@ public class GT {
                     for (Fragment fragment : stackFragments) {
                         //如果当前 不是 退出黑名单中的 那就进行返回退出
                         if (!GT_Fragment.backFragmentList.contains(fragment.getClass().getName())) {
-                            GT.logt("当前页面:" + fragment.getClass().getName());
-                            GT.logt("黑名单:" + GT_Fragment.backFragmentList);
                             gt_fragment.finish();
                             return super.onKeyDown(keyCode, event);
                         }
                     }*/
                 }
                 //需要处理返回事件，不然无法正常退出
-//                GT.logt("是黑名单 禁止返回 true");
                 return super.onKeyDown(keyCode, event);
             }
 
