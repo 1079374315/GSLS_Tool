@@ -51,6 +51,7 @@ dependencies {
     implementation 'com.google.code.gson:gson:2.10.1'// json解析
     //注册本地库 gt-DataBinding
     implementation project(':gt-DataBinding')
+    annotationProcessor project(':gt-DataBinding')
     kapt project(':gt-DataBinding')
     //协程
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.1'
