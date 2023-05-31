@@ -338,7 +338,7 @@ import dalvik.system.PathClassLoader;
  * <p>
  * <p>
  * 更新时间:2023.5.31
- * 更新内容 v1.4.3.7 版本：
+ * 更新内容 v1.4.3.8 版本：
  * CSDN 博客/官网教程:https://blog.csdn.net/qq_39799899
  * GitHub https://github.com/1079374315/GT
  * 更新内容如下：
@@ -358,6 +358,7 @@ import dalvik.system.PathClassLoader;
  * 9.新增线程池封装类管理 map,增多获取简洁线程池 api
  * 10.适配 kotlin 版 gt-DataBinding 注解
  * 11.新增简易强大 kotlin 扩展函数库 库名为 GTE.kt
+ * 12.优化 GT_Fragment 类，API，解决 Fragment返回失效的问题
  * <p>
  * <p>
  * 小提示：(用于 AndroidStudio )
@@ -9575,7 +9576,7 @@ public class GT {
                 }
 
                 //如果没有指定 主键，那就默认创建自增主键
-                if(KeySqlCode == null || KeySqlCode.length() == 0){
+                if (KeySqlCode == null || KeySqlCode.length() == 0) {
                     KeySqlCode = tableName + "_ID INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL";
                 }
 
@@ -25963,24 +25964,48 @@ public class GT {
 
             public boolean onKeyDown(int keyCode, KeyEvent event) {
                 if (gt_fragment != null) {
-                    List<String> fragmentFragments = gt_fragment.getFragmentFragments();
                     List<Fragment> stackFragments = gt_fragment.getStackFragments();
+//                    GT.logt("当前栈里的:" + gt_fragment.getStackFragmentSimpleNames());
+
+                    if(stackFragments != null && stackFragments.size() > 0){
+                        Fragment fragment = stackFragments.get(stackFragments.size() - 1);
+                        GT.logt("当前页面:" + fragment.getClass().getName());
+                        GT.logt("黑名单:" + GT_Fragment.backFragmentList);
+                        if (!GT_Fragment.backFragmentList.contains(fragment.getClass().getName())) {
+                            gt_fragment.finish();
+                            return super.onKeyDown(keyCode, event);
+                        }
+                    }
+
+
+                    /*
+                     Collections.reverse(stackFragments);//倒序
                     for (Fragment fragment : stackFragments) {
                         //如果当前 不是 退出黑名单中的 那就进行返回退出
                         if (!GT_Fragment.backFragmentList.contains(fragment.getClass().getName())) {
+                            GT.logt("当前页面:" + fragment.getClass().getName());
+                            GT.logt("黑名单:" + GT_Fragment.backFragmentList);
+                            gt_fragment.finish();
                             return super.onKeyDown(keyCode, event);
                         }
-
-                    }
+                    }*/
                 }
-                //TODO 有问题，需要处理返回事件，不然无法正常退出
-                return true;
+                //需要处理返回事件，不然无法正常退出
+//                GT.logt("是黑名单 禁止返回 true");
+                return super.onKeyDown(keyCode, event);
             }
 
             public void addNotBack(Class<?> classz) {
                 String fragmentName = classz.getName();
                 if (!GT_Fragment.backFragmentList.contains(fragmentName)) {
                     GT_Fragment.backFragmentList.add(fragmentName);
+                }
+            }
+
+            public void deleteNotBack(Class<?> classz) {
+                String fragmentName = classz.getName();
+                if (GT_Fragment.backFragmentList.contains(fragmentName)) {
+                    GT_Fragment.backFragmentList.remove(fragmentName);
                 }
             }
 
@@ -26171,6 +26196,13 @@ public class GT {
             String fragmentName = classz.getName();
             if (!backFragmentList.contains(fragmentName)) {
                 backFragmentList.add(fragmentName);
+            }
+        }
+
+        public void deleteNotBack(Class<?> classz) {
+            String fragmentName = classz.getName();
+            if (GT_Fragment.backFragmentList.contains(fragmentName)) {
+                GT_Fragment.backFragmentList.remove(fragmentName);
             }
         }
 
@@ -26688,6 +26720,27 @@ public class GT {
             return this;
         }
 
+
+        /**
+         * 设置首页模式(推荐)
+         * @param cutEffectsIndex   设置切换动画
+         * @param homeFragmentId    设置首页
+         * @param mainFragmentId    设置所有多级页面的
+         * @param fragmentHomeClass 默认启动的Fragment
+         * @return
+         */
+        public GT_Fragment setHomeModel(int cutEffectsIndex, int homeFragmentId, int mainFragmentId, Class<?> fragmentHomeClass) {
+            gt_fragment.setFragmentCutEffectsIndex(cutEffectsIndex)//设置切换动画 0-7  推荐0、4
+                    .setHomeFragmentId(homeFragmentId)//设置首页 五个大菜单 容器
+                    .setMainFragmentId(mainFragmentId)//设置所有多级页面的 容器
+                    .switchingMode(GT.GT_Fragment.DIALOG)//使用 hied show 的方式加载 首页(HomeFragment.class)
+                    .startFragmentHome(fragmentHomeClass)//使用 主界面方式启动 HomeFragment
+                    .startMode(GT.GT_Fragment.MODE_SINGLE_TOP)//栈顶模式
+                    .switchingMode(GT.GT_Fragment.ACTIVITY);//启动方式为 add delete
+
+            return this;
+        }
+
         /**
          * 切换特效
          *
@@ -26989,7 +27042,7 @@ public class GT {
             }
             fragmentNames.clear();//清空数据
 
-            if(fragmentManager != null){
+            if (fragmentManager != null) {
                 for (int i = 0; i < fragmentManager.getBackStackEntryCount(); i++) {
                     String[] fragmentDataArray = fragmentManager.getBackStackEntryAt(i).toString().split(" ");
                     try {
@@ -28427,6 +28480,13 @@ public class GT {
                 }
             }
 
+            public void deleteNotBack(Class<?> classz) {
+                String fragmentName = classz.getName();
+                if (GT_Fragment.backFragmentList.contains(fragmentName)) {
+                    GT_Fragment.backFragmentList.remove(fragmentName);
+                }
+            }
+
         }
 
         /**
@@ -29648,6 +29708,13 @@ public class GT {
                 }
             }
 
+            public void deleteNotBack(Class<?> classz) {
+                String fragmentName = classz.getName();
+                if (GT_Fragment.backFragmentList.contains(fragmentName)) {
+                    GT_Fragment.backFragmentList.remove(fragmentName);
+                }
+            }
+
         }
 
         /**
@@ -30834,6 +30901,13 @@ public class GT {
                 }
             }
 
+            public void deleteNotBack(Class<?> classz) {
+                String fragmentName = classz.getName();
+                if (GT_Fragment.backFragmentList.contains(fragmentName)) {
+                    GT_Fragment.backFragmentList.remove(fragmentName);
+                }
+            }
+
         }
 
         /**
@@ -31081,6 +31155,13 @@ public class GT {
                 }
             }
 
+            public void deleteNotBack(Class<?> classz) {
+                String fragmentName = classz.getName();
+                if (GT_Fragment.backFragmentList.contains(fragmentName)) {
+                    GT_Fragment.backFragmentList.remove(fragmentName);
+                }
+            }
+
         }
 
         //封装第二代 PopupWindow
@@ -31271,6 +31352,13 @@ public class GT {
                 String fragmentName = classz.getName();
                 if (!GT_Fragment.backFragmentList.contains(fragmentName)) {
                     GT_Fragment.backFragmentList.add(fragmentName);
+                }
+            }
+
+            public void deleteNotBack(Class<?> classz) {
+                String fragmentName = classz.getName();
+                if (GT_Fragment.backFragmentList.contains(fragmentName)) {
+                    GT_Fragment.backFragmentList.remove(fragmentName);
                 }
             }
 
@@ -40218,7 +40306,7 @@ public class GT {
             for (Field field : f) {
                 field.setAccessible(true);//设置可以读取 private 值
                 try {
-                    if(obj == null) obj = aClass.newInstance();
+                    if (obj == null) obj = aClass.newInstance();
                     map.put(field.getName(), field.get(obj));
                 } catch (IllegalAccessException e) {
                     e.printStackTrace();
