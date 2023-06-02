@@ -337,8 +337,8 @@ import dalvik.system.PathClassLoader;
  * GSLS_Tool
  * <p>
  * <p>
- * 更新时间:2023.6.1
- * 更新内容 v1.4.3.9 版本：
+ * 更新时间:2023.6.2
+ * 更新内容 v1.4.4.0 版本：
  * CSDN 博客/官网教程:https://blog.csdn.net/qq_39799899
  * GitHub https://github.com/1079374315/GT
  * 更新内容如下：
@@ -358,7 +358,7 @@ import dalvik.system.PathClassLoader;
  * 9.新增线程池封装类管理 map,增多获取简洁线程池 api
  * 10.适配 kotlin 版 gt-DataBinding 注解
  * 11.新增简易强大 kotlin 扩展函数库 库名为 GTE.kt
- * 12.修改 GT_Fragment 类 物理返回策略
+ * 12.优化 GT_Fragment 类，API，修改 GT_Fragment 类 返回策略
  * <p>
  * <p>
  * 小提示：(用于 AndroidStudio )
@@ -1108,144 +1108,12 @@ public class GT {
         return view;
     }
 
-    /**
-     * @param toFragment
-     * @跳转 Fragment
-     */
-    public static void startFragment(Fragment toFragment) {
-        if (GT_Fragment.gt_fragment != null) {
-            GT_Fragment.gt_fragment.startFragment(toFragment);
-        }
+    public static GT_Fragment startFragment(Object fragmentObj, int... resLayouts) {
+        return GT_Fragment.gt_fragment.startFragment(fragmentObj, resLayouts);
     }
 
-    /**
-     * @param toFragment
-     * @跳转 Fragment
-     */
-    public static void startFragment(Class<?> toFragment) {
-        if (GT_Fragment.gt_fragment != null) {
-            GT_Fragment.gt_fragment.startFragment(toFragment);
-        }
-    }
-
-    /**
-     * 跳转Fragment
-     *
-     * @param fragmentId
-     * @param toFragment
-     */
-    public static void startFragment(int fragmentId, Fragment toFragment) {
-        if (GT_Fragment.gt_fragment != null) {
-            GT_Fragment.gt_fragment.startFragment(toFragment, fragmentId);
-        }
-    }
-
-    /**
-     * 跳转Fragment
-     *
-     * @param fragmentId
-     * @param toFragment
-     */
-    public static void startFragment(int fragmentId, Class<?> toFragment) {
-        if (GT_Fragment.gt_fragment != null) {
-            GT_Fragment.gt_fragment.startFragment(toFragment, fragmentId);
-        }
-    }
-
-    /**
-     * 跳转Fragment
-     *
-     * @param toFragment 跳转的Fragment
-     * @param startMode  启动模式
-     */
-    public static void startFragment(Fragment toFragment, int startMode) {
-        if (GT_Fragment.gt_fragment != null) {
-            GT_Fragment.gt_fragment.startMode(startMode).startFragment(toFragment);
-        }
-    }
-
-    /**
-     * 跳转Fragment
-     *
-     * @param toFragment 跳转的Fragment
-     * @param startMode  启动模式
-     */
-    public static void startFragment(Class<?> toFragment, int startMode) {
-        if (GT_Fragment.gt_fragment != null) {
-            GT_Fragment.gt_fragment.startMode(startMode).startFragment(toFragment);
-        }
-    }
-
-    /**
-     * 跳转Fragment
-     *
-     * @param fragmentId 跳转的容器
-     * @param toFragment 跳转的Fragment
-     * @param startMode  启动模式
-     */
-    public static void startFragment(int fragmentId, Fragment toFragment, int startMode) {
-        if (GT_Fragment.gt_fragment != null) {
-            GT_Fragment.gt_fragment.startMode(startMode).startFragment(toFragment, fragmentId);
-        }
-    }
-
-    /**
-     * 跳转Fragment
-     *
-     * @param fragmentId 跳转的容器
-     * @param toFragment 跳转的Fragment
-     * @param startMode  启动模式
-     */
-    public static void startFragment(int fragmentId, Class<?> toFragment, int startMode) {
-        if (GT_Fragment.gt_fragment != null) {
-            GT_Fragment.gt_fragment.startMode(startMode).startFragment(toFragment, fragmentId);
-        }
-    }
-
-    /**
-     * @param toFragment
-     * @跳转 Fragment
-     */
-    public static void startFragmentHome(Fragment toFragment) {
-        if (GT_Fragment.gt_fragment != null) {
-            GT_Fragment.gt_fragment.startFragmentHome(toFragment);
-        }
-    }
-
-    /**
-     * @param toFragment
-     * @跳转 Fragment
-     */
-    public static void startFragmentHome(Class<?> toFragment) {
-        if (GT_Fragment.gt_fragment != null) {
-            GT_Fragment.gt_fragment.startFragmentHome(toFragment);
-        }
-    }
-
-    /**
-     * 使用首页模式启动Fragment
-     *
-     * @param fragmentId
-     * @param toFragment
-     */
-    public static void startFragmentHome(int fragmentId, Fragment toFragment) {
-        if (GT_Fragment.gt_fragment != null) {
-            GT_Fragment.gt_fragment.startMode(GT_Fragment.MODE_HOME);
-            GT_Fragment.gt_fragment.startFragment(toFragment, fragmentId);
-        }
-    }
-
-    /**
-     * 使用首页模式启动Fragment
-     *
-     * @param fragmentId
-     * @param toFragment
-     */
-    public static void startFragmentHome(int fragmentId, Class<?> toFragment) {
-        if (GT_Fragment.gt_fragment != null) {
-            GT_Fragment.gt_fragment.startMode(GT_Fragment.MODE_HOME);
-            GT_Fragment.gt_fragment.startFragment(toFragment, fragmentId);
-        }
+    public static GT_Fragment startFragmentHome(Object fragmentObj, int... resLayouts) {
+        return GT_Fragment.gt_fragment.startFragmentHome(fragmentObj,resLayouts);
     }
 
     /**
@@ -25753,7 +25621,7 @@ public class GT {
              * @param <T>
              * @return
              */
-            public <T> GT_Fragment startFragmentHome(Object fragmentObj, int fragmentId) {
+            public GT_Fragment startFragmentHome(Object fragmentObj, int fragmentId) {
                 return GT_Fragment.gt_fragment.startFragmentHome(fragmentObj, fragmentId);
             }
 
@@ -25911,7 +25779,6 @@ public class GT {
          * 2.获取组件可以使用注解的方式进行获取
          */
         public abstract static class AnnotationActivity extends BaseActivity {
-
             @Override
             protected void onCreate(Bundle savedInstanceState) {
                 super.onCreate(savedInstanceState);
@@ -27273,7 +27140,7 @@ public class GT {
          * @param <T>
          * @return
          */
-        public <T> GT_Fragment startFragmentHome(Object fragmentObj, int... resLayouts) {
+        public GT_Fragment startFragmentHome(Object fragmentObj, int... resLayouts) {
             switchingMode(GT.GT_Fragment.DIALOG);
             startMode(MODE_HOME);//设置本次 Fragment 的启动模式
             int resLayout = homeFragmentId;
@@ -28031,7 +27898,7 @@ public class GT {
              * @param <T>
              * @return
              */
-            public <T> GT_Fragment startFragmentHome(Object fragmentObj, int... resLayouts) {
+            public GT_Fragment startFragmentHome(Object fragmentObj, int... resLayouts) {
                 return GT_Fragment.gt_fragment.startFragmentHome(fragmentObj, resLayouts);
             }
 
@@ -29222,82 +29089,13 @@ public class GT {
                 return view;
             }
 
-            /**
-             * @param toFragment
-             * @跳转 Fragment
-             */
-            public void startFragment(Fragment toFragment) {
-                if (GT_Fragment.gt_fragment != null) {
-                    GT_Fragment.gt_fragment.startFragment(toFragment);
-                }
+
+            public GT_Fragment startFragment(Object fragmentObj, int... resLayouts) {
+                return GT_Fragment.gt_fragment.startFragment(fragmentObj,resLayouts);
             }
 
-            /**
-             * @param toFragment
-             * @跳转 Fragment
-             */
-            public void startFragment(Class<?> toFragment) {
-                if (GT_Fragment.gt_fragment != null) {
-                    GT_Fragment.gt_fragment.startFragment(toFragment);
-                }
-            }
-
-            public void startFragment(int fragmentId, Fragment toFragment) {
-                if (GT_Fragment.gt_fragment != null) {
-                    GT_Fragment.gt_fragment.startFragment(toFragment, fragmentId);
-                }
-            }
-
-            public void startFragment(int fragmentId, Class<?> toFragment) {
-                if (GT_Fragment.gt_fragment != null) {
-                    GT_Fragment.gt_fragment.startFragment(toFragment, fragmentId);
-                }
-            }
-
-            /**
-             * @param toFragment
-             * @跳转 Fragment
-             */
-            public void startFragmentHome(Fragment toFragment) {
-                if (GT_Fragment.gt_fragment != null) {
-                    GT_Fragment.gt_fragment.startFragmentHome(toFragment);
-                }
-            }
-
-            /**
-             * @param toFragment
-             * @跳转 Fragment
-             */
-            public void startFragmentHome(Class<?> toFragment) {
-                if (GT_Fragment.gt_fragment != null) {
-                    GT_Fragment.gt_fragment.startFragmentHome(toFragment);
-                }
-            }
-
-            /**
-             * 使用首页模式启动Fragment
-             *
-             * @param fragmentId
-             * @param toFragment
-             */
-            public void startFragmentHome(int fragmentId, Fragment toFragment) {
-                if (GT_Fragment.gt_fragment != null) {
-                    GT_Fragment.gt_fragment.startMode(GT_Fragment.MODE_HOME);
-                    GT_Fragment.gt_fragment.startFragment(toFragment, fragmentId);
-                }
-            }
-
-            /**
-             * 使用首页模式启动Fragment
-             *
-             * @param fragmentId
-             * @param toFragment
-             */
-            public void startFragmentHome(int fragmentId, Class<?> toFragment) {
-                if (GT_Fragment.gt_fragment != null) {
-                    GT_Fragment.gt_fragment.startMode(GT_Fragment.MODE_HOME);
-                    GT_Fragment.gt_fragment.startFragment(toFragment, fragmentId);
-                }
+            public GT_Fragment startFragmentHome(Object fragmentObj, int... resLayouts) {
+                return GT_Fragment.gt_fragment.startFragmentHome(fragmentObj, resLayouts);
             }
 
             /**
@@ -29370,9 +29168,15 @@ public class GT {
             @Override
             public void onViewCreated(View view, @Nullable Bundle savedInstanceState) {
                 super.onViewCreated(view, savedInstanceState);
+                dialog = getDialog();
+                if (dialog == null) return;
+                window = dialog.getWindow();
+                if (window == null) return;
+
                 initView(view, savedInstanceState);// 主要方法
                 loadData();
                 // 监听单击返回键无效
+
                 dialog.setOnKeyListener(new Dialog.OnKeyListener() {
 
                     @Override
@@ -41283,6 +41087,78 @@ public class GT {
         public static boolean isOneInstall;//是否第一次安卓
         public static boolean isTest = false;//是否为测试服 false: 正式服 true:测试服
         public static boolean isFrontDesk = true;//是否前台
+
+        public Application getApplication() {
+            return application;
+        }
+
+        public void setApplication(Application application) {
+            GTApplication.application = application;
+        }
+
+        public Context getContext() {
+            return context;
+        }
+
+        public void setContext(Context context) {
+            GTApplication.context = context;
+        }
+
+        public ExecutorService getThread() {
+            return thread;
+        }
+
+        public void setThread(ExecutorService thread) {
+            GTApplication.thread = thread;
+        }
+
+        public GT_SharedPreferences getSp() {
+            return sp;
+        }
+
+        public void setSp(GT_SharedPreferences sp) {
+            GTApplication.sp = sp;
+        }
+
+        public int getHeight() {
+            return height;
+        }
+
+        public void setHeight(int height) {
+            GTApplication.height = height;
+        }
+
+        public int getWidth() {
+            return width;
+        }
+
+        public void setWidth(int width) {
+            GTApplication.width = width;
+        }
+
+        public boolean isIsOneInstall() {
+            return isOneInstall;
+        }
+
+        public void setIsOneInstall(boolean isOneInstall) {
+            GTApplication.isOneInstall = isOneInstall;
+        }
+
+        public boolean isIsTest() {
+            return isTest;
+        }
+
+        public void setIsTest(boolean isTest) {
+            GTApplication.isTest = isTest;
+        }
+
+        public boolean isIsFrontDesk() {
+            return isFrontDesk;
+        }
+
+        public void setIsFrontDesk(boolean isFrontDesk) {
+            GTApplication.isFrontDesk = isFrontDesk;
+        }
 
         @Override
         public void onCreate() {

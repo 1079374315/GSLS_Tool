@@ -201,15 +201,48 @@ public class GT_DataBindingMain extends AbstractProcessor {
                 StringBuilder builder = new StringBuilder();
 
                 if(!isKT){//是 java
-                    builder.append("package " + bindingBean.getPackName() + ";\n\n")
+                    /*builder.append("package " + bindingBean.getPackName() + ";\n\n")
+                            .append("import " + bindingBean.getPackName() + ".*;\n")
                             .append("import android.os.*;\n")
                             .append("import android.view.*;\n")
                             .append("import android.webkit.*;\n")
-                            .append("import " + bindingBean.getPackName() + ".*;\n")
                             .append("import androidx.*;\n")
                             .append("import android.*;\n")
                             .append("import com.gsls.gt.*;\n")
-                            .append("import android.widget.*;\n");
+                            .append("import android.widget.*;\n");*/
+
+                    builder.append("package " + bindingBean.getPackName() + ";\n\n")
+                            .append("import " + bindingBean.getPackName() + ".*;\n")
+
+                            .append("import androidx.annotation.*;\n")
+                            .append("import androidx.appcompat.*;\n")
+                            .append("import androidx.core.*;\n")
+                            .append("import androidx.fragment.*;\n")
+                            .append("import androidx.lifecycle.*;\n")
+                            .append("import androidx.recyclerview.*;\n")
+
+                            .append("import android.content.*;\n")
+                            .append("import android.database.*;\n")
+                            .append("import android.accessibilityservice.*;\n")
+                            .append("import android.animation.*;\n")
+                            .append("import android.app.*;\n")
+                            .append("import android.graphics.*;\n")
+                            .append("import android.hardware.*;\n")
+                            .append("import android.media.*;\n")
+                            .append("import android.net.*;\n")
+                            .append("import android.provider.*;\n")
+                            .append("import android.renderscript.*;\n")
+                            .append("import android.telephony.*;\n")
+                            .append("import android.text.*;\n")
+                            .append("import android.util.*;\n")
+                            .append("import android.view.*;\n")
+                            .append("import android.os.*;\n")
+                            .append("import android.view.*;\n")
+                            .append("import android.webkit.*;\n")
+                            .append("import android.widget.*;\n")
+
+                            .append("import com.gsls.gt.*;\n");
+
                 }else{//是 kt
                     builder.append("package " + bindingBean.getPackName() + ";\n\n")
                             .append("import " + bindingBean.getPackName() + ".*;\n")
@@ -290,7 +323,7 @@ public class GT_DataBindingMain extends AbstractProcessor {
                         builder.append("\npublic class " + bindingBean.getClassName() + "Binding<VM> extends GT.GT_Dialog.DataBindingDialogFragment {\n\n");
                         break;
                     case GT_DataBinding.FloatingWindow:
-                        builder.append("\npublic class " + bindingBean.getClassName() + "Binding<VM> extends GT.GT_FloatingWindow.DataBindingFloatingWindow {\n\n");
+                        builder.append("\npublic class " + bindingBean.getClassName() + "Binding<VM> extends GT.FloatingWindow.DataBindingFloatingWindow {\n\n");
                         break;
                     case GT_DataBinding.PopupWindow:
                         builder.append("\npublic class " + bindingBean.getClassName() + "Binding<VM> extends GT.GT_PopupWindow.DataBindingPopupWindow {\n\n");
