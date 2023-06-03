@@ -337,8 +337,8 @@ import dalvik.system.PathClassLoader;
  * GSLS_Tool
  * <p>
  * <p>
- * 更新时间:2023.6.2
- * 更新内容 v1.4.4.0 版本：
+ * 更新时间:2023.6.3
+ * 更新内容 v1.4.4.1 版本：
  * CSDN 博客/官网教程:https://blog.csdn.net/qq_39799899
  * GitHub https://github.com/1079374315/GT
  * 更新内容如下：
@@ -25705,11 +25705,19 @@ public class GT {
 
             public boolean onKeyDown(int keyCode, KeyEvent event) {
                 if (gt_fragment == null) return true;
+
+                //处理其他Fragment 返回退出
                 List<Fragment> stackFragments = gt_fragment.getStackFragments();
                 Collections.reverse(stackFragments);
                 for(Fragment fragment : stackFragments){
                     if(fragment.isVisible()){
                         if (!GT_Fragment.backFragmentList.contains(fragment.getClass().getName())) {
+                            if(fragment instanceof GT_Fragment.BaseFragment){
+                                GT_Fragment.BaseFragment baseFragment = (GT_Fragment.BaseFragment) fragment;
+                                if(baseFragment.onBackPressed()){
+                                    return true;
+                                }
+                            }
                             gt_fragment.finish();
                             return true;
                         }else{
@@ -25717,6 +25725,7 @@ public class GT {
                         }
                     }
                 }
+
                 //需要处理返回事件，不然无法正常退出
                 for (Fragment fragment : stackFragments) {
                     if (fragment instanceof GT_Fragment.BaseFragment && gt_fragment.stackTopHashCode.equals(fragment.toString())) {
