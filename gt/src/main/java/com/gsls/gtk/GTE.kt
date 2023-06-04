@@ -70,7 +70,7 @@ fun Context.string(@StringRes id: Int): String = GT.Res.string(this, id)
 fun Activity.string(@StringRes id: Int): String = GT.Res.string(this, id)
 fun Fragment.string(@StringRes id: Int): String = GT.Res.string(requireContext(), id)
 fun DialogFragment.string(@StringRes id: Int): String = GT.Res.string(requireContext(), id)
-fun GT.FloatingWindow.BaseFloatingWindow.string(@StringRes id: Int): String =
+fun GT.GT_FloatingWindow.BaseFloatingWindow.string(@StringRes id: Int): String =
     GT.Res.string(context, id)
 
 fun GT.GT_PopupWindow.BasePopupWindow.string(@StringRes id: Int): String =
@@ -87,7 +87,7 @@ fun Context.color(@ColorRes id: Int) = GT.Res.color(this, id)
 fun Activity.color(@ColorRes id: Int) = GT.Res.color(this, id)
 fun Fragment.color(@ColorRes id: Int) = GT.Res.color(requireContext(), id)
 fun DialogFragment.color(@ColorRes id: Int) = GT.Res.color(requireContext(), id)
-fun GT.FloatingWindow.BaseFloatingWindow.color(@ColorRes id: Int) = GT.Res.color(context, id)
+fun GT.GT_FloatingWindow.BaseFloatingWindow.color(@ColorRes id: Int) = GT.Res.color(context, id)
 fun GT.GT_PopupWindow.BasePopupWindow.color(@ColorRes id: Int) = GT.Res.color(context, id)
 fun GT.GT_View.BaseView.color(@ColorRes id: Int) = GT.Res.color(context, id)
 fun GT.GT_WebView.BaseWebView.color(@ColorRes id: Int) = GT.Res.color(context, id)
@@ -99,7 +99,7 @@ fun Context.drawable(@DrawableRes id: Int): Drawable = GT.Res.drawable(this, id)
 fun Activity.drawable(@DrawableRes id: Int): Drawable = GT.Res.drawable(this, id)
 fun Fragment.drawable(@DrawableRes id: Int): Drawable = GT.Res.drawable(requireContext(), id)
 fun DialogFragment.drawable(@DrawableRes id: Int): Drawable = GT.Res.drawable(requireContext(), id)
-fun GT.FloatingWindow.BaseFloatingWindow.drawable(@DrawableRes id: Int): Drawable =
+fun GT.GT_FloatingWindow.BaseFloatingWindow.drawable(@DrawableRes id: Int): Drawable =
     GT.Res.drawable(context, id)
 
 fun GT.GT_PopupWindow.BasePopupWindow.drawable(@DrawableRes id: Int): Drawable =
@@ -118,7 +118,7 @@ fun Context.dimen(@DimenRes id: Int) = GT.Res.dimen(this, id)
 fun Activity.dimen(@DimenRes id: Int) = GT.Res.dimen(this, id)
 fun Fragment.dimen(@DimenRes id: Int) = GT.Res.dimen(requireContext(), id)
 fun DialogFragment.dimen(@DimenRes id: Int) = GT.Res.dimen(requireContext(), id)
-fun GT.FloatingWindow.BaseFloatingWindow.dimen(@DimenRes id: Int) = GT.Res.dimen(context, id)
+fun GT.GT_FloatingWindow.BaseFloatingWindow.dimen(@DimenRes id: Int) = GT.Res.dimen(context, id)
 fun GT.GT_PopupWindow.BasePopupWindow.dimen(@DimenRes id: Int) = GT.Res.dimen(context, id)
 fun GT.GT_View.BaseView.dimen(@DimenRes id: Int) = GT.Res.dimen(context, id)
 fun GT.GT_WebView.BaseWebView.dimen(@DimenRes id: Int) = GT.Res.dimen(context, id)
@@ -136,7 +136,7 @@ fun Fragment.animation(@AnimatorRes id: Int): XmlResourceParser =
 fun DialogFragment.animation(@AnimatorRes id: Int): XmlResourceParser =
     GT.Res.animation(requireContext(), id)
 
-fun GT.FloatingWindow.BaseFloatingWindow.animation(@AnimatorRes id: Int): XmlResourceParser =
+fun GT.GT_FloatingWindow.BaseFloatingWindow.animation(@AnimatorRes id: Int): XmlResourceParser =
     GT.Res.animation(context, id)
 
 fun GT.GT_PopupWindow.BasePopupWindow.animation(@AnimatorRes id: Int): XmlResourceParser =
@@ -162,10 +162,10 @@ fun <T> Fragment.inflate(@LayoutRes id: Int): T = GT.Res.inflate(requireContext(
 fun Fragment.inflate(@LayoutRes id: Int): View = GT.Res.inflate(requireContext(), id)
 fun <T> DialogFragment.inflate(@LayoutRes id: Int): T = GT.Res.inflate(requireContext(), id)
 fun DialogFragment.inflate(@LayoutRes id: Int): View = GT.Res.inflate(requireContext(), id)
-fun <T> GT.FloatingWindow.BaseFloatingWindow.inflate(@LayoutRes id: Int): T =
+fun <T> GT.GT_FloatingWindow.BaseFloatingWindow.inflate(@LayoutRes id: Int): T =
     GT.Res.inflate(context, id)
 
-fun GT.FloatingWindow.BaseFloatingWindow.inflate(@LayoutRes id: Int): View =
+fun GT.GT_FloatingWindow.BaseFloatingWindow.inflate(@LayoutRes id: Int): View =
     GT.Res.inflate(context, id)
 
 fun <T> GT.GT_PopupWindow.BasePopupWindow.inflate(@LayoutRes id: Int): T =
@@ -193,8 +193,8 @@ fun <T> Fragment.view(@IdRes id: Int): T = GT.Res.view(requireContext(), id)
 fun Fragment.view(@IdRes id: Int): View = GT.Res.view(requireContext(), id)
 fun <T> DialogFragment.view(@IdRes id: Int): T = GT.Res.view(requireContext(), id)
 fun DialogFragment.view(@IdRes id: Int): View = GT.Res.view(requireContext(), id)
-fun <T> GT.FloatingWindow.BaseFloatingWindow.view(@IdRes id: Int): T = GT.Res.view(view, id)
-fun GT.FloatingWindow.BaseFloatingWindow.view(@IdRes id: Int): View = GT.Res.view(view, id)
+fun <T> GT.GT_FloatingWindow.BaseFloatingWindow.view(@IdRes id: Int): T = GT.Res.view(view, id)
+fun GT.GT_FloatingWindow.BaseFloatingWindow.view(@IdRes id: Int): View = GT.Res.view(view, id)
 fun <T> GT.GT_PopupWindow.BasePopupWindow.view(@IdRes id: Int): T = GT.Res.view(view, id)
 fun GT.GT_PopupWindow.BasePopupWindow.view(@IdRes id: Int): View = GT.Res.view(view, id)
 fun <T> GT.GT_View.BaseView.view(@IdRes id: Int): T = GT.Res.view(view, id)
@@ -214,7 +214,7 @@ fun Fragment.stringArray(@ArrayRes id: Int): Array<String> =
 fun DialogFragment.stringArray(@ArrayRes id: Int): Array<String> =
     GT.Res.stringArray(requireContext(), id)
 
-fun GT.FloatingWindow.BaseFloatingWindow.stringArray(@ArrayRes id: Int): Array<String> =
+fun GT.GT_FloatingWindow.BaseFloatingWindow.stringArray(@ArrayRes id: Int): Array<String> =
     GT.Res.stringArray(context, id)
 
 fun GT.GT_PopupWindow.BasePopupWindow.stringArray(@ArrayRes id: Int): Array<String> =
@@ -232,7 +232,7 @@ fun Context.intArray(@ArrayRes id: Int): IntArray = GT.Res.intArray(this, id)
 fun Activity.intArray(@ArrayRes id: Int): IntArray = GT.Res.intArray(this, id)
 fun Fragment.intArray(@ArrayRes id: Int): IntArray = GT.Res.intArray(requireContext(), id)
 fun DialogFragment.intArray(@ArrayRes id: Int): IntArray = GT.Res.intArray(requireContext(), id)
-fun GT.FloatingWindow.BaseFloatingWindow.intArray(@ArrayRes id: Int): IntArray =
+fun GT.GT_FloatingWindow.BaseFloatingWindow.intArray(@ArrayRes id: Int): IntArray =
     GT.Res.intArray(context, id)
 
 fun GT.GT_PopupWindow.BasePopupWindow.intArray(@ArrayRes id: Int): IntArray =
@@ -247,7 +247,7 @@ fun Context.assetLocales(): Array<String> = GT.Res.assetLocales(this)
 fun Activity.assetLocales(): Array<String> = GT.Res.assetLocales(this)
 fun Fragment.assetLocales(): Array<String> = GT.Res.assetLocales(requireContext())
 fun DialogFragment.assetLocales(): Array<String> = GT.Res.assetLocales(requireContext())
-fun GT.FloatingWindow.BaseFloatingWindow.assetLocales(): Array<String> =
+fun GT.GT_FloatingWindow.BaseFloatingWindow.assetLocales(): Array<String> =
     GT.Res.assetLocales(context)
 
 fun GT.GT_PopupWindow.BasePopupWindow.assetLocales(): Array<String> = GT.Res.assetLocales(context)
