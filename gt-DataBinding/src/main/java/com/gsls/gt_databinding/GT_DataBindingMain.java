@@ -323,7 +323,7 @@ public class GT_DataBindingMain extends AbstractProcessor {
                         builder.append("\npublic class " + bindingBean.getClassName() + "Binding<VM> extends GT.GT_Dialog.DataBindingDialogFragment {\n\n");
                         break;
                     case GT_DataBinding.FloatingWindow:
-                        builder.append("\npublic class " + bindingBean.getClassName() + "Binding<VM> extends GT.FloatingWindow.DataBindingFloatingWindow {\n\n");
+                        builder.append("\npublic class " + bindingBean.getClassName() + "Binding<VM> extends GT.GT_FloatingWindow.DataBindingFloatingWindow {\n\n");
                         break;
                     case GT_DataBinding.PopupWindow:
                         builder.append("\npublic class " + bindingBean.getClassName() + "Binding<VM> extends GT.GT_PopupWindow.DataBindingPopupWindow {\n\n");

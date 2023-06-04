@@ -1754,6 +1754,8 @@ public class GT {
             return EventBus.getDefault().post(eventData, eventKeys);
         }
 
+
+
         /**
          * 发布粘性事件
          * 注意:在自定义 evenKey 时请不要写入 "_GT_" 字符,该字符为关键字
@@ -29943,7 +29945,7 @@ public class GT {
     /**
      * 封装了集合类
      */
-    public static class FloatingWindow implements SaveObject.SaveBean {
+    public static class GT_FloatingWindow implements SaveObject.SaveBean {
 
         /**
          * 必看事项
@@ -29991,7 +29993,7 @@ public class GT {
             private int height = -1;                           //屏幕高度
             private View view;                                 //当前加载的布局
 
-            protected Timer timer;                                 //定时器来检测是否绑定APP
+            protected Timer timer;                               //定时器来检测是否绑定APP
             private boolean isDrag = false;                      //是否可拖动
             private static boolean isShow = true;                //是否显示
 
@@ -30527,15 +30529,6 @@ public class GT {
                 EventBus.getDefault().unregister(this);//取消订阅者
             }
 
-
-            /**
-             * 内容由 ViewModel 层去提供
-             *
-             * @param obj
-             */
-           /* public void onViewModeFeedback(Object... obj) {
-
-            }*/
         }
 
         /**
@@ -39471,8 +39464,8 @@ public class GT {
                 view = fragment.getView();
             } else if (obj instanceof View) {
                 view = (View) obj;
-            } else if (obj instanceof FloatingWindow.BaseFloatingWindow) {
-                FloatingWindow.BaseFloatingWindow fwb = (FloatingWindow.BaseFloatingWindow) obj;
+            } else if (obj instanceof GT_FloatingWindow.BaseFloatingWindow) {
+                GT_FloatingWindow.BaseFloatingWindow fwb = (GT_FloatingWindow.BaseFloatingWindow) obj;
                 view = fwb.getView();
             } else if (obj instanceof GT_View.BaseView) {
                 GT_View.BaseView baseView = (GT_View.BaseView) obj;
