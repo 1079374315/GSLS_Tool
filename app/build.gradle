@@ -39,6 +39,4 @@ dependencies {
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.4.0'
 
     implementation project(':gt')
-    implementation project(':gt-DataBinding')
-    kapt project(':gt-DataBinding')
 }
