@@ -8,13 +8,12 @@ import com.gsls.gtk.logt
 import com.gsls.gtk.toStrings
 
 
-@GT_R_Build
+
 @GT_AnnotationActivity(R.layout.activity_main)
 class MainKTActivity : GT_Activity.AnnotationActivity() {
 
     override fun initView(savedInstanceState: Bundle?) {
         super.initView(savedInstanceState)
-
 
 
     }

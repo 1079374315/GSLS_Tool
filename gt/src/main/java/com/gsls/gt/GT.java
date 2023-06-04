@@ -1754,8 +1754,6 @@ public class GT {
             return EventBus.getDefault().post(eventData, eventKeys);
         }
 
-
-
         /**
          * 发布粘性事件
          * 注意:在自定义 evenKey 时请不要写入 "_GT_" 字符,该字符为关键字
@@ -30529,6 +30527,15 @@ public class GT {
                 EventBus.getDefault().unregister(this);//取消订阅者
             }
 
+
+            /**
+             * 内容由 ViewModel 层去提供
+             *
+             * @param obj
+             */
+           /* public void onViewModeFeedback(Object... obj) {
+
+            }*/
         }
 
         /**
