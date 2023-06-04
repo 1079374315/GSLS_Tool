@@ -15,16 +15,6 @@ public class MainActivity extends GT.GT_Activity.AnnotationActivity {
     protected void initView(Bundle savedInstanceState) {
         super.initView(savedInstanceState);
 
-        findViewById(R.id.btn).setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-
-
-
-
-            }
-        });
-
     }
 
 }
