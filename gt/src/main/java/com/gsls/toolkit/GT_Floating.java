@@ -63,7 +63,7 @@ import java.util.TimerTask;
  * 还可以写上 getAppName 或 getAppPack 方法，用于监听点击安卓手机已安装应用，如果返回类型为 true 则直接打开该已安装应用
  * <p>
  */
-public class GT_Floating extends GT.FloatingWindow.BaseFloatingWindow implements View.OnClickListener {
+public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow implements View.OnClickListener {
     //组件加载
     protected TextView tv_shutdown;//开关机提示
     private View cl_close;//开关机整体页面
