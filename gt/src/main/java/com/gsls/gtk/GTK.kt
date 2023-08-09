@@ -1,6 +1,10 @@
 package com.gsls.gtk
 
-object GTK {
+import com.gsls.gt.GT
+
+//继承扩展 原有的 GT库
+object GTK : GT() {
+
 
 
 }

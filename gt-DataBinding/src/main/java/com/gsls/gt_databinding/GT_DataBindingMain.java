@@ -105,12 +105,12 @@ public class GT_DataBindingMain extends AbstractProcessor {
                     //Java
                     if (FileUtils.fileExist(classPath)) {
                         isKT = false;
-                        DataBindingUtils.log("Yes:" + classPath);
+                        DataBindingUtils.log("Yes1:" + classPath);
                         bindingBean.setJavaLibraryName(libraryName);
                         bindingBean.setClassPath(classPath);
                         String query = FileUtils.query(bindingBean.getClassPath());
                         bindingBean.setClassCode(query);//设置源码
-                        DataBindingUtils.log("query1:" + query);
+                        DataBindingUtils.log("query11:" + query);
                         int R_Index = query.indexOf(".R;");
                         DataBindingUtils.log("R_Index1:" + R_Index);
                         if (R_Index != -1) {
@@ -130,13 +130,13 @@ public class GT_DataBindingMain extends AbstractProcessor {
                     //Kotlin
                     if (FileUtils.fileExist(classPath2)) {
                         isKT = true;
-                        DataBindingUtils.log("Yes:" + classPath2);
+                        DataBindingUtils.log("Yes2:" + classPath2);
                         bindingBean.setJavaLibraryName(libraryName);
                         bindingBean.setClassPath(classPath2);
                         String query = FileUtils.query(bindingBean.getClassPath());
                         bindingBean.setClassCode(query);//设置源码
-                        DataBindingUtils.log("query1:" + query);
-                        int R_Index = query.indexOf(".R;");
+                        DataBindingUtils.log("query12:" + query);
+                        int R_Index = query.indexOf(".R");
                         DataBindingUtils.log("R_Index2:" + R_Index);
                         if (R_Index != -1) {
                             int lastIndexOf = query.lastIndexOf("import ", R_Index);
@@ -298,6 +298,7 @@ public class GT_DataBindingMain extends AbstractProcessor {
                         builder.append("import android.content.Context;\n")
                                 //导入****.R
                                 .append("import " + bindingBean.getResourcePackName() + ".R;\n")
+//                                .append("import com.gsls.gtk.R;\n")
                                 .append("import java.util.List;\n")
                                 .append("import androidx.recyclerview.widget.RecyclerView;\n");
                         break;

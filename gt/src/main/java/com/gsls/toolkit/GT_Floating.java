@@ -220,7 +220,7 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
             View item_app_ico = LayoutInflater.from(this).inflate(R.layout.item_app_ico, null);
             TextView tv_appName = item_app_ico.findViewById(R.id.tv_appName);
             ImageView iv_icon = item_app_ico.findViewById(R.id.iv_icon);
-            GT.Glide.with(this).load(appBean.appIcon != null ? appBean.appIcon : R.mipmap.gt_logo).into(iv_icon);
+            GT.Glide.with(this).load(appBean.appIcon != null ? appBean.appIcon : R.mipmap.gt_logo).into(iv_icon);//6
             tv_appName.setText(appBean.name);
             flowLayout.addView(item_app_ico);//添加APP
             if (appBean.function != null) {

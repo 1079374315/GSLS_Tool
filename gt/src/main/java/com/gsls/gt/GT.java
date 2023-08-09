@@ -20,12 +20,16 @@ import android.app.ActivityManager;
 import android.app.AlertDialog;
 import android.app.Application;
 import android.app.Dialog;
+import android.app.KeyguardManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.ProgressDialog;
 import android.app.Service;
+import android.app.WallpaperInfo;
+import android.app.WallpaperManager;
+import android.app.admin.DevicePolicyManager;
 import android.content.BroadcastReceiver;
 import android.content.ClipData;
 import android.content.ClipboardManager;
@@ -43,6 +47,8 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PermissionInfo;
 import android.content.pm.ResolveInfo;
+import android.content.pm.ShortcutInfo;
+import android.content.pm.ShortcutManager;
 import android.content.res.AssetManager;
 import android.content.res.Configuration;
 import android.content.res.Resources;
@@ -71,25 +77,32 @@ import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.Icon;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
-import android.hardware.usb.UsbDevice;
-import android.hardware.usb.UsbManager;
+import android.hardware.camera2.CameraAccessException;
+import android.hardware.camera2.CameraManager;
+import android.hardware.fingerprint.FingerprintManager;
 import android.media.AudioAttributes;
+import android.media.AudioFormat;
 import android.media.AudioManager;
+import android.media.AudioRecord;
 import android.media.MediaPlayer;
+import android.media.MediaRecorder;
 import android.media.SoundPool;
 import android.media.ThumbnailUtils;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
+import android.net.TrafficStats;
 import android.net.Uri;
 import android.net.http.SslError;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.CancellationSignal;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.IBinder;
@@ -98,12 +111,15 @@ import android.os.Message;
 import android.os.Messenger;
 import android.os.PowerManager;
 import android.os.RemoteException;
+import android.os.StatFs;
 import android.provider.MediaStore;
 import android.provider.Settings;
 import android.renderscript.Allocation;
 import android.renderscript.Element;
 import android.renderscript.RenderScript;
 import android.renderscript.ScriptIntrinsicBlur;
+import android.security.keystore.KeyGenParameterSpec;
+import android.security.keystore.KeyProperties;
 import android.telephony.TelephonyManager;
 import android.text.Editable;
 import android.text.Html;
@@ -113,6 +129,7 @@ import android.text.SpannableStringBuilder;
 import android.text.Spanned;
 import android.text.TextUtils;
 import android.text.TextWatcher;
+import android.text.format.Formatter;
 import android.text.style.CharacterStyle;
 import android.text.style.ForegroundColorSpan;
 import android.util.ArrayMap;
@@ -120,6 +137,7 @@ import android.util.AttributeSet;
 import android.util.Base64;
 import android.util.DisplayMetrics;
 import android.util.Log;
+import android.util.LruCache;
 import android.util.TypedValue;
 import android.view.ContextThemeWrapper;
 import android.view.Display;
@@ -132,8 +150,10 @@ import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.view.ViewTreeObserver;
 import android.view.Window;
+import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
@@ -178,6 +198,10 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResult;
+import androidx.activity.result.ActivityResultCallback;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.AnimatorRes;
 import androidx.annotation.ArrayRes;
 import androidx.annotation.ColorRes;
@@ -202,6 +226,10 @@ import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
+import androidx.lifecycle.Lifecycle;
+import androidx.lifecycle.LifecycleEventObserver;
+import androidx.lifecycle.LifecycleOwner;
+import androidx.lifecycle.LifecycleRegistry;
 import androidx.lifecycle.ViewModel;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.lifecycle.ViewModelStore;
@@ -211,15 +239,23 @@ import androidx.recyclerview.widget.RecyclerView;
 import androidx.recyclerview.widget.StaggeredGridLayoutManager;
 
 import com.friendlyarm.AndroidSDK.HardwareInit;
-import com.github.mjdev.libaums.UsbMassStorageDevice;
-import com.github.mjdev.libaums.fs.FileSystem;
-import com.github.mjdev.libaums.fs.UsbFile;
-import com.github.mjdev.libaums.fs.UsbFileInputStream;
-import com.github.mjdev.libaums.fs.UsbFileOutputStream;
-import com.github.mjdev.libaums.partition.Partition;
 import com.google.gson.Gson;
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.Binarizer;
+import com.google.zxing.BinaryBitmap;
+import com.google.zxing.EncodeHintType;
+import com.google.zxing.LuminanceSource;
+import com.google.zxing.MultiFormatWriter;
+import com.google.zxing.RGBLuminanceSource;
+import com.google.zxing.Result;
+import com.google.zxing.WriterException;
+import com.google.zxing.common.BitMatrix;
+import com.google.zxing.common.HybridBinarizer;
+import com.google.zxing.qrcode.QRCodeReader;
+import com.google.zxing.qrcode.QRCodeWriter;
 import com.gsls.gt_databinding.annotation.GT_DaoBuild;
 import com.gsls.gt_databinding.annotation.GT_HttpCallBuild;
+import com.gsls.gtk.GTEKt;
 import com.gsls.toolkit.GT_Floating;
 
 import org.json.JSONArray;
@@ -239,6 +275,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -267,6 +304,7 @@ import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Proxy;
 import java.lang.reflect.Type;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.net.HttpURLConnection;
 import java.net.Inet4Address;
 import java.net.InetAddress;
@@ -279,6 +317,7 @@ import java.net.URLEncoder;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.security.InvalidParameterException;
+import java.security.KeyStore;
 import java.security.MessageDigest;
 import java.sql.Time;
 import java.sql.Timestamp;
@@ -295,8 +334,8 @@ import java.util.ConcurrentModificationException;
 import java.util.Date;
 import java.util.Enumeration;
 import java.util.GregorianCalendar;
-import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
@@ -306,6 +345,7 @@ import java.util.Set;
 import java.util.TimeZone;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -321,6 +361,7 @@ import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
 import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.DESKeySpec;
@@ -334,31 +375,36 @@ import dalvik.system.PathClassLoader;
 
 /**
  * 工具类说明：
- * GSLS_Tool
+ * GSLS_TOOL
  * <p>
  * <p>
- * 更新时间:2023.6.3
- * 更新内容 v1.4.4.1 版本：
+ * 更新时间:2023.8.9
+ * 更新内容 v1.4.4.6 版本：
  * CSDN 博客/官网教程:https://blog.csdn.net/qq_39799899
  * GitHub https://github.com/1079374315/GT
  * 更新内容如下：
- * 1.优化 Hibernate 数据库（具体使用教程请参考：[第9章：Hibernate(热度推荐：✪✪✪✪✪✪)]）
- * (1)新增索引功能：单列索引、组合索引、唯一索引
- * (2)新增 数据库Hibernate 使用 接口的方式调用管理数据库API
- * (3)将数据库注解 @GT.Hibernate.GT_Property 改为了 @GT.Hibernate.GT_Column
- * (4)数据库新增 读写锁，线程操作更安全
- * (5)增强数据库 保存全部数据saveAll() 的功能(之前最多一次性能保存50万条，增强后内存足够的情况下，无上限)
- * 2.优化日志 调用方法
- * 3.优化 GT_WebView googleplay 报错 onReceivedSslError 的问题
- * 4.优化 使用串口工具 SerialPortUtils 时，缺少 libserial_port.so 文件的问题
- * 5.遗弃的方法 readWritePermission()
- * 6.完成 Kotlin 新版，具体新增那些请参考官网教程
- * 7.增加 GT.Res 资源工具类
- * 8.新增 @GT_R_Build("资源文件名")解决多模块中无法使用注解绑定组件ID的情况 具体使用教程，请参考官网教程：
- * 9.新增线程池封装类管理 map,增多获取简洁线程池 api
- * 10.适配 kotlin 版 gt-DataBinding 注解
- * 11.新增简易强大 kotlin 扩展函数库 库名为 GTE.kt
- * 12.优化 GT_Fragment 类，API，修改 GT_Fragment 类 返回策略
+ * 1.优化 GT_Fragment 类，API，修改 GT_Fragment 类 返回策略
+ * 2.新增 指纹验证工具类 FingerprintUtils 和 封装好的指纹验证对话框 FingerprintDialogFragment 使用教程清参考官网
+ * 3.新增 选择图片 功能
+ * 4.GT.Glide 图片加载框架优化内容:
+ * (1).优化内存缓存策略
+ * (2).提升加载动态图性能 提升透明动画稳定性
+ * (3).解决断网时读取本地缓存图片失败的问题
+ * (4).解决 加载动态图后，View事件丢失的问题
+ * (5).解决 在复杂布局中，加载动态图，动态图错位的问题
+ * 5.去掉 U盘工具 API
+ * 6.ApplicationUtils 类 增加获取 软键盘高度 API
+ * 7.ImageViewUtils 类 增加 生成、解析二维码
+ * 8.去掉 GT.ApplicationUtils 封装类中的所有分享api方法， 新增分享工具类 ShareUtils ，支持一键分享文件、网图、GIF图、支持万能渠道分享
+ * 9.新增 手电筒 FlashlightUtils 封装类，五行代码 搞定
+ * 10.新增 声音分贝 AudioRecordUtils 封装类，三行代码 搞定
+ * 11.磁场传感器 MagneticFieldUtils 封装类，四行代码 搞定
+ * 12.光源传感器 LightSourceUtils 封装类，四步搞定
+ * 13.水平仪传感器 GradienterUtils 封装类，四步搞定
+ * 14.新增壁纸管理器 WallpaperManagerUtils，两步搞定
+ * 15.新增跳转封装类 SkipUtils，跳转各种系统页面
+ * 16.GT.EventBus 新增局部 发布事件 和 订阅事件，灵活多变，支持事件拦截，结果返回等。(具体请参考博客教程)
+ *
  * <p>
  * <p>
  * 小提示：(用于 AndroidStudio )
@@ -781,7 +827,7 @@ public class GT {
      */
     public static void toast(Object message) {
         if (getActivity() != null) {
-            if (GT.Thread.isMainThread()) {
+            if (Thread.isMainThread()) {
                 Toast toast = null;
                 if (toast == null) {
                     toast = Toast.makeText(getActivity(), message.toString(), Toast.LENGTH_SHORT);
@@ -790,7 +836,7 @@ public class GT {
                 }
                 toast.show();
             } else {
-                GT.Thread.runAndroid(new Runnable() {
+                Thread.runAndroid(new Runnable() {
                     @Override
                     public void run() {
                         Toast toast = null;
@@ -811,7 +857,7 @@ public class GT {
     }
 
     public static void toast(Context context, Object content) {
-        if (GT.Thread.isMainThread()) {
+        if (Thread.isMainThread()) {
             Toast toast = null;
             if (toast == null) {
                 toast = Toast.makeText(getActivity(), content.toString(), Toast.LENGTH_SHORT);
@@ -820,7 +866,7 @@ public class GT {
             }
             toast.show();
         } else {
-            GT.Thread.runAndroid(new Runnable() {
+            Thread.runAndroid(new Runnable() {
                 @Override
                 public void run() {
                     Toast toast = null;
@@ -844,10 +890,10 @@ public class GT {
         if (TOAST.TOAST_TF) {
             Context context = getActivity();
             if (context != null && context != null) {
-                if (GT.Thread.isMainThread()) {
+                if (Thread.isMainThread()) {
                     Toast.makeText(context, String.valueOf(msg), Toast.LENGTH_SHORT).show();
                 } else {
-                    GT.Thread.runAndroid(new Runnable() {
+                    Thread.runAndroid(new Runnable() {
                         @Override
                         public void run() {
                             Toast.makeText(context, String.valueOf(msg), Toast.LENGTH_SHORT).show();
@@ -871,7 +917,7 @@ public class GT {
     public static void toast_time(Object msg, long time) {
         if (TOAST.TOAST_TF) {
             Context context = getActivity();
-            if (GT.Thread.isMainThread()) {
+            if (Thread.isMainThread()) {
                 if (context != null && context != null) {
                     final Toast toast = Toast.makeText(context, String.valueOf(msg), Toast.LENGTH_LONG);
                     final Timer timer = new Timer();
@@ -893,7 +939,7 @@ public class GT {
                         err("GT_bug", "消息框错误日志：你没有为 Context 进行赋值 ，却引用了 Toast 导致该功能无法实现。解决措施 在调用 toast 代码之前添加：GT.getGT().setactivity(activity);");
                 }
             } else {
-                GT.Thread.runAndroid(new Runnable() {
+                Thread.runAndroid(new Runnable() {
                     @Override
                     public void run() {
                         if (context != null && context != null) {
@@ -932,10 +978,10 @@ public class GT {
      */
     public static void toast_s(Context context, Object msg) {
         if (!TOAST.TOAST_TF) return;
-        if (GT.Thread.isMainThread()) {
+        if (Thread.isMainThread()) {
             Toast.makeText(context, String.valueOf(msg), Toast.LENGTH_SHORT).show();
         } else {
-            GT.Thread.runAndroid(new Runnable() {
+            Thread.runAndroid(new Runnable() {
                 @Override
                 public void run() {
                     Toast.makeText(context, String.valueOf(msg), Toast.LENGTH_SHORT).show();
@@ -953,7 +999,7 @@ public class GT {
      */
     public static void toast_time(Context context, Object msg, int time) {
         if (TOAST.TOAST_TF) {
-            if (GT.Thread.isMainThread()) {
+            if (Thread.isMainThread()) {
                 final Toast toast = Toast.makeText(context, String.valueOf(msg), Toast.LENGTH_LONG);
                 final Timer timer = new Timer();
                 timer.schedule(new TimerTask() {
@@ -970,7 +1016,7 @@ public class GT {
                     }
                 }, time);
             } else {
-                GT.Thread.runAndroid(new Runnable() {
+                Thread.runAndroid(new Runnable() {
                     @Override
                     public void run() {
                         final Toast toast = Toast.makeText(context, String.valueOf(msg), Toast.LENGTH_LONG);
@@ -996,7 +1042,7 @@ public class GT {
         }
     }
 
-    private static GT.TOAST.ToastView toastView;
+    private static TOAST.ToastView toastView;
 
     /**
      * 简易自定义吐司
@@ -1005,18 +1051,18 @@ public class GT {
      * @param layout  自定义布局
      * @param Gravity 吐司弹出位置 默认 Gravity.BOTTOM
      */
-    public static GT.TOAST.ToastView toastView(Context context, int layout, int... gravitys) {
+    public static TOAST.ToastView toastView(Context context, int layout, int... gravitys) {
 
-        if (GT.Thread.isMainThread()) {
+        if (Thread.isMainThread()) {
             int gravity = Gravity.BOTTOM;
             if (gravitys.length > 0) {
                 gravity = gravitys[0];
             }
             if (toastView == null) {
-                toastView = new GT.TOAST.ToastView().initLayout(layout, gravity, context);
+                toastView = new TOAST.ToastView().initLayout(layout, gravity, context);
             }
         } else {
-            GT.Thread.runAndroid(new Runnable() {
+            Thread.runAndroid(new Runnable() {
                 @Override
                 public void run() {
                     int gravity = Gravity.BOTTOM;
@@ -1024,7 +1070,7 @@ public class GT {
                         gravity = gravitys[0];
                     }
                     if (toastView == null) {
-                        toastView = new GT.TOAST.ToastView().initLayout(layout, gravity, context);
+                        toastView = new TOAST.ToastView().initLayout(layout, gravity, context);
                     }
                 }
             });
@@ -1113,7 +1159,7 @@ public class GT {
     }
 
     public static GT_Fragment startFragmentHome(Object fragmentObj, int... resLayouts) {
-        return GT_Fragment.gt_fragment.startFragmentHome(fragmentObj,resLayouts);
+        return GT_Fragment.gt_fragment.startFragmentHome(fragmentObj, resLayouts);
     }
 
     /**
@@ -1714,8 +1760,9 @@ public class GT {
          */
 
         //订阅者事件总线管理器
-        private static final Map<String, EventBusBean> eventBusMap = new HashMap<>();//普通事件
-        private static final Map<String, Object> eventBusStickyMap = new HashMap<>();//粘性事件
+        public static final Map<String, Map<String, List<OneListener>>> allInteriorEventBusMap = new ArrayMap<>();//所有局部事件
+        private static final Map<String, EventBusBean> eventBusMap = new ArrayMap<>();//普通事件
+        private static final Map<String, Object> eventBusStickyMap = new ArrayMap<>();//粘性事件
         //用于注销订阅者
         private List<String> deleteList = new ArrayList<>();
         //用于订阅者优先级
@@ -1742,112 +1789,6 @@ public class GT {
         }
 
         /**
-         * 发布事件
-         * 注意:在自定义 evenKey 时请不要写入 "_GT_" 字符,该字符为关键字
-         *
-         * @param <T>       返回类型 (发布事件后可接收到订阅者返回值,但如果订阅者与发布者不在同一线程中或发布的事件中有两个订阅者,将无法在发布事件的线程接收到订阅者的返回值)
-         * @param eventData 发布的事件 (参数仅支持一个,若需要传多参数可传递 Bundle,List,Map,实体类Bean等等)
-         * @param eventKeys 指定发送的区域 (如果不填则默认向所有订阅者发布事件)
-         * @return
-         */
-        public static <T> T posts(Object eventData, Object... eventKeys) {
-            return EventBus.getDefault().post(eventData, eventKeys);
-        }
-
-        /**
-         * 发布粘性事件
-         * 注意:在自定义 evenKey 时请不要写入 "_GT_" 字符,该字符为关键字
-         *
-         * @param <T>       返回类型 (发布事件后可接收到订阅者返回值,但如果订阅者与发布者不在同一线程中或发布的事件中有两个订阅者,将无法在发布事件的线程接收到订阅者的返回值)
-         * @param eventData 发布的事件 (参数仅支持一个,若需要传多参数可传递 Bundle,List,Map,实体类Bean等等)
-         * @param eventKeys 指定发送的区域 (如果不填则默认向所有订阅者发布事件)
-         * @return
-         */
-        public static <T> T postStickys(Object eventData, Object... eventKeys) {
-            return EventBus.getDefault().postSticky(eventData, eventKeys);
-        }
-
-        /**
-         * 发布跨进程 事件
-         * 注意:在自定义 evenKey 时请不要写入 "_GT_" 字符,该字符为关键字
-         *
-         * @param 无法返回数据
-         * @param eventData 发布的事件 (参数仅支持一个的基本类型)
-         * @param eventKeys 指定发送的区域 (如果不填则默认向所有订阅者发布事件)
-         * @return
-         */
-        public static void postAcrossProcessess(Object eventData, Object... eventKeys) {
-            GT.EventBus.getDefault().postAcrossProcesses(eventData, eventKeys);
-        }
-
-        /**
-         * 发布事件 到本进程 与 跨进程
-         *
-         * @param eventData 发布的事件 (参数仅支持一个)
-         * @param eventKeys 指定发送的区域 (如果不填则默认向所有订阅者发布事件)
-         */
-        public static void postAlls(Object eventData, Object... eventKeys) {
-            GT.EventBus.getDefault().postAll(eventData, eventKeys);
-        }
-
-        /**
-         * 注册被观察者
-         *
-         * @param subscriber
-         */
-        public static void registers(Object subscriber) {
-            EventBus.getDefault().register(subscriber);
-        }
-
-        /**
-         * 注册跨进程
-         *
-         * @param context
-         * @param subscriber 注册的类
-         */
-        public static void registerAcrossProcessess(Object subscriber, Context... mContext) {
-            GT.EventBus.getDefault().registerAcrossProcesses(subscriber, mContext);
-        }
-
-
-        /**
-         * 取消事件分发
-         *
-         * @param eventNames 填写要取消的事件分发，若不填则默认将调用该方法 的方法名作为 要拦截的事件分发者
-         */
-        public static void cancelEventDeliverys(Object... eventNames) {
-            //如果你指定了 要拦截的事件分发者，那就按照你指定的事件来拦截
-            if (eventNames.length > 0) {
-                EventBus.getDefault().cancelEventDelivery(eventNames);
-            } else {//如果没有指定，那就默认将调用该方法 的方法名作为 要拦截的事件分发者
-                try {
-                    String methodName = java.lang.Thread.currentThread().getStackTrace()[3].getMethodName();//调用的方法名
-                    EventBus.getDefault().cancelEventDelivery(methodName);
-                } catch (Exception e) {
-
-                }
-            }
-        }
-
-        /**
-         * 取消被观察者
-         *
-         * @param subscriber
-         */
-        public static void unregisters(Object subscriber) {
-            EventBus.getDefault().unregister(subscriber);
-        }
-
-        /**
-         * 取消跨进程 被观察者
-         *
-         * @param subscriber
-         */
-        public static void unregisterAcrossProcessess(Object subscriber, Context... mContext) {
-            GT.EventBus.getDefault().unregisterAcrossProcesses(subscriber, mContext);
-        }
-
-        /**
          * 查看普通事件
          */
         public Map<String, EventBusBean> showEventBusMap() {
@@ -1865,7 +1806,7 @@ public class GT {
          */
         public void cancelEventDelivery(Object... eventNames) {
             //如果你指定了 要拦截的事件分发者，那就按照你指定的事件来拦截
-            if (eventNames.length > 0) {
+            if (eventNames != null && eventNames.length > 0) {
                 for (Object obj : eventNames) {
                     interceptList.add(obj);
                 }
@@ -1934,12 +1875,198 @@ public class GT {
             eventBusStickyMap.clear();
         }
 
+
+        //****************************************************** EventBus 快捷方式 **************************************************
+
+        /**
+         * 发布事件
+         * 注意:在自定义 evenKey 时请不要写入 "_GT_" 字符,该字符为关键字
+         *
+         * @param <T>       返回类型 (发布事件后可接收到订阅者返回值,但如果订阅者与发布者不在同一线程中或发布的事件中有两个订阅者,将无法在发布事件的线程接收到订阅者的返回值)
+         * @param eventData 发布的事件 (参数仅支持一个,若需要传多参数可传递 Bundle,List,Map,实体类Bean等等)
+         * @param eventKeys 指定发送的区域 (如果不填则默认向所有订阅者发布事件)
+         * @return
+         */
+        public static <T> T posts(Object eventData, Object... eventKeys) {
+            return EventBus.getDefault().post(eventData, eventKeys);
+        }
+
+        /**
+         * 发布粘性事件
+         * 注意:在自定义 evenKey 时请不要写入 "_GT_" 字符,该字符为关键字
+         *
+         * @param <T>       返回类型 (发布事件后可接收到订阅者返回值,但如果订阅者与发布者不在同一线程中或发布的事件中有两个订阅者,将无法在发布事件的线程接收到订阅者的返回值)
+         * @param eventData 发布的事件 (参数仅支持一个,若需要传多参数可传递 Bundle,List,Map,实体类Bean等等)
+         * @param eventKeys 指定发送的区域 (如果不填则默认向所有订阅者发布事件)
+         * @return
+         */
+        public static <T> T postStickys(Object eventData, Object... eventKeys) {
+            return EventBus.getDefault().postSticky(eventData, eventKeys);
+        }
+
+        /**
+         * 发布跨进程 事件
+         * 注意:在自定义 evenKey 时请不要写入 "_GT_" 字符,该字符为关键字
+         *
+         * @param 无法返回数据
+         * @param eventData 发布的事件 (参数仅支持一个的基本类型)
+         * @param eventKeys 指定发送的区域 (如果不填则默认向所有订阅者发布事件)
+         * @return
+         */
+        public static void postAcrossProcessess(Object eventData, Object... eventKeys) {
+            EventBus.getDefault().postAcrossProcesses(eventData, eventKeys);
+        }
+
+        /**
+         * 发布内部事件
+         * 注意:在自定义 evenKey 时请不要写入 "_GT_" 字符,该字符为关键字
+         *
+         * @param eventData 发布的事件 (参数仅支持一个,若需要传多参数可传递 Bundle,List,Map,实体类Bean等等)
+         * @param eventKeys 指定发送的区域 (如果不填则默认向所有订阅者发布事件)
+         * @return
+         */
+        public static <T> T postInteriors(T eventData, Object... eventKeys) {
+            return EventBus.getDefault().postInterior(eventData, eventKeys);
+        }
+
+        /**
+         * 发布事件 到本进程 与 跨进程
+         *
+         * @param eventData 发布的事件 (参数仅支持一个)
+         * @param eventKeys 指定发送的区域 (如果不填则默认向所有订阅者发布事件)
+         */
+        public static void postAlls(Object eventData, Object... eventKeys) {
+            EventBus.getDefault().postAll(eventData, eventKeys);
+        }
+
+
         /**
          * 注册被观察者
          *
          * @param subscriber
          */
-        public void register(Object subscriber) {
+        public static <T> void registerInteriors(Object subscriber, String key, GT.OneListener<T> oneListener) {
+            EventBus.getDefault().registerInterior(subscriber, key, oneListener);
+        }
+
+        /**
+         * 注册被观察者
+         *
+         * @param subscriber
+         */
+        public static void registers(Object subscriber) {
+            EventBus.getDefault().register(subscriber);
+        }
+
+        /**
+         * 注册跨进程
+         *
+         * @param context
+         * @param subscriber 注册的类
+         */
+        public static void registerAcrossProcessess(Object subscriber, Context... mContext) {
+            EventBus.getDefault().registerAcrossProcesses(subscriber, mContext);
+        }
+
+        /**
+         * 取消事件分发
+         *
+         * @param eventNames 填写要取消的事件分发，若不填则默认将调用该方法 的方法名作为 要拦截的事件分发者
+         */
+        public static void cancelEventDeliverys(Object... eventNames) {
+            //如果你指定了 要拦截的事件分发者，那就按照你指定的事件来拦截
+            EventBus.getDefault().cancelEventDelivery(eventNames);
+        }
+
+        /**
+         * 取消被观察者
+         *
+         * @param subscriber
+         */
+        public static void unregisters(Object subscriber) {
+            EventBus.getDefault().unregister(subscriber);
+        }
+
+        /**
+         * 取消跨进程 被观察者
+         *
+         * @param subscriber
+         */
+        public static void unregisterAcrossProcessess(Object subscriber, Context... mContext) {
+            EventBus.getDefault().unregisterAcrossProcesses(subscriber, mContext);
+        }
+
+
+        /**
+         * 取消 内部被观察者
+         *
+         * @param subscriber
+         */
+        public static void unregisterInteriors(Object subscriber) {
+            EventBus.getDefault().unregisterInterior(subscriber);
+        }
+
+        /**
+         * 取消 当前类所有 被观察者
+         *
+         * @param subscriber
+         */
+        public static void unregisterAlls(Object subscriber) {
+            EventBus.getDefault().unregisterAll(subscriber);
+        }
+
+
+        //****************************************************** EventBus 实际 方法 **************************************************
+
+
+        /**
+         * 注册内部 被观察者
+         *
+         * @param subscriber
+         * @param key
+         * @param oneListener
+         * @param <T>
+         */
+        public synchronized <T> void registerInterior(Object subscriber, String key, GT.OneListener<T> oneListener) {
+            if (subscriber == null || key == null || oneListener == null) return;
+            synchronized (allInteriorEventBusMap) {
+                Map<String, List<OneListener>> interiorEventBusMap = allInteriorEventBusMap.get(subscriber.toString());
+                if (interiorEventBusMap == null) {
+                    interiorEventBusMap = new ArrayMap<>();//局部事件
+                }
+
+                List<OneListener> oneListeners = interiorEventBusMap.get(key);//Map<String, List<OneListener>>
+                if (oneListeners == null || oneListeners.size() == 0) {
+                    oneListeners = new CopyOnWriteArrayList<OneListener>();
+                }
+                oneListeners.add(oneListener);
+                interiorEventBusMap.put(key, oneListeners);
+
+                allInteriorEventBusMap.put(subscriber.toString(), interiorEventBusMap);
+            }
+        }
+
+        /**
+         * 注册跨进程 被观察者
+         *
+         * @param subscriber
+         * @param mContext   注册的类
+         */
+        public synchronized void registerAcrossProcesses(Object subscriber, Context... mContext) {
+            Context context = GT.getActivity();
+            if (mContext.length > 0) {
+                context = mContext[0];
+            }
+            EventBus.registers(subscriber);
+            EventBusClient.registerAcrossProcesses(context, subscriber);
+        }
+
+        /**
+         * 注册 被观察者
+         *
+         * @param subscriber
+         */
+        public synchronized void register(Object subscriber) {
             try {
                 Class<?> aClass = subscriber.getClass();
                 Method[] methods;
@@ -1992,7 +2119,7 @@ public class GT {
                     //如果订阅者没有被注册,那就进行注册
                     if (!eventBusMap.containsKey(eventKey)) {
                         EventBusBean eventBusBean = new EventBusBean(subscriber, aClass, parameterTypes, returnType, eventKey, methodName, threadMode, priority, sticky);
-                        eventBusMap.put(eventKey, eventBusBean);
+                        eventBusMap.put(eventKey, eventBusBean);//ok
                     }
 
                     //---------------------------------------------------------------  粘性事件处理 ----------------------------------------------
@@ -2051,27 +2178,35 @@ public class GT {
                     GT.errt("e:" + e);
                 }
             }
+        }
 
+
+        /**
+         * 取消内部 被观察者
+         *
+         * @param subscriber
+         */
+        public synchronized void unregisterInterior(Object subscriber) {
+            if (subscriber == null) return;
+            allInteriorEventBusMap.remove(subscriber.toString());
         }
 
         /**
-         * 注册跨进程
+         * 取消跨进程 被观察者
          *
          * @param subscriber
-         * @param mContext   注册的类
          */
-        public void registerAcrossProcesses(Object subscriber, Context... mContext) {
+        public synchronized void unregisterAcrossProcesses(Object subscriber, Context... mContext) {
             Context context = GT.getActivity();
             if (mContext.length > 0) {
                 context = mContext[0];
             }
-            GT.EventBus.registers(subscriber);
-            GT.EventBus.EventBusClient.registerAcrossProcesses(context, subscriber);
+            EventBus.unregisters(subscriber);
+            EventBusClient.unregisterAcrossProcesses(context);
         }
 
-
         /**
-         * 取消被观察者
+         * 取消 被观察者
          *
          * @param subscriber
          */
@@ -2138,7 +2273,7 @@ public class GT {
                         if (eventBusBean != null) {
                             eventBusBean.object = null;
                         }
-                        eventBusMap.remove(key);
+                        eventBusMap.remove(key);//ok
                     }
                 }
 
@@ -2150,17 +2285,103 @@ public class GT {
         }
 
         /**
-         * 取消跨进程 被观察者
+         * 取消当前类所有 观察者
          *
          * @param subscriber
          */
-        public synchronized void unregisterAcrossProcesses(Object subscriber, Context... mContext) {
-            Context context = GT.getActivity();
-            if (mContext.length > 0) {
-                context = mContext[0];
+        public synchronized void unregisterAll(Object subscriber) {
+            unregisterInterior(subscriber);
+            unregister(subscriber);
+            unregisterAcrossProcesses(subscriber);
+        }
+
+        /**
+         * 发布内部事件
+         *
+         * @param bean
+         * @param key
+         * @param <T>
+         */
+        public synchronized <T> T postInterior(Object eventData, Object... eventKeys) {
+            T t = null;
+            synchronized (allInteriorEventBusMap) {
+                try {
+                    interceptList.clear();
+                    if (eventKeys != null && eventKeys.length > 0) {
+                        for (Object eventKey : eventKeys) {
+                            String key = eventKey.toString();
+                            for (String mapKey : allInteriorEventBusMap.keySet()) {
+                                Map<String, List<OneListener>> interiorEventBusMap = allInteriorEventBusMap.get(mapKey);
+                                if (interceptList.contains(key)) continue;//过滤掉 事件分发拦截
+                                List<OneListener> oneListeners = interiorEventBusMap.get(key);
+                                if (oneListeners != null && oneListeners.size() > 0) {
+                                    for (OneListener<T> oneListener : oneListeners) {
+                                        try {
+                                            oneListener.onOneListener((T) eventData);
+                                        } catch (Exception e) {
+
+                                        }
+
+                                        try {
+                                            Object returnData = oneListener.onOneReturnListener((T) eventData);
+                                            if (returnData != null) {
+                                                t = (T) returnData;
+                                            }
+                                        } catch (Exception e) {
+
+                                        }
+
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+
+                }
             }
-            GT.EventBus.unregisters(subscriber);
-            GT.EventBus.EventBusClient.unregisterAcrossProcesses(context);
+            interceptList.clear();
+            return t;
+        }
+
+        /**
+         * 发布粘性事件
+         * 注意:在自定义 evenKey 时请不要写入 "_GT_" 字符,该字符为关键字
+         *
+         * @param <T>       返回类型 (发布事件后可接收到订阅者返回值,但如果订阅者与发布者不在同一线程中或发布的事件中有两个订阅者,将无法在发布事件的线程接收到订阅者的返回值)
+         * @param eventData 发布的事件 (参数仅支持一个,若需要传多参数可传递 Bundle,List,Map,实体类Bean等等)
+         * @param eventKeys 指定发送的区域 (如果不填则默认向所有订阅者发布事件)
+         * @return
+         */
+        public synchronized <T> T postSticky(Object eventData, Object... eventKeys) {
+            synchronized (eventBusStickyMap) {
+                try {
+                    String key = "";
+                    if (eventKeys.length != 0) {
+                        for (Object obj : eventKeys) {
+                            if (obj instanceof Class<?>) {
+                                Class<?> aclass = (Class<?>) obj;
+                                key += aclass.getName() + SEPARATOR;
+                            } else {
+                                key += obj.toString() + SEPARATOR;
+                            }
+                        }
+                        if (key.contains(SEPARATOR)) {
+                            if (SEPARATOR.equals(key.substring(key.length() - 1))) {
+                                key = key.substring(0, key.length() - 1);
+                            }
+                        }
+                    }
+                    //记录粘性事件
+                    eventBusStickyMap.put(key, eventData);
+                } catch (ConcurrentModificationException e) {
+                    if (LOG.GT_LOG_TF) {
+                        GT.errt("e:" + e);
+                    }
+                }
+            }
+            //正常发布事件
+            return post(eventData, eventKeys);
         }
 
         /**
@@ -2172,14 +2393,13 @@ public class GT {
          * @param eventKeys 指定发送的区域 (如果不填则默认向所有订阅者发布事件)
          * @return
          */
-        public <T> T post(Object eventData, Object... eventKeys) {
+        public synchronized <T> T post(Object eventData, Object... eventKeys) {
             synchronized (eventBusMap) {
                 try {
                     T t = null;
 
                     priorityList.clear();
                     interceptList.clear();
-
                     //订阅方法的优先级
                     for (String key : eventBusMap.keySet()) {
                         priorityList.add(eventBusMap.get(key));
@@ -2207,22 +2427,31 @@ public class GT {
 
                     //类型匹配后进行向订阅者按照线程优先级进行遍历 发布事件
                     for (EventBusBean eventBusBean : priorityList) {
+
+
                         //如果有指定订阅者类型,那就进行过滤筛选
                         if (eventKeys != null && eventKeys.length != 0) {
-                            if (!eventBusBean.eventKey.contains(SEPARATOR)) continue;
+                            if (!eventBusBean.eventKey.contains(SEPARATOR)) {
+                                continue;
+                            }
                             String[] split = eventBusBean.eventKey.split(SEPARATOR);
-                            if (split.length < 2) continue;//如果少于两个分隔符，那就有问题，过滤掉
+                            if (split.length < 2) {
+                                continue;//如果少于两个分隔符，那就有问题，过滤掉
+                            }
                             String keyStr = split[1];
 
                             //事件分发拦截
-                            if (interceptList.size() != 0 && (interceptList.contains(keyStr) || interceptList.contains(eventBusBean.aClass)))
+                            if (interceptList.size() != 0 && (interceptList.contains(keyStr) || interceptList.contains(eventBusBean.aClass))) {
                                 continue;
+                            }
                             //字符串拦截
-                            if (keyStringList.size() != 0 && !keyStringList.contains(keyStr))
+                            if (keyStringList.size() != 0 && !keyStringList.contains(keyStr)) {
                                 continue;
+                            }
                             //class 拦截
-                            if (keyClassList.size() != 0 && !keyClassList.contains(eventBusBean.aClass))
+                            if (keyClassList.size() != 0 && !keyClassList.contains(eventBusBean.aClass)) {
                                 continue;
+                            }
                         }
 
                         //按照订阅者的线程类型进行处理
@@ -2255,32 +2484,7 @@ public class GT {
                     }
 
                     interceptList.clear();//清空拦截事件对象
-
-                    //获取本次发布事件订阅者数量
-                /*int count = 0;
-                if (eventKeys != null && eventKeys.length != 0) {
-                    try {
-                        for (String key : eventBusMap.keySet()) {
-                            EventBusBean eventBusBean = eventBusMap.get(key);
-                            if (!eventBusBean.eventKey.contains(SEPARATOR)) continue;
-                            String[] split = eventBusBean.eventKey.split(SEPARATOR);
-                            if (split.length < 2) continue;
-                            String keyStr = split[1];
-                            if (keyStringList.size() != 0 && !keyStringList.contains(keyStr))
-                                continue;
-                            if (keyClassList.size() != 0 && !keyClassList.contains(eventBusBean.aClass))
-                                continue;
-                            count++;
-                        }
-                    } catch (Exception e) {
-//                    GT.errt("e:" + e);
-                    }
-                } else {
-                    count = eventBusMap.keySet().size();
-                }*/
-
                     //如果只有一个发布的那就进行返回数据
-//                if (count == 1) return t;
                     return t;
                 } catch (ConcurrentModificationException e) {
                     if (LOG.GT_LOG_TF) {
@@ -2292,56 +2496,15 @@ public class GT {
         }
 
         /**
-         * 发布粘性事件
-         * 注意:在自定义 evenKey 时请不要写入 "_GT_" 字符,该字符为关键字
-         *
-         * @param <T>       返回类型 (发布事件后可接收到订阅者返回值,但如果订阅者与发布者不在同一线程中或发布的事件中有两个订阅者,将无法在发布事件的线程接收到订阅者的返回值)
-         * @param eventData 发布的事件 (参数仅支持一个,若需要传多参数可传递 Bundle,List,Map,实体类Bean等等)
-         * @param eventKeys 指定发送的区域 (如果不填则默认向所有订阅者发布事件)
-         * @return
-         */
-        public <T> T postSticky(Object eventData, Object... eventKeys) {
-
-            synchronized (eventBusStickyMap) {
-                try {
-                    String key = "";
-                    if (eventKeys.length != 0) {
-                        for (Object obj : eventKeys) {
-                            if (obj instanceof Class<?>) {
-                                Class<?> aclass = (Class<?>) obj;
-                                key += aclass.getName() + SEPARATOR;
-                            } else {
-                                key += obj.toString() + SEPARATOR;
-                            }
-                        }
-                        if (key.contains(SEPARATOR)) {
-                            if (SEPARATOR.equals(key.substring(key.length() - 1))) {
-                                key = key.substring(0, key.length() - 1);
-                            }
-                        }
-                    }
-                    //记录粘性事件
-                    eventBusStickyMap.put(key, eventData);
-                } catch (ConcurrentModificationException e) {
-                    if (LOG.GT_LOG_TF) {
-                        GT.errt("e:" + e);
-                    }
-                }
-            }
-            //正常发布事件
-            return post(eventData, eventKeys);
-        }
-
-        /**
          * 发布跨进程事件 (postAcrossProcesse)
          *
          * @param 无法返回数据
          * @param eventData 发布的事件 (参数仅支持一个的基本类型)
          * @param eventKeys 指定发送的区域 (如果不填则默认向所有订阅者发布事件)
          */
-        public void postAcrossProcesses(Object eventData, Object... eventKeys) {
-            GT.EventBus.EventBusService.sendMsg(eventData, eventKeys);
-            GT.EventBus.EventBusClient.sendMsg(eventData, eventKeys);
+        public synchronized void postAcrossProcesses(Object eventData, Object... eventKeys) {
+            EventBusService.sendMsg(eventData, eventKeys);
+            EventBusClient.sendMsg(eventData, eventKeys);
         }
 
         /**
@@ -2350,9 +2513,10 @@ public class GT {
          * @param eventData 发布的事件 (参数仅支持一个)
          * @param eventKeys 指定发送的区域 (如果不填则默认向所有订阅者发布事件)
          */
-        public void postAll(Object eventData, Object... eventKeys) {
-            postAcrossProcesses(eventData, eventKeys);
+        public synchronized void postAll(Object eventData, Object... eventKeys) {
+            postInterior(eventData, eventKeys);
             posts(eventData, eventKeys);
+            postAcrossProcesses(eventData, eventKeys);
         }
 
         /**
@@ -2362,7 +2526,7 @@ public class GT {
          */
         private <T> T setMethodValue(EventBusBean eventBusBean, Object eventData) {
             try {
-                GT.log(eventBusBean.object + ":" + eventBusBean.methodName + ":" + eventBusBean.returnType + ":" + eventBusBean.parameterTypes);
+//                GT.log(eventBusBean.object + ":" + eventBusBean.methodName + ":" + eventBusBean.returnType + ":" + eventBusBean.parameterTypes);
                 return (T) AnnotationAssist.setReflectMethodValue(eventBusBean.object, eventBusBean.methodName, eventBusBean.returnType, eventBusBean.parameterTypes, eventData == null ? "null" : eventData);
             } catch (Exception e) {
                 if (LOG.GT_LOG_TF) {
@@ -2536,6 +2700,7 @@ public class GT {
              * @param subscriber 注册的类
              */
             public static void registerAcrossProcesses(Context context, Object subscriber) {
+                if (context == null) return;
                 //第二种：Messenger 传递消息
                 Intent intent = new Intent("com.gsls.gt.EventBus");
                 intent.setPackage(context.getPackageName());
@@ -2545,13 +2710,13 @@ public class GT {
             public static void sendMsg(Object eventData, Object... eventKeys) {
 //                logt("servermessenger:" + servermessenger);
 
-                GT.Observable.getDefault().execute(new Observable.RunJava<Object>() {
+                Observable.getDefault().execute(new Observable.RunJava<Object>() {
                     @Override
                     public void run() {
                         if (servermessenger != null) return;
                         //处理 跨进程 有 0.003 毫秒 延迟的问题,挂起处理最大等待限度为 1秒
                         for (int i = 0; i < 1000; i++) {
-                            GT.Thread.sleep(1);
+                            Thread.sleep(1);
                             if (servermessenger != null) break;
                         }
                     }
@@ -2700,12 +2865,12 @@ public class GT {
                             for (int i = 0; i < split.length; i++) {
                                 objs[i] = split[i];
                             }
-                            GT.EventBus.posts(value, objs);
+                            EventBus.posts(value, objs);
                         } else {
-                            GT.EventBus.posts(value, key);
+                            EventBus.posts(value, key);
                         }
                     } else {
-                        GT.EventBus.posts(value);
+                        EventBus.posts(value);
                     }
                 }
             });
@@ -2723,13 +2888,13 @@ public class GT {
             public static void sendMsg(Object eventData, Object... eventKeys) {
 //                logt("clientMessager:" + clientMessager);
 
-                GT.Observable.getDefault().execute(new Observable.RunJava<Object>() {
+                Observable.getDefault().execute(new Observable.RunJava<Object>() {
                     @Override
                     public void run() {
                         if (clientMessager != null) return;
                         //处理 跨进程 有 0.003 毫秒 延迟的问题,挂起处理最大等待限度为 1秒
                         for (int i = 0; i < 1000; i++) {
-                            GT.Thread.sleep(1);
+                            Thread.sleep(1);
                             if (clientMessager != null) break;
                         }
 
@@ -2881,12 +3046,12 @@ public class GT {
                                 for (int i = 0; i < split.length; i++) {
                                     objs[i] = split[i];
                                 }
-                                GT.EventBus.posts(value, objs);
+                                EventBus.posts(value, objs);
                             } else {
-                                GT.EventBus.posts(value, key);
+                                EventBus.posts(value, key);
                             }
                         } else {
-                            GT.EventBus.posts(value);
+                            EventBus.posts(value);
                         }
 
                         //向客户端发送消息
@@ -3265,7 +3430,7 @@ public class GT {
             return sp_e;
         }   //获取 SharedPreferences.Editor
 
-        private boolean commit = false;             //定义是否自动提交
+        private boolean commit = true;             //定义是否自动提交
 
 
         /**
@@ -3274,15 +3439,15 @@ public class GT {
          * @param context     上下文
          * @param SPName      存储的名字
          * @param permissions 存储可读取的权限
-         * @param commit      是否自动提交
+         * @param commits     是否自动提交(默认自动提交)
          */
-        public GT_SharedPreferences(Context context, String sPName, boolean commit) {
+        public GT_SharedPreferences(Context context, String sPName, boolean... commits) {
             if (sp != null) return;
-
             lockRead = mReadWriteLock.readLock();
             lockWrite = mReadWriteLock.writeLock();
-
-            this.commit = commit;
+            if (commits != null && commits.length > 0) {
+                this.commit = commits[0];
+            }
             sp = context.getSharedPreferences(sPName, 0);//打开 或 创建 SharedPreferences
             sp_e = sp.edit();//让userData处于编辑状态
         }
@@ -3337,17 +3502,12 @@ public class GT {
          * @return 返回 sp 操作对象
          */
         public SharedPreferences.Editor delete(String key) {
-
             try {
                 if (lockWrite != null) {
                     lockWrite.lock();
                 }
-                if (query(key) != null) {
-                    sp_e.remove(key);
-                    if (commit) sp_e.apply();
-                } else {
-                    if (LOG.GT_LOG_TF) log("删除失败  当前 sp 中无此 key");
-                }
+                sp_e.remove(key);
+                if (commit) sp_e.apply();
             } catch (Exception e) {
                 GT.errs("e:" + e);
             } finally {
@@ -3366,9 +3526,7 @@ public class GT {
          * @return 返回 sp 操作类
          */
         public GT_SharedPreferences updata(String key, Object object) {
-            if (query(key) != null) {
-                save(key, object);
-            }
+            save(key, object);
             return this;
         }
 
@@ -3440,15 +3598,15 @@ public class GT {
                 if (lockRead != null) {
                     lockRead.lock();
                 }
-                if (dataType == Integer.class) {
+                if (dataType == Integer.class || dataType == int.class) {
                     obj = sp.getInt(key, 0);
                 } else if (dataType == String.class) {
                     obj = sp.getString(key, null);
-                } else if (dataType == Long.class) {
+                } else if (dataType == Long.class || dataType == long.class) {
                     obj = sp.getLong(key, 0);
-                } else if (dataType == Float.class) {
+                } else if (dataType == Float.class || dataType == float.class) {
                     obj = sp.getFloat(key, 0);
-                } else if (dataType == Boolean.class) {
+                } else if (dataType == boolean.class || dataType == Boolean.class) {
                     obj = sp.getBoolean(key, false);
                 } else if (dataType == Set.class) {
                     obj = sp.getStringSet(key, null);
@@ -3658,18 +3816,32 @@ public class GT {
          * @param activitys
          * @return
          */
-        public static String getGTPath(Context... contexts) {
-            Context context = null;
-            if (contexts.length > 0) {
-                context = contexts[0];
+        public static String getPath(Context context, boolean... isCreate) {
+            String path = FileUtils.getAppDirectory(context) + "/";
+            if (isCreate != null && isCreate.length != 0 && isCreate[0] && path != null) {
+                File file = new File(path);
+                if (!file.exists()) {
+                    file.mkdirs();
+                }
             }
-            if (context == null) {
-                context = getActivity();
+            return path;
+        }
+
+        /**
+         * 获取 GT 路径
+         *
+         * @param activitys
+         * @return
+         */
+        public static String getGTPath(Context context, boolean... isCreate) {
+            String path = FileUtils.getAppDirectory(context) + "/GT/";
+            if (isCreate != null && isCreate.length != 0 && isCreate[0] && path != null) {
+                File file = new File(path);
+                if (!file.exists()) {
+                    file.mkdirs();
+                }
             }
-            if (context == null) {
-                context = GT_Fragment.getGt_fragment().getActivity();
-            }
-            return FileUtils.getAppDirectory(context) + "/GT/" + ApplicationUtils.getPackageName(context) + "/";
+            return path;
         }
 
         /**
@@ -4342,152 +4514,6 @@ public class GT {
             return Environment.getExternalStorageDirectory().toString();
         }
 
-
-        //自定义U盘读写权限
-        private static final String ACTION_USB_PERMISSION = "com.android.example.USB_PERMISSION";
-        private Context context;
-        private OnUSB_flashDiskListener onUSB_flashDiskListener;
-
-        public FileUtils(Context context) {
-            this.context = context;
-        }
-
-        /**
-         * U盘事件监听
-         *
-         * @param onUSB_flashDiskListener
-         */
-        public void onUSB_flashDiskListener(OnUSB_flashDiskListener onUSB_flashDiskListener) {
-            this.onUSB_flashDiskListener = onUSB_flashDiskListener;
-            IntentFilter usbDeviceStateFilter = new IntentFilter();
-            usbDeviceStateFilter.addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED);
-            usbDeviceStateFilter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
-            context.registerReceiver(mOtgReceiver, usbDeviceStateFilter);
-            //注册监听自定义广播
-            IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
-            context.registerReceiver(mOtgReceiver, filter);
-        }
-
-        /**
-         * @description OTG广播，监听U盘的插入及拔出
-         * @author ldm
-         * @time 2017/9/1 17:20
-         * @param
-         */
-        private BroadcastReceiver mOtgReceiver = new BroadcastReceiver() {
-            public void onReceive(Context context, Intent intent) {
-                String action = intent.getAction();
-                switch (action) {
-                    case ACTION_USB_PERMISSION://接受到自定义广播
-                        UsbDevice usbDevice = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
-                        //允许权限申请
-                        if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
-                            if (usbDevice != null) {
-                                //用户已授权，可以进行读取操作
-                                UsbFile usbFile = readDevice(getUsbMass(usbDevice));//成功读取信息的
-                                onUSB_flashDiskListener.onPermissionObtainedSuccessfully(usbDevice, usbFile);
-                            } else {
-                                onUSB_flashDiskListener.onError("No USB flash drive is inserted");
-                            }
-                        } else {
-                            onUSB_flashDiskListener.onObtainingPermissionFailed(usbDevice);
-                        }
-                        break;
-                    case UsbManager.ACTION_USB_DEVICE_ATTACHED://接收到U盘设备插入广播
-                        UsbDevice device_add = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
-                        if (device_add != null) {
-                            //接收到U盘插入广播，尝试读取U盘设备数据
-                            onUSB_flashDiskListener.onReceiveInsertBroadcast(device_add);
-                            redUDiskDevsList();//很难读取到信息的
-                        }
-                        break;
-                    case UsbManager.ACTION_USB_DEVICE_DETACHED://接收到U盘设设备拔出广播
-                        onUSB_flashDiskListener.onReceivePullOutBroadcast();
-                        break;
-                }
-            }
-        };
-
-        /**
-         * @description U盘设备读取
-         * @author ldm
-         * @time 2017/9/1 17:20
-         */
-        private void redUDiskDevsList() {
-            //设备管理器
-            UsbManager usbManager = (UsbManager) context.getSystemService(Context.USB_SERVICE);
-            //获取U盘存储设备
-            storageDevices = UsbMassStorageDevice.getMassStorageDevices(context);
-            PendingIntent pendingIntent = PendingIntent.getBroadcast(context, 0, new Intent(ACTION_USB_PERMISSION), 0);
-            //一般手机只有1个OTG插口
-            for (UsbMassStorageDevice device : storageDevices) {
-                //读取设备是否有权限
-                if (device == null) continue;
-                if (usbManager.hasPermission(device.getUsbDevice())) {
-                    readDevice(device);
-                } else {
-                    //没有权限，进行申请
-                    usbManager.requestPermission(device.getUsbDevice(), pendingIntent);
-                }
-            }
-            if (storageDevices.length == 0) {
-                onUSB_flashDiskListener.onError("The usb flash drive is unavailable");
-            }
-        }
-
-        //当前处接U盘列表
-        private UsbMassStorageDevice[] storageDevices;
-
-        private UsbMassStorageDevice getUsbMass(UsbDevice usbDevice) {
-            for (UsbMassStorageDevice device : storageDevices) {
-                if (usbDevice.equals(device.getUsbDevice())) {
-                    return device;
-                }
-            }
-            return null;
-        }
-
-        //当前U盘所在文件目录
-
-        private UsbFile readDevice(UsbMassStorageDevice device) {
-            try {
-                device.init();//初始化
-                //设备分区
-                Partition partition = device.getPartitions().get(0);
-                //文件系统
-                FileSystem currentFs = partition.getFileSystem();
-                String volumeLabel = currentFs.getVolumeLabel();//可以获取到设备的标识
-                //通过FileSystem可以获取当前U盘的一些存储信息，包括剩余空间大小，容量等等
-                //U盘信息
-                USB_Bean usb_bean = new USB_Bean();
-                usb_bean.setCapacity(formetFileSize(currentFs.getCapacity()));
-                usb_bean.setHaveBeenUsed(formetFileSize(currentFs.getOccupiedSpace()));
-                usb_bean.setFreeSpace(formetFileSize(currentFs.getFreeSpace()));
-                usb_bean.setBlockSize(formetFileSize(currentFs.getChunkSize()));
-                usb_bean.setType(currentFs.getType());
-                onUSB_flashDiskListener.onU_DiskInformation(usb_bean);
-                return currentFs.getRootDirectory();//设置当前文件对象为根目录
-            } catch (Exception e) {
-                onUSB_flashDiskListener.onError(e.toString());
-            }
-            return null;
-        }
-
-        //USB 接口
-        public static interface OnUSB_flashDiskListener {
-            void onReceiveInsertBroadcast(UsbDevice device_add);//接收插入广播
-
-            void onPermissionObtainedSuccessfully(UsbDevice usbDevice, UsbFile usbFile);//获取权限成功
-
-            void onObtainingPermissionFailed(UsbDevice usbDevice);//获取权限失败
-
-            void onU_DiskInformation(USB_Bean usbBean);//U盘信息
-
-            void onError(String message);//U盘异常
-
-            void onReceivePullOutBroadcast();//接收拔出广播
-        }
-
         //U盘的实体类信息
         public class USB_Bean {
 
@@ -4559,98 +4585,6 @@ public class GT {
                         ", type=" + type +
                         '}';
             }
-        }
-
-        /**
-         * 读取SD卡文件与写入USB中
-         *
-         * @param os
-         * @param is
-         * @param sdFile
-         * @param onUSBSaveListener
-         * @throws IOException
-         */
-        private static void redFileStream(OutputStream os, InputStream is, File sdFile, OnUSB_SaveListener onUSBSaveListener) throws IOException {
-            int length = (int) sdFile.length();
-            int count = 0;
-            byte[] buffer = new byte[1024];
-            while (true) {
-                int numread = is.read(buffer);
-                count += numread;
-                int mProgress = (int) (((float) count / length) * 100);
-                if (onUSBSaveListener != null)
-                    onUSBSaveListener.onInProgress(mProgress);
-                if (numread < 0) break;//下载完成
-                os.write(buffer, 0, numread);
-            }
-            os.flush();
-            os.close();
-            is.close();
-        }
-
-        /**
-         * 把本地文件写入到U盘中
-         *
-         * @param sdFile            SD卡中的文件
-         * @param usbFile           USB盘文件对象
-         * @param uDiskPath         USB文件路径(可写纯路径或路径+完整文件名)如：测试路径/AA/拷贝的数据.xls    测试路径/AA
-         * @param onUSBSaveListener 监听USB接口
-         * @return
-         */
-        public static boolean saveSDFile2OTG(final File sdFile, UsbFile usbFile, String uDiskPath, OnUSB_SaveListener onUSBSaveListener) {
-            UsbFile uFile;
-            FileInputStream fis;
-            try {
-                fis = new FileInputStream(sdFile);//读取选择的文件的
-                if (usbFile.isDirectory()) {//如果选择是个文件夹
-                    UsbFile[] usbFiles = usbFile.listFiles();
-                    if (usbFiles.length > 0) {
-                        for (UsbFile file : usbFiles) {
-                            if (file.getName().equals(sdFile.getName())) {
-                                file.delete();
-                            }
-                        }
-                    }
-
-                    //创建U盘中的文件夹
-                    FileBean fileBean = parseFilePath(uDiskPath);
-                    List<String> filePathList = fileBean.getFilePathList();
-                    if (filePathList != null) {
-                        for (String folder : filePathList)
-                            usbFile = usbFile.createDirectory(folder);
-                    }
-
-                    //设置文件名称
-                    String fileName = sdFile.getName();
-                    if (fileBean.fileName != null) {
-                        fileName = fileBean.fileName;
-                    }
-
-                    //开始创建U盘文件
-                    uFile = usbFile.createFile(fileName);
-                    UsbFileOutputStream uos = new UsbFileOutputStream(uFile);
-                    try {
-                        if (onUSBSaveListener != null)
-                            onUSBSaveListener.onStart();
-                        redFileStream(uos, fis, sdFile, onUSBSaveListener);
-                        if (onUSBSaveListener != null)
-                            onUSBSaveListener.onClose(true);
-                        return true;
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                        if (onUSBSaveListener != null)
-                            onUSBSaveListener.onClose(false);
-                    }
-                }
-            } catch (final Exception e) {
-                e.printStackTrace();
-                if (onUSBSaveListener != null)
-                    onUSBSaveListener.onClose(false);
-                return false;
-            }
-            if (onUSBSaveListener != null)
-                onUSBSaveListener.onClose(false);
-            return false;
         }
 
         /**
@@ -4737,101 +4671,6 @@ public class GT {
                         '}';
             }
         }
-
-        //USB 接口
-        public interface OnUSB_SaveListener {
-            void onStart();//任务开始
-
-            void onInProgress(int progress);//获取权限成功
-
-            void onClose(boolean copyState);//任务结束
-
-        }
-
-        /**
-         * 读取 USB设备列表
-         *
-         * @return USB设备列表
-         */
-        public UsbMassStorageDevice[] getDeviceList() {
-            UsbManager usbManager = (UsbManager) context.getSystemService(Context.USB_SERVICE);
-            //获取存储设备
-            storageDevices = UsbMassStorageDevice.getMassStorageDevices(context);
-            PendingIntent pendingIntent = PendingIntent.getBroadcast(context, 0, new Intent(ACTION_USB_PERMISSION), 0);
-            //可能有几个 一般只有一个 因为大部分手机只有1个otg插口
-            for (UsbMassStorageDevice device : storageDevices) {
-//            Log.e(TAG, device.getUsbDevice().getDeviceName());
-                //有就直接读取设备是否有权限
-                if (!usbManager.hasPermission(device.getUsbDevice())) {
-                    //没有权限请求权限
-                    usbManager.requestPermission(device.getUsbDevice(), pendingIntent);
-                }
-            }
-            return storageDevices;
-        }
-
-        /**
-         * 读取 USB 内文件夹下文件列表
-         *
-         * @param usbFolder usb文件夹
-         * @return 文件列表
-         */
-        public ArrayList<UsbFile> getUsbFolderFileList(UsbFile usbFolder) {
-            //更换当前目录
-            ArrayList<UsbFile> usbFiles = new ArrayList<>();
-            try {
-                Collections.addAll(usbFiles, usbFolder.listFiles());
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            return usbFiles;
-        }
-
-        /**
-         * 复制 USB文件到本地
-         *
-         * @param targetFile        需要复制的文件
-         * @param savePath          复制的目标文件路径
-         * @param onUSBSaveListener 下载进度回调
-         * @return 复制结果
-         */
-        public boolean saveUSbFileToLocal(UsbFile targetFile, String savePath, OnUSB_SaveListener onUSBSaveListener) {
-            boolean result;
-            try {
-                //开始写入
-                UsbFileInputStream uis = new UsbFileInputStream(targetFile);//读取选择的文件的
-                FileOutputStream fos = new FileOutputStream(savePath);
-                //这里uis.available一直为0
-//            int avi = uis.available();
-                long avi = targetFile.getLength();
-                int writeCount = 0;
-                int bytesRead;
-                byte[] buffer = new byte[1024];
-                if (onUSBSaveListener != null)
-                    onUSBSaveListener.onStart();
-                while ((bytesRead = uis.read(buffer)) != -1) {
-                    fos.write(buffer, 0, bytesRead);
-                    writeCount += bytesRead;
-//                Log.e(TAG, "Progress : write : " + writeCount + " All : " + avi);
-                    //回调下载进度
-                    if (onUSBSaveListener != null)
-                        onUSBSaveListener.onInProgress((int) (writeCount * 100 / avi));
-                }
-                fos.flush();
-                uis.close();
-                fos.close();
-                result = true;
-                if (onUSBSaveListener != null)
-                    onUSBSaveListener.onClose(true);
-            } catch (Exception e) {
-                e.printStackTrace();
-                result = false;
-                if (onUSBSaveListener != null)
-                    onUSBSaveListener.onClose(false);
-            }
-            return result;
-        }
-
 
     }
 
@@ -5907,13 +5746,13 @@ public class GT {
                         }
                         return listList;
                     }
-                    case "java.util.HashMap": {
+                    case "java.util.ArrayMap": {
                         //解析二级 Map {key1=value1, key2=value2}, {2=2, 22=22}
                         List<Object> mapList = new ArrayList<Object>();
                         valueData = valueData.substring(1, valueData.length() - 1);
                         String[] split = valueData.split("\\}, \\{");//key1=value1, key2=value2}, {2=2, 22=22
                         for (String str : split) {
-                            Map<Object, Object> map = new HashMap<>();
+                            Map<Object, Object> map = new ArrayMap<>();
                             String[] split1 = str.split(", ");//key1=value1, key2=value2
                             for (String str1 : split1) {
                                 String[] split2 = str1.split("=");//key1=value1
@@ -5991,7 +5830,7 @@ public class GT {
                 String valuesType = values.substring(0, valuesIndex);
                 String valuesData = values.substring(valuesIndex + 1, values.length() - 1);
 
-                Map<Object, Object> map = new HashMap<>();
+                Map<Object, Object> map = new ArrayMap<>();
                 Class<?> keysTypeClass = null;
                 Class<?> valuesTypeClass = null;
                 try {
@@ -6114,8 +5953,8 @@ public class GT {
                 case "java.util.ArrayList": {
                     return ArrayList.class;
                 }
-                case "java.util.HashMap": {
-                    return HashMap.class;
+                case "java.util.ArrayMap": {
+                    return ArrayMap.class;
                 }
                 default:
                     //特殊类型
@@ -6513,9 +6352,9 @@ public class GT {
                             } else {
                                 data = val.toString();
                             }
-                        } else if (val.getClass() == HashMap.class) {
-                            Set<?> keys = ((HashMap<?, ?>) val).keySet();
-                            Collection<?> values = ((HashMap<?, ?>) val).values();
+                        } else if (val.getClass() == ArrayMap.class) {
+                            Set<?> keys = ((ArrayMap<?, ?>) val).keySet();
+                            Collection<?> values = ((ArrayMap<?, ?>) val).values();
                             if (values.size() != 0) {
                                 Object keyObj = keys.iterator().next();
                                 Object valObj = values.iterator().next();
@@ -6703,9 +6542,9 @@ public class GT {
                             } else {
                                 data = val.toString();
                             }
-                        } else if (val.getClass() == HashMap.class) {
-                            Set<?> keys = ((HashMap<?, ?>) val).keySet();
-                            Collection<?> values = ((HashMap<?, ?>) val).values();
+                        } else if (val.getClass() == ArrayMap.class) {
+                            Set<?> keys = ((ArrayMap<?, ?>) val).keySet();
+                            Collection<?> values = ((ArrayMap<?, ?>) val).values();
                             if (values.size() != 0) {
                                 Object keyObj = keys.iterator().next();
                                 Object valObj = values.iterator().next();
@@ -7484,7 +7323,7 @@ public class GT {
                     }
 
                     //递归查询父类
-                    GT.Hibernate.querySuper(bean, tClass, returnValues, cursor);
+                    Hibernate.querySuper(bean, tClass, returnValues, cursor);
 
                     Field[] fields = bean.getClass().getDeclaredFields();
                     for (Field field : fields) {
@@ -7503,7 +7342,7 @@ public class GT {
                                         String value = cursor.getString(cursor.getColumnIndex(valueName));
 //                                      //解密
                                         if (gt_Column != null && gt_Column.setIsEncryption()) {
-                                            value = GT.Encryption.DES.decryptPassword(value, passWord);
+                                            value = Encryption.DES.decryptPassword(value, passWord);
                                         }
                                         obj = value;
                                     } else if (int.class == type || Integer.class == type) {
@@ -7702,12 +7541,12 @@ public class GT {
                                             obj = null;
                                         } else {
                                             //第二次转换 List OR Map
-                                            obj = GT.Hibernate.returnListOrMap(type, value);
+                                            obj = Hibernate.returnListOrMap(type, value);
                                         }
                                     } else {
                                         String value = cursor.getString(cursor.getColumnIndex(valueName));
                                         try {
-                                            obj = GT.JSON.fromJson2(value, type);
+                                            obj = JSON.fromJson2(value, type);
                                         } catch (Exception e) {
                                             e.printStackTrace();
                                         }
@@ -9824,9 +9663,9 @@ public class GT {
          * ==================================== 新版 数据库 操作API ====================================
          */
 
-        private static Map<String, String[]> parameterNameMap = new HashMap<>();//存储一个接口里方法的形参名称
+        private static Map<String, String[]> parameterNameMap = new ArrayMap<>();//存储一个接口里方法的形参名称
 
-        public static <T> T create(Class<T> classz, GT.Hibernate... hibernates) {
+        public static <T> T create(Class<T> classz, Hibernate... hibernates) {
             //设置并发请求个数
             ExecutorService executor = null;
             GT_DaoBuild gt_dao = classz.getAnnotation(GT_DaoBuild.class);
@@ -9857,7 +9696,7 @@ public class GT {
                 @Override
                 public Object runMethod(Object proxy, Method method, Object[] args) {
                     String methodName = method.getName();
-                    Hibernate.Call<T> call = new Hibernate.Call<T>();
+                    Call<T> call = new Call<T>();
                     call.executor = finalExecutor;//设置线程池
 
                     //设置指定的 数据库框架对象
@@ -9865,7 +9704,7 @@ public class GT {
                         call.hibernate = hibernates[0];
                     }
                     if (call.hibernate == null) {
-                        call.hibernate = new GT.Hibernate().initialize(null, 1, Hibernate.DATABASE_PASSWORD, null);
+                        call.hibernate = new Hibernate().initialize(null, 1, Hibernate.DATABASE_PASSWORD, null);
                     }
 
                     //获取所有注解
@@ -9881,7 +9720,7 @@ public class GT {
                         if (typeName.indexOf("Call<") != -1) {
                             typeName = typeName.substring(typeName.indexOf("Call<") + "Call<".length(), typeName.length() - 1);
                         }
-                        call.t = (T) AnnotationAssist.classToObject(typeName);
+                        call.t = (T) AnnotationAssist.classToObject(typeName);//1
                         if (typeName.contains("java.util.List")) {
                             call.tClass = AnnotationAssist.stringListToClass(typeName);
                         } else {
@@ -9923,8 +9762,8 @@ public class GT {
                         //获取 注解上的方法名称
                         for (Annotation[] annotation1 : declaredAnnotations) {
                             for (Annotation annotation2 : annotation1) {
-                                if (annotation2 instanceof Hibernate.Where) {
-                                    Hibernate.Where where = (Hibernate.Where) annotation2;
+                                if (annotation2 instanceof Where) {
+                                    Where where = (Where) annotation2;
                                     list.add(where.value());
                                 }
                             }
@@ -9984,7 +9823,7 @@ public class GT {
                                 if (obj instanceof WhereBean) {
                                     call.whereBean = (WhereBean) obj;
                                 } else {
-                                    call.t = (T) obj;
+                                    call.t = (T) obj;//2
                                 }
                             } else {//call.whereBean
                                 if (!call.getParamMap().containsKey(parameterArray[i])) {
@@ -10061,8 +9900,8 @@ public class GT {
         public static class Call<T> {
 
             private List<String> keyList = new ArrayList<>(); //为了保证方法参数的顺序
-            private Map<String, Object> paramMap = new HashMap<>();
-            private Map<String, Object> headerMap = new HashMap<>();
+            private Map<String, Object> paramMap = new ArrayMap<>();
+            private Map<String, Object> headerMap = new ArrayMap<>();
             private ExecutorService executor;//线程池
             private String response;
             private Method method;
@@ -10070,15 +9909,15 @@ public class GT {
             private Class<T> tClass;
             private Exception exception;//异常
 
-            private GT.Hibernate.WhereBean whereBean;
+            private WhereBean whereBean;
 
-            private GT.Hibernate hibernate;//SQL管理器
+            private Hibernate hibernate;//SQL管理器
 
             public Map<String, Object> getParamMap() {
                 return paramMap;
             }
 
-            public Hibernate.Call<T> addParam(String key, Object obj) {
+            public Call<T> addParam(String key, Object obj) {
                 if (paramMap != null) {
                     paramMap.put(key, obj);
                     keyList.add(key);
@@ -10125,7 +9964,7 @@ public class GT {
             }
 
             //异步需要填参数，同步请求无需填参数
-            public Hibernate.Call<T> newCall(Hibernate.Callback<T>... callback) {
+            public Call<T> newCall(Callback<T>... callback) {
                 return callRequest(this, callback);
             }
 
@@ -10295,8 +10134,8 @@ public class GT {
          * @param callBack
          * @param <T>
          */
-        private static <T> Hibernate.Call<T> callRequest(Hibernate.Call<T> call, Hibernate.Callback<T>... callbacks) {
-            Hibernate.Callback<T> callBack = null;
+        private static <T> Call<T> callRequest(Call<T> call, Callback<T>... callbacks) {
+            Callback<T> callBack = null;
             if (callbacks.length > 0) {
                 callBack = callbacks[0];
             }
@@ -10326,10 +10165,10 @@ public class GT {
          * @param <T>
          * @return
          */
-        private static <T> Hibernate.Call<T> callSynchronization(Hibernate.Call<T> call, Hibernate.Callback<T> callback) {
+        private static <T> Call<T> callSynchronization(Call<T> call, Callback<T> callback) {
             if (call.hibernate == null) return call;
 
-            GT.Thread.runAndroid(new Runnable() {
+            Thread.runAndroid(new Runnable() {
                 @Override
                 public void run() {
                     callback.onStart(call);
@@ -10347,7 +10186,7 @@ public class GT {
                         String key = iterator.next();
                         sqlValueList.add(key);
                     }
-                    Collections.reverse(sqlValueList);
+//                    Collections.reverse(sqlValueList);
 
                     //设置查询类型值
                     for (int i = 0; i < sqlValueList.size(); i++) {
@@ -10370,7 +10209,7 @@ public class GT {
                     }
 
                     boolean finalStatus = status;
-                    GT.Thread.runAndroid(new Runnable() {
+                    Thread.runAndroid(new Runnable() {
                         @Override
                         public void run() {
                             if (finalStatus) {//插入成功
@@ -10383,26 +10222,20 @@ public class GT {
 
                 } else if (GT_Delete.class.equals(call.whereBean.type)) {//删除数据
                     boolean status = true;
-                    if (call.t != null) {
-                        status = call.hibernate.delete(call.t).isStatus();
-                    } else if (call.whereBean.sqlWhere.length == 0 && call.whereBean.sqlValue.length == 1) {//根据ID删除
+
+                    if (call.whereBean.sqlWhere.length == 0 && call.whereBean.sqlValue.length == 1) {//根据ID删除
                         status = call.hibernate.delete(call.tClass, Integer.parseInt(call.whereBean.sqlValue[0])).isStatus();
-                    } else {
-                        //根据条件删除操作
-                        if (call.whereBean.sqlWhere.length == 0 && call.whereBean.sqlValue.length == 0) {
-                            //删除所有
-                            status = call.hibernate.deleteAll(call.tClass).isStatus();
-                        } else {
-                            if (call.whereBean.sqlWhere.length != 0 || call.whereBean.sqlValue.length != 0) {
-                                status = call.hibernate
-                                        .where(call.whereBean.sqlWhere, call.whereBean.sqlValue)
-                                        .delete(call.tClass).isStatus();
-                            }
-                        }
+                    } else if (call.whereBean.sqlWhere.length != 0 || call.whereBean.sqlValue.length != 0) {//根据具体条件删除
+                        status = call.hibernate.where(call.whereBean.sqlWhere, call.whereBean.sqlValue).delete(call.tClass).isStatus();
+                    } else if (call.t != null) {//根据实体类的 ID 删除
+                        status = call.hibernate.delete(call.t).isStatus();
+                    } else if (call.whereBean.sqlWhere.length == 0 && call.whereBean.sqlValue.length == 0) {
+                        //删除所有
+                        status = call.hibernate.deleteAll(call.tClass).isStatus();
                     }
 
                     boolean finalStatus = status;
-                    GT.Thread.runAndroid(new Runnable() {
+                    Thread.runAndroid(new Runnable() {
                         @Override
                         public void run() {
                             if (finalStatus) {//删除成功
@@ -10425,11 +10258,11 @@ public class GT {
                             .having(call.whereBean.having)
                             .isLast(call.whereBean.isList);
                     if (call.t instanceof ArrayList) {
-                        call.t = (T) call.hibernate.queryAll(call.tClass);
+                        call.t = (T) call.hibernate.queryAll(call.tClass);//3
                     } else {
-                        call.t = (T) call.hibernate.query(call.tClass);
+                        call.t = (T) call.hibernate.query(call.tClass);//4
                     }
-                    GT.Thread.runAndroid(new Runnable() {
+                    Thread.runAndroid(new Runnable() {
                         @Override
                         public void run() {
                             if (call.t != null) {
@@ -10453,7 +10286,7 @@ public class GT {
                                 String idName = call.whereBean.sqlWhere[0];
                                 idName = idName.substring(0, idName.indexOf(" "));
                                 contentValues.put(idName, Integer.parseInt(call.whereBean.sqlValue[0]));
-                                call.t = (T) contentValues;
+                                call.t = (T) contentValues;//5
                             }
                         } catch (Exception e) {
 
@@ -10463,12 +10296,12 @@ public class GT {
                         status = call.hibernate.update(call.t).isStatus();
                     }
                     boolean finalStatus = status;
-                    GT.Thread.runAndroid(new Runnable() {
+                    Thread.runAndroid(new Runnable() {
                         @Override
                         public void run() {
                             if (finalStatus) {//修改成功
                                 if (call.t instanceof ContentValues) {//ContentValues 转 实体类
-                                    call.t = (T) AnnotationAssist.contentValuesToObject((ContentValues) call.t, call.tClass);
+                                    call.t = (T) AnnotationAssist.contentValuesToObject((ContentValues) call.t, call.tClass);//6
                                 }
                                 callback.onSuccess(call.t, call);
                             } else {//修改失败
@@ -10479,7 +10312,7 @@ public class GT {
                 } else if (GT_Code.class.equals(call.whereBean.type)) {//使用自定义代码执行
                     SQLiteDatabase sqliteDatabase = call.hibernate.getSqliteDatabase();
                     if (sqliteDatabase == null || call.whereBean.getSqlCode() == null || call.whereBean.getSqlCode().length() == 0) {
-                        GT.Thread.runAndroid(new Runnable() {
+                        Thread.runAndroid(new Runnable() {
                             @Override
                             public void run() {
                                 callback.onError(call, call.exception);
@@ -10498,7 +10331,7 @@ public class GT {
                         } else if (code.contains("select")) {
                             code = ApplicationUtils.replaceArray(call.whereBean.getSqlCode(), "\\?", call.whereBean.sqlValue);
                             Cursor cursor = sqliteDatabase.rawQuery(code, null);
-                            call.t = (T) cursorToObject(cursor, call.tClass, sqliteDatabase, call.tClass.getSimpleName(), replaceSelectValue(code));
+                            call.t = (T) cursorToObject(cursor, call.tClass, sqliteDatabase, call.tClass.getSimpleName(), replaceSelectValue(code));//7
                         } else if (code.contains("update")) {
                             code = ApplicationUtils.replaceArray(call.whereBean.getSqlCode(), "\\?", call.whereBean.sqlValue);
                             call.hibernate.getSqliteDatabase().execSQL(code);
@@ -10508,7 +10341,7 @@ public class GT {
                         }
 
                         //如果没报异常捕获，那就算执行正常走操作成功流程
-                        GT.Thread.runAndroid(new Runnable() {
+                        Thread.runAndroid(new Runnable() {
                             @Override
                             public void run() {
                                 callback.onSuccess(call.t, call);
@@ -10520,7 +10353,7 @@ public class GT {
                     GT.err("非法的 查询实体类型");
                 }
             } catch (Exception e) {
-                GT.Thread.runAndroid(new Runnable() {
+                Thread.runAndroid(new Runnable() {
                     @Override
                     public void run() {
                         callback.onError(call, e);
@@ -10528,7 +10361,7 @@ public class GT {
                 });
             }
 
-            GT.Thread.runAndroid(new Runnable() {
+            Thread.runAndroid(new Runnable() {
                 @Override
                 public void run() {
                     callback.onEnd(call);
@@ -10541,25 +10374,25 @@ public class GT {
         //增强版请求接口
         public static interface CallbackListener<T> {
 
-            public void onSuccess(T t, Hibernate.Call<T> call);
+            public void onSuccess(T t, Call<T> call);
 
-            public void onError(Hibernate.Call<T> call, Exception e);
+            public void onError(Call<T> call, Exception e);
 
         }
 
         //查询接口类
-        public static abstract class Callback<T> implements Hibernate.CallbackListener<T> {
+        public static abstract class Callback<T> implements CallbackListener<T> {
 
-            public void onStart(Hibernate.Call<T> call) {
+            public void onStart(Call<T> call) {
             }//开始查询
 
-            public void onSuccess(T t, Hibernate.Call<T> call) {
+            public void onSuccess(T t, Call<T> call) {
             }//查询成功
 
-            public void onError(Hibernate.Call<T> call, Exception e) {
+            public void onError(Call<T> call, Exception e) {
             }//查询错误
 
-            public void onEnd(Hibernate.Call<T> call) {
+            public void onEnd(Call<T> call) {
             }//结束操作
 
         }
@@ -10638,8 +10471,7 @@ public class GT {
          * @param context
          */
         public static void cleanDatabases(Context context) {
-            deleteFilesByDirectory(new File("/data/data/"
-                    + context.getPackageName() + "/databases"));
+            deleteFilesByDirectory(new File("/data/data/" + context.getPackageName() + "/databases"));
         }
 
         /**
@@ -10648,8 +10480,7 @@ public class GT {
          * @param context
          */
         public static void cleanSharedPreference(Context context) {
-            deleteFilesByDirectory(new File("/data/data/"
-                    + context.getPackageName() + "/shared_prefs"));
+            deleteFilesByDirectory(new File("/data/data/" + context.getPackageName() + "/shared_prefs"));
         }
 
         /**
@@ -10677,8 +10508,7 @@ public class GT {
          * @param context
          */
         public static void cleanExternalCache(Context context) {
-            if (Environment.getExternalStorageState().equals(
-                    Environment.MEDIA_MOUNTED)) {
+            if (Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED)) {
                 deleteFilesByDirectory(context.getExternalCacheDir());
             }
         }
@@ -10821,6 +10651,446 @@ public class GT {
 
     }
 
+    //设备信息与SD卡信息
+    public static class DeviceInfoSDCardUtils {
+        /**
+         * 获取设备宽度（px）
+         */
+        public static int getDeviceWidth(Context context) {
+            return context.getResources().getDisplayMetrics().widthPixels;
+        }
+
+        /**
+         * 获取设备高度（px）
+         */
+        public static int getDeviceHeight(Context context) {
+            return context.getResources().getDisplayMetrics().heightPixels;
+        }
+
+        /**
+         * 获取设备的唯一标识， 需要 “android.permission.READ_Phone_STATE”权限
+         */
+        public static String getIMEI(Context context) {
+            TelephonyManager tm = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
+            String deviceId = tm.getDeviceId();
+            if (deviceId == null) {
+                return "UnKnown";
+            } else {
+                return deviceId;
+            }
+        }
+
+        /**
+         * 获取厂商名
+         **/
+        public static String getDeviceManufacturer() {
+            return Build.MANUFACTURER;
+        }
+
+        /**
+         * 获取产品名
+         **/
+        public static String getDeviceProduct() {
+            return Build.PRODUCT;
+        }
+
+        /**
+         * 获取手机品牌
+         */
+        public static String getDeviceBrand() {
+            return Build.BRAND;
+        }
+
+        /**
+         * 获取手机型号
+         */
+        public static String getDeviceModel() {
+            return Build.MODEL;
+        }
+
+        /**
+         * 获取手机主板名
+         */
+        public static String getDeviceBoard() {
+            return Build.BOARD;
+        }
+
+        /**
+         * 设备名
+         **/
+        public static String getDeviceDevice() {
+            return Build.DEVICE;
+        }
+
+        /**
+         * fingerprit 信息
+         **/
+        public static String getDeviceFubgerprint() {
+            return Build.FINGERPRINT;
+        }
+
+        /**
+         * 硬件名
+         **/
+        public static String getDeviceHardware() {
+            return Build.HARDWARE;
+        }
+
+        /**
+         * 主机
+         **/
+        public static String getDeviceHost() {
+            return Build.HOST;
+        }
+
+        /**
+         * 显示ID
+         **/
+        public static String getDeviceDisplay() {
+            return Build.DISPLAY;
+        }
+
+        /**
+         * ID
+         **/
+        public static String getDeviceId() {
+            return Build.ID;
+        }
+
+        /**
+         * 获取手机用户名
+         **/
+        public static String getDeviceUser() {
+            return Build.USER;
+        }
+
+        /**
+         * 获取手机 硬件序列号
+         **/
+        public static String getDeviceSerial() {
+            return Build.SERIAL;
+        }
+
+        /**
+         * 获取手机Android 系统SDK
+         *
+         * @return
+         */
+        public static int getDeviceSDK() {
+            return Build.VERSION.SDK_INT;
+        }
+
+        /**
+         * 获取手机Android 版本
+         *
+         * @return
+         */
+        public static String getDeviceAndroidVersion() {
+            return Build.VERSION.RELEASE;
+        }
+
+        /**
+         * 获取当前手机系统语言。
+         */
+        public static String getDeviceDefaultLanguage() {
+            return Locale.getDefault().getLanguage();
+        }
+
+        /**
+         * 获取当前系统上的语言列表(Locale列表)
+         */
+        public static String getDeviceSupportLanguage() {
+            Log.e("wangjie", "Local:" + Locale.GERMAN);
+            Log.e("wangjie", "Local:" + Locale.ENGLISH);
+            Log.e("wangjie", "Local:" + Locale.US);
+            Log.e("wangjie", "Local:" + Locale.CHINESE);
+            Log.e("wangjie", "Local:" + Locale.TAIWAN);
+            Log.e("wangjie", "Local:" + Locale.FRANCE);
+            Log.e("wangjie", "Local:" + Locale.FRENCH);
+            Log.e("wangjie", "Local:" + Locale.GERMANY);
+            Log.e("wangjie", "Local:" + Locale.ITALIAN);
+            Log.e("wangjie", "Local:" + Locale.JAPAN);
+            Log.e("wangjie", "Local:" + Locale.JAPANESE);
+            return Locale.getAvailableLocales().toString();
+        }
+
+        public static String getDeviceAllInfo(Context context) {
+
+            return "\n\n1. IMEI:\n\t\t" + getIMEI(context)
+
+                    + "\n\n2. 设备宽度:\n\t\t" + getDeviceWidth(context)
+
+                    + "\n\n3. 设备高度:\n\t\t" + getDeviceHeight(context)
+
+                    + "\n\n4. 是否有内置SD卡:\n\t\t" + isSDCardMount()
+
+                    + "\n\n5. RAM 信息:\n\t\t" + getRAMInfo(context)
+
+                    + "\n\n8. 是否联网:\n\t\t" + Network.isInternet(context)
+
+                    + "\n\n9. 网络类型:\n\t\t" + Network.getNetworkState(context)
+
+                    + "\n\n10. 系统默认语言:\n\t\t" + getDeviceDefaultLanguage()
+
+                    + "\n\n11. 硬件序列号(设备名):\n\t\t" + Build.SERIAL
+
+                    + "\n\n12. 手机型号:\n\t\t" + Build.MODEL
+
+                    + "\n\n13. 生产厂商:\n\t\t" + Build.MANUFACTURER
+
+                    + "\n\n14. 手机Fingerprint标识:\n\t\t" + Build.FINGERPRINT
+
+                    + "\n\n15. Android 版本:\n\t\t" + Build.VERSION.RELEASE
+
+                    + "\n\n16. Android SDK版本:\n\t\t" + Build.VERSION.SDK_INT
+
+                    + "\n\n17. 安全patch 时间:\n\t\t" + Build.VERSION.SECURITY_PATCH
+
+                    + "\n\n18. 发布时间:\n\t\t" + Build.TIME
+
+                    + "\n\n19. 版本类型:\n\t\t" + Build.TYPE
+
+                    + "\n\n20. 用户名:\n\t\t" + Build.USER
+
+                    + "\n\n21. 产品名:\n\t\t" + Build.PRODUCT
+
+                    + "\n\n22. ID:\n\t\t" + Build.ID
+
+                    + "\n\n23. 显示ID:\n\t\t" + Build.DISPLAY
+
+                    + "\n\n24. 硬件名:\n\t\t" + Build.HARDWARE
+
+                    + "\n\n25. 产品名:\n\t\t" + Build.DEVICE
+
+                    + "\n\n26. Bootloader:\n\t\t" + Build.BOOTLOADER
+
+                    + "\n\n27. 主板名:\n\t\t" + Build.BOARD
+
+                    + "\n\n28. CodeName:\n\t\t" + Build.VERSION.CODENAME + "\n\n29. 语言支持:\n\t\t" + getDeviceSupportLanguage();
+
+        }
+
+        private static final int INTERNAL_STORAGE = 0;
+        private static final int EXTERNAL_STORAGE = 1;
+
+        /**
+         * 获取 手机 RAM 信息
+         */
+        public static String getRAMInfo(Context context) {
+            long totalSize = 0;
+            long availableSize = 0;
+
+            ActivityManager activityManager = (ActivityManager) context.getSystemService(context.ACTIVITY_SERVICE);
+
+            ActivityManager.MemoryInfo memoryInfo = new ActivityManager.MemoryInfo();
+            activityManager.getMemoryInfo(memoryInfo);
+            totalSize = memoryInfo.totalMem;
+            availableSize = memoryInfo.availMem;
+
+            return "可用/总共：" + Formatter.formatFileSize(context, availableSize) + "/" + Formatter.formatFileSize(context, totalSize);
+        }
+
+        /**
+         * 判断SD是否挂载
+         */
+        public static boolean isSDCardMount() {
+            return Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED);
+        }
+
+        /**
+         * 获取 手机 RAM 信息 方法 一
+         */
+        public static String getTotalRAM(Context context) {
+            long size = 0;
+            ActivityManager activityManager = (ActivityManager) context.getSystemService(context.ACTIVITY_SERVICE);
+            ActivityManager.MemoryInfo outInfo = new ActivityManager.MemoryInfo();
+            activityManager.getMemoryInfo(outInfo);
+            size = outInfo.totalMem;
+
+            return Formatter.formatFileSize(context, size);
+        }
+
+        /**
+         * 手机 RAM 信息 方法 二
+         */
+        public static String getTotalRAMOther(Context context) {
+            String path = "/proc/meminfo";
+            String firstLine = null;
+            int totalRam = 0;
+            try {
+                FileReader fileReader = new FileReader(path);
+                BufferedReader br = new BufferedReader(fileReader, 8192);
+                firstLine = br.readLine().split("\\s+")[1];
+                br.close();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            if (firstLine != null) {
+
+                totalRam = (int) Math.ceil((new Float(Float.valueOf(firstLine) / (1024 * 1024)).doubleValue()));
+
+                long totalBytes = 0;
+
+            }
+
+            return Formatter.formatFileSize(context, totalRam);
+        }
+
+        /**
+         * 获取 手机 可用 RAM
+         */
+        public static String getAvailableRAM(Context context) {
+            long size = 0;
+            ActivityManager activityManager = (ActivityManager) context.getSystemService(context.ACTIVITY_SERVICE);
+            ActivityManager.MemoryInfo outInfo = new ActivityManager.MemoryInfo();
+            activityManager.getMemoryInfo(outInfo);
+            size = outInfo.availMem;
+
+            return Formatter.formatFileSize(context, size);
+        }
+
+        /**
+         * 获取手机内部存储空间
+         *
+         * @param context
+         * @return 以M, G为单位的容量
+         */
+        public static String getTotalInternalMemorySize(Context context) {
+            File file = Environment.getDataDirectory();
+            StatFs statFs = new StatFs(file.getPath());
+            long blockSizeLong = statFs.getBlockSizeLong();
+            long blockCountLong = statFs.getBlockCountLong();
+            long size = blockCountLong * blockSizeLong;
+            return Formatter.formatFileSize(context, size);
+        }
+
+        /**
+         * 获取手机内部可用存储空间
+         *
+         * @param context
+         * @return 以M, G为单位的容量
+         */
+        public static String getAvailableInternalMemorySize(Context context) {
+            File file = Environment.getDataDirectory();
+            StatFs statFs = new StatFs(file.getPath());
+            long availableBlocksLong = statFs.getAvailableBlocksLong();
+            long blockSizeLong = statFs.getBlockSizeLong();
+            return Formatter.formatFileSize(context, availableBlocksLong * blockSizeLong);
+        }
+
+        /**
+         * 获取手机外部存储空间
+         *
+         * @param context
+         * @return 以M, G为单位的容量
+         */
+        public static String getTotalExternalMemorySize(Context context) {
+            File file = Environment.getExternalStorageDirectory();
+            StatFs statFs = new StatFs(file.getPath());
+            long blockSizeLong = statFs.getBlockSizeLong();
+            long blockCountLong = statFs.getBlockCountLong();
+            return Formatter.formatFileSize(context, blockCountLong * blockSizeLong);
+        }
+
+        /**
+         * 获取手机外部可用存储空间
+         *
+         * @param context
+         * @return 以M, G为单位的容量
+         */
+        public static String getAvailableExternalMemorySize(Context context) {
+            File file = Environment.getExternalStorageDirectory();
+            StatFs statFs = new StatFs(file.getPath());
+            long availableBlocksLong = statFs.getAvailableBlocksLong();
+            long blockSizeLong = statFs.getBlockSizeLong();
+            return Formatter.formatFileSize(context, availableBlocksLong * blockSizeLong);
+        }
+
+        /**
+         * SD 卡信息
+         */
+
+        public static String getSDCardInfo() {
+
+            SDCardInfo sd = new SDCardInfo();
+            if (!isSDCardMount()) return "SD card 未挂载!";
+
+            sd.isExist = true;
+            StatFs sf = new StatFs(Environment.getExternalStorageDirectory().getPath());
+
+            sd.totalBlocks = sf.getBlockCountLong();
+            sd.blockByteSize = sf.getBlockSizeLong();
+            sd.availableBlocks = sf.getAvailableBlocksLong();
+            sd.availableBytes = sf.getAvailableBytes();
+            sd.freeBlocks = sf.getFreeBlocksLong();
+            sd.freeBytes = sf.getFreeBytes();
+            sd.totalBytes = sf.getTotalBytes();
+            return sd.toString();
+        }
+
+        public static class SDCardInfo {
+            boolean isExist;
+            long totalBlocks;
+            long freeBlocks;
+            long availableBlocks;
+            long blockByteSize;
+            long totalBytes;
+            long freeBytes;
+            long availableBytes;
+
+            @Override
+            public String toString() {
+                return "isExist=" + isExist + "\ntotalBlocks=" + totalBlocks + "\nfreeBlocks=" + freeBlocks + "\navailableBlocks=" + availableBlocks + "\nblockByteSize=" + blockByteSize + "\ntotalBytes=" + totalBytes + "\nfreeBytes=" + freeBytes + "\navailableBytes=" + availableBytes;
+            }
+        }
+
+        // add start by wangjie for SDCard TotalStorage
+        public static String getSDCardTotalStorage(long totalByte) {
+
+            double byte2GB = totalByte / 1024.00 / 1024.00 / 1024.00;
+            double totalStorage;
+            if (byte2GB > 1) {
+                totalStorage = Math.ceil(byte2GB);
+                if (totalStorage > 1 && totalStorage < 3) {
+                    return 2.0 + "GB";
+                } else if (totalStorage > 2 && totalStorage < 5) {
+                    return 4.0 + "GB";
+                } else if (totalStorage >= 5 && totalStorage < 10) {
+                    return 8.0 + "GB";
+                } else if (totalStorage >= 10 && totalStorage < 18) {
+                    return 16.0 + "GB";
+                } else if (totalStorage >= 18 && totalStorage < 34) {
+                    return 32.0 + "GB";
+                } else if (totalStorage >= 34 && totalStorage < 50) {
+                    return 48.0 + "GB";
+                } else if (totalStorage >= 50 && totalStorage < 66) {
+                    return 64.0 + "GB";
+                } else if (totalStorage >= 66 && totalStorage < 130) {
+                    return 128.0 + "GB";
+                }
+            } else {
+                // below 1G return get values
+                totalStorage = totalByte / 1024.00 / 1024.00;
+
+                if (totalStorage >= 515 && totalStorage < 1024) {
+                    return 1 + "GB";
+                } else if (totalStorage >= 260 && totalStorage < 515) {
+                    return 512 + "MB";
+                } else if (totalStorage >= 130 && totalStorage < 260) {
+                    return 256 + "MB";
+                } else if (totalStorage > 70 && totalStorage < 130) {
+                    return 128 + "MB";
+                } else if (totalStorage > 50 && totalStorage < 70) {
+                    return 64 + "MB";
+                }
+            }
+
+            return totalStorage + "GB";
+        }
+
+
+    }
+
     /**
      * 随机类
      */
@@ -10853,10 +11123,11 @@ public class GT {
          * @return
          */
         public static int getInt(int min, int max) {
-            max++;
-            int i = random.nextInt(max) % (max - min + 2) + min;
-            if (i > max) i--;
-            return i;
+            int value = random.nextInt(max);
+            if (value < min) {
+                return getInt(min, max);
+            }
+            return value;
         }
 
         /**
@@ -10876,8 +11147,7 @@ public class GT {
          * @return
          */
         public static String getName(int nameLength) {
-            if (nameLength < 1)
-                return null;
+            if (nameLength < 1) return null;
             String sum = "";
             for (int i = 1; i < nameLength + 1; i++) {
                 String str = "";
@@ -12080,7 +12350,51 @@ public class GT {
      */
     public static class GT_Cache {
 
-        private volatile static Map<Class<ViewModel>, ViewModel> vewiModelMap = new HashMap<>();//HttpCall 存储缓存
+        private volatile static GT_SharedPreferences sp;
+
+        //本地缓存
+        public static void initCache(Context context) {
+            if (sp == null) {
+                sp = new GT_SharedPreferences(context, context.getPackageName());
+            }
+        }
+
+        //存储 本地缓存
+        public static void putCacheData(String key, Object bean_json) {
+            try {
+                if (sp == null && GT.getActivity() != null) initCache(GT.getActivity());
+                if (sp == null) return;
+                sp.save(key, bean_json);
+            } catch (Exception e) {
+            }
+        }
+
+        //存储 更多 本地缓存
+        public static void putCacheMap(Map<String, Object> map) {
+            try {
+                if (sp == null && GT.getActivity() != null) initCache(GT.getActivity());
+                if (sp == null) return;
+
+                for (String key : map.keySet()) {
+                    Object obj = map.get(key);
+                    sp.save(key, obj);
+                }
+            } catch (Exception e) {
+            }
+        }
+
+        //获取 本地缓存
+        public static <T> T getCacheData(String key, Class<T> classz) {
+            try {
+                if (sp == null && GT.getActivity() != null) initCache(GT.getActivity());
+                if (sp == null) return null;
+                return sp.query(key, classz);
+            } catch (Exception e) {
+                return null;
+            }
+        }
+
+        private volatile static Map<Class<ViewModel>, ViewModel> vewiModelMap = new ArrayMap<>();//HttpCall 存储缓存
 
         public static void addViewModel(Class<ViewModel> viewModelClass, ViewModel viewModel) {
             /*Set<Class<ViewModel>> key = vewiModelMap.keySet();
@@ -12131,7 +12445,7 @@ public class GT {
             return context;
         }
 
-        private volatile static Map<String, GT_SharedPreferences> sp_cache = new HashMap<>();//sp存储缓存
+        private volatile static Map<String, GT_SharedPreferences> sp_cache = new ArrayMap<>();//sp存储缓存
 
         /**
          * 处理过的存储 缓存
@@ -12166,7 +12480,7 @@ public class GT {
             }
         }
 
-        private volatile static Map<String, Hibernate> hibernate_cache = new HashMap<>();//数据库 Hibernate 缓存
+        private volatile static Map<String, Hibernate> hibernate_cache = new ArrayMap<>();//数据库 Hibernate 缓存
 
         /**
          * 处理过的存储 缓存
@@ -12201,7 +12515,7 @@ public class GT {
             }
         }
 
-        private volatile static Map<String, Object> http_cache = new HashMap<>();//HttpCall 存储缓存
+        private volatile static Map<String, Object> http_cache = new ArrayMap<>();//HttpCall 存储缓存
 
         /**
          * 处理过的存储 缓存
@@ -12236,7 +12550,7 @@ public class GT {
             }
         }
 
-        private volatile static Map<String, SerialPortUtils> serialPort_cache = new HashMap<>();//串口通信 缓存
+        private volatile static Map<String, SerialPortUtils> serialPort_cache = new ArrayMap<>();//串口通信 缓存
 
         /**
          * 处理过的存储 缓存
@@ -12271,7 +12585,7 @@ public class GT {
             }
         }
 
-        private volatile static Map<String, GT_Socket.TCP> socketTCP_cache = new HashMap<>();//socketTCP 缓存
+        private volatile static Map<String, GT_Socket.TCP> socketTCP_cache = new ArrayMap<>();//socketTCP 缓存
 
         /**
          * 处理过的存储 缓存
@@ -12307,8 +12621,13 @@ public class GT {
         }
 
         //释放掉所有缓存,建议只有在app完全退出的时候才调用
-        public void close() {
+        public static void close() {
             try {
+                if (vewiModelMap != null) {
+                    vewiModelMap.clear();
+                    vewiModelMap = null;
+                }
+
                 if (sp_cache != null) {
                     sp_cache.clear();
                     sp_cache = null;
@@ -12514,6 +12833,85 @@ public class GT {
             }
         }
 
+        //实时显示 网络速递 <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+        public static class NetWorkSpeedUtils {
+
+            private Context context;
+            private onSendSpeed onSendSpeed;
+            private Timer timer;
+            private boolean isStart;
+            private long lastTotalRxBytes = 0;
+            private long lastTimeStamp = 0;
+
+            public NetWorkSpeedUtils(Context context, onSendSpeed onSendSpeed) {
+                this.context = context;
+                this.onSendSpeed = onSendSpeed;
+            }
+
+            TimerTask task = new TimerTask() {
+                @Override
+                public void run() {
+                    if (isStart) {
+                        showNetSpeed();
+                    }
+                }
+            };
+
+
+            public NetWorkSpeedUtils startShowNetSpeed() {
+                isStart = true;
+                lastTotalRxBytes = getTotalRxBytes();
+                lastTimeStamp = System.currentTimeMillis();
+                timer = new Timer();
+                timer.schedule(task, 1000, 1000); // 1s后启动任务，每2s执行一次
+                return this;
+            }
+
+
+            public void start() {
+                isStart = true;
+            }
+
+            public void stop() {
+                isStart = false;
+            }
+
+
+            public void cancel() {
+                if (task != null) {
+                    task.cancel();
+                    task = null;
+                }
+                if (timer != null) {
+                    timer.cancel();
+                    timer = null;
+                }
+            }
+
+            private long getTotalRxBytes() {
+                return TrafficStats.getUidRxBytes(context.getApplicationInfo().uid) == TrafficStats.UNSUPPORTED ? 0 : (TrafficStats.getTotalRxBytes() / 1024);//转为KB
+            }
+
+            private void showNetSpeed() {
+                long nowTotalRxBytes = getTotalRxBytes();
+                long nowTimeStamp = System.currentTimeMillis();
+                long speed = ((nowTotalRxBytes - lastTotalRxBytes) * 1000 / (nowTimeStamp - lastTimeStamp));//毫秒转换
+                long speed2 = ((nowTotalRxBytes - lastTotalRxBytes) * 1000 % (nowTimeStamp - lastTimeStamp));//毫秒转换
+                lastTimeStamp = nowTimeStamp;
+                lastTotalRxBytes = nowTotalRxBytes;
+                String data = speed + "." + speed2 + " kb/s";
+                onSendSpeed.onSend(data);
+            }
+
+            interface onSendSpeed {
+
+                void onSend(String data);
+
+            }
+
+
+        }
+
     }
 
     /**
@@ -12555,7 +12953,6 @@ public class GT {
             return gson.fromJson(jsonStr, clazz);
         }
 
-
         /**
          * 将对象转换成Json字符串
          * 装换实体类需要用规则的创建，构造、set、get、toString、都有才行
@@ -12594,7 +12991,7 @@ public class GT {
                 Collection<?> collection = (Collection<?>) o;
                 serializeCollect(js, collection);
             } else if (isMap(clazz)) { // Map
-                HashMap<?, ?> collection = (HashMap<?, ?>) o;
+                ArrayMap<?, ?> collection = (ArrayMap<?, ?>) o;
                 serializeMap(js, collection);
             } else { // 单个值
                 try {
@@ -12801,7 +13198,7 @@ public class GT {
          */
         public static Map<String, String> beanToMap(Object obj) {
             Class<?> cls = obj.getClass();
-            Map<String, String> valueMap = new HashMap<String, String>();
+            Map<String, String> valueMap = new ArrayMap<String, String>();
             // 取出bean里的所有方法
             Method[] methods = cls.getDeclaredMethods();
             Field[] fields = cls.getDeclaredFields();
@@ -13110,7 +13507,7 @@ public class GT {
             T obj = null;
             if (clazz.isInterface()) {
                 if (clazz.equals(Map.class)) {
-                    obj = (T) new HashMap();
+                    obj = (T) new ArrayMap();
                 } else if (clazz.equals(List.class)) {
                     obj = (T) new ArrayList();
                 } else if (clazz.equals(Set.class)) {
@@ -13856,14 +14253,18 @@ public class GT {
          * @param savePath
          * @param saveFileName
          * @param listener
+         * @param iscache      是否开启网络缓存
          */
-        public static void downloadFile(final String url, final String savePath, final OnLoadData listener) {
+        public static void downloadFile(final String url, final String savePath, final OnLoadData listener, boolean... iscache) {
             Thread.getInstance(0).execute(new Runnable() {
                 @Override
                 public void run() {
                     HttpURLConnection conn;
                     try {
                         conn = (HttpURLConnection) new URL(url).openConnection();
+                        if (iscache != null && iscache.length > 0 && iscache[0]) {
+                            conn.setUseCaches(true); //设置使用网络缓存
+                        }
                         conn.connect();
                         InputStream is = conn.getInputStream();
                         int length = conn.getContentLength();
@@ -14062,7 +14463,7 @@ public class GT {
          * }
          */
         private static AnnotationAssist annotationAssist = new AnnotationAssist();
-        private static Map<String, String[]> parameterNameMap = new HashMap<>();//存储一个接口里方法的形参名称
+        private static Map<String, String[]> parameterNameMap = new ArrayMap<>();//存储一个接口里方法的形参名称
 
         //构建 HttpCall 对象
         @Target(ElementType.FIELD)
@@ -14193,6 +14594,12 @@ public class GT {
         @Target(ElementType.METHOD)
         @Retention(RetentionPolicy.SOURCE)
         public @interface PATH {
+            String value();
+        }
+
+        @Target(ElementType.METHOD)
+        @Retention(RetentionPolicy.SOURCE)
+        public @interface PUT {
             String value();
         }
 
@@ -14337,6 +14744,7 @@ public class GT {
                     GET get = method.getAnnotation(GET.class);
                     POST post = method.getAnnotation(POST.class);
                     PATH path = method.getAnnotation(PATH.class);
+                    PUT put = method.getAnnotation(PUT.class);
                     DELETE delete = method.getAnnotation(DELETE.class);
                     HEAD head = method.getAnnotation(HEAD.class);
                     OPTION option = method.getAnnotation(OPTION.class);
@@ -14357,6 +14765,9 @@ public class GT {
                     } else if (path != null) {
                         call.type = "PATH";
                         urlValue = path.value();
+                    } else if (put != null) {
+                        call.type = "PUT";
+                        urlValue = put.value();
                     } else if (delete != null) {
                         call.type = "DELETE";
                         urlValue = delete.value();
@@ -14608,8 +15019,8 @@ public class GT {
             private boolean filePause = false;//文件 上传下载 暂停
             private boolean uploadingOrDownload = false;//默认是下载
             private List<String> keyList = new ArrayList<>(); //为了保证方法参数的顺序
-            private Map<String, Object> paramMap = new HashMap<>();
-            private Map<String, Object> headerMap = new HashMap<>();
+            private Map<String, Object> paramMap = new ArrayMap<>();
+            private Map<String, Object> headerMap = new ArrayMap<>();
             private ExecutorService executor;//线程池
             private String charset = "UTF-8";//请求字符集格式
             private boolean redirects = true;//默认自动进行重定向
@@ -15590,14 +16001,74 @@ public class GT {
      */
     public static class Glide {
         private static Glide glide = null;//定义 GT 对象
-        private static final Map<String, Object> keyList = new HashMap<>();//缓存图片
-        private static final Map<String, Object> objList = new HashMap<>();//缓存加载对象
+        private static final Map<Integer, String> objList = new ArrayMap<>();//缓存加载对象
+        public static final ConcurrentHashMap<Object, Movie> gifCacheMovieList = new ConcurrentHashMap<>();//动态图缓存加载对象
         private static boolean isCache = true;//是否缓存
         private static String CACHE_PATH = null;//默认的本地缓存位置
+        private final int gifTagId = 107;//动态图tagId
+        private static final ExecutorService instance = GT.Thread.getInstance(0);//Glide 线程池
 
-        //强制设置 内存缓存
-        public static void setCacheImg(String key, Object imgObj) {
-            keyList.put(key, imgObj);//存储缓存
+        //设置 内存缓存
+        public static void setCacheImg(String key, Bitmap bitmap) {
+            LruCacheUtil.initCache();
+            LruCacheUtil.addBitmapToMemoryCache(key, bitmap);
+        }
+
+        //图片一级缓存 内存缓存
+        public static class LruCacheUtil {
+
+            private static LruCache<String, Bitmap> mMemoryCache;
+
+            // 获取到可用内存的最大值，使用内存超出这个值会引起OutOfMemory异常。
+            private static int mTotalSize = (int) Runtime.getRuntime().totalMemory();
+
+            //初始化
+            public static LruCache<String, Bitmap> initCache() {
+                if (mMemoryCache != null) return mMemoryCache;
+                // 使用最大可用内存值的1/5作为缓存的大小
+                mMemoryCache = new LruCache<String, Bitmap>(mTotalSize / 5) {
+                    @Override
+                    protected int sizeOf(String key, Bitmap bitmap) {
+                        // 重写此方法来衡量每张图片的大小，默认返回图片数量。
+                        return bitmap.getByteCount() / 1024;
+                    }
+                };
+                return mMemoryCache;
+            }
+
+            //添加图片到缓存
+            public static synchronized void addBitmapToMemoryCache(String key, Bitmap bitmap) {
+                if (getBitmapFromMemCache(key) == null) {
+                    if (key != null && bitmap != null) {
+                        mMemoryCache.put(key, bitmap);
+                    }
+                }
+            }
+
+            //从缓存获取图片
+            public static synchronized Bitmap getBitmapFromMemCache(String key) {
+                if (key != null) {
+                    return mMemoryCache.get(key);
+                } else {
+                    return null;
+                }
+            }
+
+            //清除缓存
+            public static void clearCache() {
+                if (mMemoryCache != null) {
+                    if (mMemoryCache.size() > 0) {
+                        mMemoryCache.evictAll();
+                    }
+                    mMemoryCache = null;
+                }
+            }
+
+            //获取添加到缓存的图片数量
+            public static int getPutCount() {
+                return mMemoryCache.putCount();
+            }
+
         }
 
         //图片信息
@@ -15610,6 +16081,7 @@ public class GT {
             private boolean isCaches = true;//是否缓存
             private boolean isThumbnail = false;//是否缩略图
             private boolean isGIF = false;//是否动态图
+            private int gifSpeed = 16;//动态图速度
             private int width, height;//缩略图的宽高
             private boolean isAnimation = true;//是否采用透明渐变动画
             private double compressionRatio = -1;//压缩比例
@@ -15623,41 +16095,32 @@ public class GT {
 
             @Override
             public String toString() {
-                return "GlideBean{" +
-                        "imgObjet=" + imgObjet +
-                        ", resource=" + resource +
-                        ", placeholder=" + placeholder +
-                        ", error=" + error +
-                        ", isCaches=" + isCaches +
-                        ", isThumbnail=" + isThumbnail +
-                        ", isGIF=" + isGIF +
-                        ", width=" + width +
-                        ", height=" + height +
-                        ", isAnimation=" + isAnimation +
-                        ", compressionRatio=" + compressionRatio +
-                        ", blurRadius=" + blurRadius +
-                        ", roundCorner=" + roundCorner +
-                        ", roundCorner_topLeft=" + roundCorner_topLeft +
-                        ", roundCorner_topRight=" + roundCorner_topRight +
-                        ", roundCorner_bottomLeft=" + roundCorner_bottomLeft +
-                        ", roundCorner_bottomRight=" + roundCorner_bottomRight +
-                        ", isCompression=" + isCompression +
-                        '}';
+                return "GlideBean{" + "imgObjet=" + imgObjet + ", resource=" + resource + ", placeholder=" + placeholder + ", error=" + error + ", isCaches=" + isCaches + ", isThumbnail=" + isThumbnail + ", isGIF=" + isGIF + ", width=" + width + ", height=" + height + ", isAnimation=" + isAnimation + ", compressionRatio=" + compressionRatio + ", blurRadius=" + blurRadius + ", roundCorner=" + roundCorner + ", roundCorner_topLeft=" + roundCorner_topLeft + ", roundCorner_topRight=" + roundCorner_topRight + ", roundCorner_bottomLeft=" + roundCorner_bottomLeft + ", roundCorner_bottomRight=" + roundCorner_bottomRight + ", isCompression=" + isCompression + '}';
             }
         }
 
         private Glide() {
         }
 
-        private static Glide getInstance() {
+        private static Glide getInstance(Object obj) {
             if (glide == null) {
                 synchronized (Glide.class) {
                     if (glide == null) {
                         glide = new Glide();
                         try {
-                            Context activity = getActivity();
-                            if (activity != null) {
-                                CACHE_PATH = FileUtils.getGTPath(activity) + "img/";
+
+                            Context context = null;
+                            if (obj instanceof Activity) {
+                                context = (Context) obj;
+                            }
+
+                            if (obj instanceof Context) {
+                                context = (Context) obj;
+                            }
+
+                            context = getActivity();
+                            if (context != null) {
+                                CACHE_PATH = FileUtils.getGTPath(context) + "img/";
                             }
                         } catch (Exception e) {
 
@@ -15673,7 +16136,7 @@ public class GT {
             return glide;
         }
 
-        private GlideBean glideBean;
+        private GlideBean glideBean2;
 
         /**
          * 设置加载图片的页面
@@ -15682,8 +16145,16 @@ public class GT {
          * @return
          */
         public static Glide with(Object obj) {
-//            if (glide == null) glide = getInstance();
+//            ide = getInstance();
             glide = new Glide();
+            if (LruCacheUtil.mMemoryCache == null) {
+                instance.execute(new Runnable() {
+                    @Override
+                    public void run() {
+                        LruCacheUtil.initCache();
+                    }
+                });
+            }
             if (CACHE_PATH == null) {
                 try {
                     Context context = null;
@@ -15691,25 +16162,25 @@ public class GT {
                         context = (Context) obj;
                     }
 
-                    if (obj instanceof Context) {
+                    if (context == null && obj instanceof Context) {
                         context = (Context) obj;
                     }
-
-                    context = getActivity();
-                    if (context != null) {
-                        CACHE_PATH = FileUtils.getGTPath(context) + "img/";
+                    if (context == null) {
+                        context = getActivity();
                     }
+                    if (context != null) {
+                        Context finalContext = context;
+                        CACHE_PATH = FileUtils.getGTPath(finalContext) + "img/";
+                        File file = new File(CACHE_PATH);
+                        if (!file.exists()) {
+                            file.mkdirs();
+                        }
+                    }
+
                 } catch (Exception e) {
 
-                } finally {
-                    File file = new File(CACHE_PATH);
-                    if (!file.exists()) {
-                        file.mkdirs();
-                    }
                 }
             }
-            //需要监听声明周期
-
             return glide;
         }
 
@@ -15726,10 +16197,10 @@ public class GT {
          */
         public Glide placeholder(Object resource) {
             if (resource == null) return glide;
-            if (glideBean == null) {
-                glideBean = new GlideBean();
+            if (glideBean2 == null) {
+                glideBean2 = new GlideBean();
             }
-            glideBean.placeholder = resource;
+            glideBean2.placeholder = resource;
             return glide;
         }
 
@@ -15740,10 +16211,10 @@ public class GT {
          * @return
          */
         public Glide compressionRatio(double ratio) {
-            if (glideBean == null) {
-                glideBean = new GlideBean();
+            if (glideBean2 == null) {
+                glideBean2 = new GlideBean();
             }
-            glideBean.compressionRatio = ratio;
+            glideBean2.compressionRatio = ratio;
             return glide;
         }
 
@@ -15754,10 +16225,10 @@ public class GT {
          * @return
          */
         public Glide isCompression(boolean compression) {
-            if (glideBean == null) {
-                glideBean = new GlideBean();
+            if (glideBean2 == null) {
+                glideBean2 = new GlideBean();
             }
-            glideBean.isCompression = compression;
+            glideBean2.isCompression = compression;
             return glide;
         }
 
@@ -15768,10 +16239,10 @@ public class GT {
          * @return
          */
         public Glide isThumbnail(boolean thumbnail) {
-            if (glideBean == null) {
-                glideBean = new GlideBean();
+            if (glideBean2 == null) {
+                glideBean2 = new GlideBean();
             }
-            glideBean.isThumbnail = thumbnail;
+            glideBean2.isThumbnail = thumbnail;
             return glide;
         }
 
@@ -15782,10 +16253,10 @@ public class GT {
          * @return
          */
         public Glide blurTransformation(float ambiguity) {
-            if (glideBean == null) {
-                glideBean = new GlideBean();
+            if (glideBean2 == null) {
+                glideBean2 = new GlideBean();
             }
-            glideBean.blurRadius = ambiguity;
+            glideBean2.blurRadius = ambiguity;
             return glide;
         }
 
@@ -15796,13 +16267,13 @@ public class GT {
          * @return
          */
         public Glide roundedCorners(int roundedAll) {
-            if (glideBean == null) {
-                glideBean = new GlideBean();
+            if (glideBean2 == null) {
+                glideBean2 = new GlideBean();
             }
-            if (glideBean.isGIF) {
-                glideBean.roundCorner = ImageViewTools.getGIFRoundedValue(roundedAll);
+            if (glideBean2.isGIF) {
+                glideBean2.roundCorner = ImageViewTools.getGIFRoundedValue(roundedAll);
             } else {
-                glideBean.roundCorner = ImageViewTools.getRoundedValue(roundedAll);
+                glideBean2.roundCorner = ImageViewTools.getRoundedValue(roundedAll);
             }
             return glide;
         }
@@ -15817,19 +16288,19 @@ public class GT {
          * @return
          */
         public Glide roundedCorners(int topLeft, int topRight, int bottomLeft, int bottomRight) {
-            if (glideBean == null) {
-                glideBean = new GlideBean();
+            if (glideBean2 == null) {
+                glideBean2 = new GlideBean();
             }
-            if (glideBean.isGIF) {
-                glideBean.roundCorner_topLeft = ImageViewTools.getGIFRoundedValue(topLeft);
-                glideBean.roundCorner_topRight = ImageViewTools.getGIFRoundedValue(topRight);
-                glideBean.roundCorner_bottomLeft = ImageViewTools.getGIFRoundedValue(bottomLeft);
-                glideBean.roundCorner_bottomRight = ImageViewTools.getGIFRoundedValue(bottomRight);
+            if (glideBean2.isGIF) {
+                glideBean2.roundCorner_topLeft = ImageViewTools.getGIFRoundedValue(topLeft);
+                glideBean2.roundCorner_topRight = ImageViewTools.getGIFRoundedValue(topRight);
+                glideBean2.roundCorner_bottomLeft = ImageViewTools.getGIFRoundedValue(bottomLeft);
+                glideBean2.roundCorner_bottomRight = ImageViewTools.getGIFRoundedValue(bottomRight);
             } else {
-                glideBean.roundCorner_topLeft = ImageViewTools.getRoundedValue(topLeft);
-                glideBean.roundCorner_topRight = ImageViewTools.getRoundedValue(topRight);
-                glideBean.roundCorner_bottomLeft = ImageViewTools.getRoundedValue(bottomLeft);
-                glideBean.roundCorner_bottomRight = ImageViewTools.getRoundedValue(bottomRight);
+                glideBean2.roundCorner_topLeft = ImageViewTools.getRoundedValue(topLeft);
+                glideBean2.roundCorner_topRight = ImageViewTools.getRoundedValue(topRight);
+                glideBean2.roundCorner_bottomLeft = ImageViewTools.getRoundedValue(bottomLeft);
+                glideBean2.roundCorner_bottomRight = ImageViewTools.getRoundedValue(bottomRight);
             }
             return glide;
         }
@@ -15844,50 +16315,50 @@ public class GT {
         public Glide roundedCorners(int... topLeft_topRight_bottomLeft_bottomRight) {
             if (topLeft_topRight_bottomLeft_bottomRight == null) return this;
 
-            if (glideBean == null) {
-                glideBean = new GlideBean();
+            if (glideBean2 == null) {
+                glideBean2 = new GlideBean();
             }
 
-            if (glideBean.isGIF) {
+            if (glideBean2.isGIF) {
                 switch (topLeft_topRight_bottomLeft_bottomRight.length) {
                     case 1:
-                        glideBean.roundCorner_topLeft = ImageViewTools.getGIFRoundedValue(topLeft_topRight_bottomLeft_bottomRight[0]);
+                        glideBean2.roundCorner_topLeft = ImageViewTools.getGIFRoundedValue(topLeft_topRight_bottomLeft_bottomRight[0]);
                         break;
                     case 2:
-                        glideBean.roundCorner_topLeft = ImageViewTools.getGIFRoundedValue(topLeft_topRight_bottomLeft_bottomRight[0]);
-                        glideBean.roundCorner_topRight = ImageViewTools.getGIFRoundedValue(topLeft_topRight_bottomLeft_bottomRight[1]);
+                        glideBean2.roundCorner_topLeft = ImageViewTools.getGIFRoundedValue(topLeft_topRight_bottomLeft_bottomRight[0]);
+                        glideBean2.roundCorner_topRight = ImageViewTools.getGIFRoundedValue(topLeft_topRight_bottomLeft_bottomRight[1]);
                         break;
                     case 3:
-                        glideBean.roundCorner_topLeft = ImageViewTools.getGIFRoundedValue(topLeft_topRight_bottomLeft_bottomRight[0]);
-                        glideBean.roundCorner_topRight = ImageViewTools.getGIFRoundedValue(topLeft_topRight_bottomLeft_bottomRight[1]);
-                        glideBean.roundCorner_bottomLeft = ImageViewTools.getGIFRoundedValue(topLeft_topRight_bottomLeft_bottomRight[2]);
+                        glideBean2.roundCorner_topLeft = ImageViewTools.getGIFRoundedValue(topLeft_topRight_bottomLeft_bottomRight[0]);
+                        glideBean2.roundCorner_topRight = ImageViewTools.getGIFRoundedValue(topLeft_topRight_bottomLeft_bottomRight[1]);
+                        glideBean2.roundCorner_bottomLeft = ImageViewTools.getGIFRoundedValue(topLeft_topRight_bottomLeft_bottomRight[2]);
                         break;
                     case 4:
-                        glideBean.roundCorner_topLeft = ImageViewTools.getGIFRoundedValue(topLeft_topRight_bottomLeft_bottomRight[0]);
-                        glideBean.roundCorner_topRight = ImageViewTools.getGIFRoundedValue(topLeft_topRight_bottomLeft_bottomRight[1]);
-                        glideBean.roundCorner_bottomLeft = ImageViewTools.getGIFRoundedValue(topLeft_topRight_bottomLeft_bottomRight[2]);
-                        glideBean.roundCorner_bottomRight = ImageViewTools.getGIFRoundedValue(topLeft_topRight_bottomLeft_bottomRight[3]);
+                        glideBean2.roundCorner_topLeft = ImageViewTools.getGIFRoundedValue(topLeft_topRight_bottomLeft_bottomRight[0]);
+                        glideBean2.roundCorner_topRight = ImageViewTools.getGIFRoundedValue(topLeft_topRight_bottomLeft_bottomRight[1]);
+                        glideBean2.roundCorner_bottomLeft = ImageViewTools.getGIFRoundedValue(topLeft_topRight_bottomLeft_bottomRight[2]);
+                        glideBean2.roundCorner_bottomRight = ImageViewTools.getGIFRoundedValue(topLeft_topRight_bottomLeft_bottomRight[3]);
                         break;
                 }
             } else {
                 switch (topLeft_topRight_bottomLeft_bottomRight.length) {
                     case 1:
-                        glideBean.roundCorner_topLeft = ImageViewTools.getRoundedValue(topLeft_topRight_bottomLeft_bottomRight[0]);
+                        glideBean2.roundCorner_topLeft = ImageViewTools.getRoundedValue(topLeft_topRight_bottomLeft_bottomRight[0]);
                         break;
                     case 2:
-                        glideBean.roundCorner_topLeft = ImageViewTools.getRoundedValue(topLeft_topRight_bottomLeft_bottomRight[0]);
-                        glideBean.roundCorner_topRight = ImageViewTools.getRoundedValue(topLeft_topRight_bottomLeft_bottomRight[1]);
+                        glideBean2.roundCorner_topLeft = ImageViewTools.getRoundedValue(topLeft_topRight_bottomLeft_bottomRight[0]);
+                        glideBean2.roundCorner_topRight = ImageViewTools.getRoundedValue(topLeft_topRight_bottomLeft_bottomRight[1]);
                         break;
                     case 3:
-                        glideBean.roundCorner_topLeft = ImageViewTools.getRoundedValue(topLeft_topRight_bottomLeft_bottomRight[0]);
-                        glideBean.roundCorner_topRight = ImageViewTools.getRoundedValue(topLeft_topRight_bottomLeft_bottomRight[1]);
-                        glideBean.roundCorner_bottomLeft = ImageViewTools.getRoundedValue(topLeft_topRight_bottomLeft_bottomRight[2]);
+                        glideBean2.roundCorner_topLeft = ImageViewTools.getRoundedValue(topLeft_topRight_bottomLeft_bottomRight[0]);
+                        glideBean2.roundCorner_topRight = ImageViewTools.getRoundedValue(topLeft_topRight_bottomLeft_bottomRight[1]);
+                        glideBean2.roundCorner_bottomLeft = ImageViewTools.getRoundedValue(topLeft_topRight_bottomLeft_bottomRight[2]);
                         break;
                     case 4:
-                        glideBean.roundCorner_topLeft = ImageViewTools.getRoundedValue(topLeft_topRight_bottomLeft_bottomRight[0]);
-                        glideBean.roundCorner_topRight = ImageViewTools.getRoundedValue(topLeft_topRight_bottomLeft_bottomRight[1]);
-                        glideBean.roundCorner_bottomLeft = ImageViewTools.getRoundedValue(topLeft_topRight_bottomLeft_bottomRight[2]);
-                        glideBean.roundCorner_bottomRight = ImageViewTools.getRoundedValue(topLeft_topRight_bottomLeft_bottomRight[3]);
+                        glideBean2.roundCorner_topLeft = ImageViewTools.getRoundedValue(topLeft_topRight_bottomLeft_bottomRight[0]);
+                        glideBean2.roundCorner_topRight = ImageViewTools.getRoundedValue(topLeft_topRight_bottomLeft_bottomRight[1]);
+                        glideBean2.roundCorner_bottomLeft = ImageViewTools.getRoundedValue(topLeft_topRight_bottomLeft_bottomRight[2]);
+                        glideBean2.roundCorner_bottomRight = ImageViewTools.getRoundedValue(topLeft_topRight_bottomLeft_bottomRight[3]);
                         break;
                 }
             }
@@ -15902,11 +16373,14 @@ public class GT {
          * @param isAutomaticPauses 是否自动暂停
          * @return
          */
-        public Glide asGif(boolean isGif) {
-            if (glideBean == null) {
-                glideBean = new GlideBean();
+        public Glide asGif(boolean isGif, int... gifSpeeds) {
+            if (glideBean2 == null) {
+                glideBean2 = new GlideBean();
             }
-            glideBean.isGIF = isGif;
+            if (gifSpeeds != null && gifSpeeds.length > 0) {
+                glideBean2.gifSpeed = gifSpeeds[0];
+            }
+            glideBean2.isGIF = isGif;
             return glide;
         }
 
@@ -15917,10 +16391,10 @@ public class GT {
          * @return
          */
         public Glide asGif() {
-            if (glideBean == null) {
-                glideBean = new GlideBean();
+            if (glideBean2 == null) {
+                glideBean2 = new GlideBean();
             }
-            glideBean.isGIF = true;
+            glideBean2.isGIF = true;
             return glide;
         }
 
@@ -15937,10 +16411,10 @@ public class GT {
          */
         public Glide error(Object resource) {
             if (resource == null) return glide;
-            if (glideBean == null) {
-                glideBean = new GlideBean();
+            if (glideBean2 == null) {
+                glideBean2 = new GlideBean();
             }
-            glideBean.error = resource;
+            glideBean2.error = resource;
             return glide;
         }
 
@@ -15955,12 +16429,12 @@ public class GT {
          * @return
          */
         public Glide loadThumbnail(Object resource, int width, int height, boolean... isCaches) {
-            if (glideBean == null) {
-                glideBean = new GlideBean();
+            if (glideBean2 == null) {
+                glideBean2 = new GlideBean();
             }
-            glideBean.width = width;
-            glideBean.height = height;
-            glideBean.isThumbnail = true;
+            glideBean2.width = width;
+            glideBean2.height = height;
+            glideBean2.isThumbnail = true;
             return load(resource, isCaches);
         }
 
@@ -15996,16 +16470,16 @@ public class GT {
          */
         public Glide load(Object resource, boolean... isCaches) {
             if (resource == null) return glide;
-
-            if (glideBean == null) {
-                glideBean = new GlideBean();
+            if (glideBean2 == null) {
+                glideBean2 = new GlideBean();
             }
-            glideBean.resource = resource;
+            glideBean2.resource = resource;
             if (isCaches.length > 0) {
-                glideBean.isCaches = isCaches[0];
+                glideBean2.isCaches = isCaches[0];
             }
             return glide;
         }
+
 
         /**
          * 加载图片
@@ -16014,56 +16488,49 @@ public class GT {
          * @return
          */
         public Glide into(ImageView iv, boolean... isAnimations) {
-
-            //设置是否需要显示 加载显示动画
             final View[] view = {null};
-            final float alpha = iv.getAlpha();
-            if (isAnimations.length > 0) {
-                glideBean.isAnimation = isAnimations[0];
-            } else {
-                //如果是第一次设置图片才设置默认动画
-                if (iv.getDrawable() == null) {
-                    glideBean.isAnimation = true;
+            Object gifTag = iv.getTag(iv.getId() + gifTagId);//读取是否有 gif 缓存
+            if (!(iv instanceof GT.ViewUtils.GTImageView) || gifTag != null) {
+                //设置是否需要显示 加载显示动画
+                Object tag = iv.getTag(iv.getId());
+                if (tag == null) {
+                    iv.setTag(iv.getId(), iv.getAlpha());
+                }
+                if (isAnimations.length > 0) {
+                    glideBean2.isAnimation = isAnimations[0];
                 } else {
-                    glideBean.isAnimation = false;
+                    //如果是第一次设置图片才设置默认动画
+                    if (iv.getDrawable() == null) {
+                        glideBean2.isAnimation = true;
+                    } else {
+                        glideBean2.isAnimation = false;
+                    }
                 }
             }
-
 
             //开始设置 占位图
             try {
                 Thread.runAndroid(new Runnable() {
                     public void run() {
-                        if (iv != null && iv.getDrawable() == null) {
+                        if (iv != null && iv.getDrawable() == null && !(iv instanceof GT.ViewUtils.GTImageView) || gifTag != null) {
                             try {
-                                if (iv != null || glideBean.placeholder != null) {
-                                    if (glideBean.placeholder instanceof Bitmap) {
-                                        Bitmap bitmap = (Bitmap) glideBean.placeholder;
+                                if (iv != null || glideBean2.placeholder != null) {
+                                    if (glideBean2.placeholder instanceof Bitmap) {
+                                        Bitmap bitmap = (Bitmap) glideBean2.placeholder;
                                         iv.setImageBitmap(bitmap);
-                                    } else if (glideBean.placeholder instanceof Drawable) {
-                                        Drawable drawable = (Drawable) glideBean.placeholder;
+                                    } else if (glideBean2.placeholder instanceof Drawable) {
+                                        Drawable drawable = (Drawable) glideBean2.placeholder;
                                         iv.setImageDrawable(drawable);
-                                    } else if (glideBean.placeholder instanceof Integer) {
-                                        iv.setImageResource((Integer) glideBean.placeholder);
-                                    } else if (glideBean.placeholder instanceof ImageView) {
-                                        ImageView iv2 = (ImageView) glideBean.placeholder;
-                                        iv.setBackground(iv2.getBackground());
-                                        iv.setImageBitmap(iv2.getDrawingCache());
-                                        iv.setImageDrawable(iv2.getDrawable());
-                                        iv.setScaleType(iv2.getScaleType());
-                                        iv.setTag(iv2.getTag());
-                                        iv.setVisibility(iv2.getVisibility());
-                                        iv.setMaxWidth(iv2.getMaxWidth());
-                                        iv.setMaxHeight(iv2.getMaxHeight());
-                                        iv.setLayoutParams(iv2.getLayoutParams());
+                                    } else if (glideBean2.placeholder instanceof Integer) {
+                                        iv.setImageResource((Integer) glideBean2.placeholder);
                                     }
                                 }
                             } catch (Exception e) {
-                                loadError(glideBean, iv, e);
+                                loadError(glideBean2, iv, e);
                             }
                         }
-                        if (!glideBean.isGIF) {
-                            glideBean.placeholder = null;
+                        if (!glideBean2.isGIF) {
+                            glideBean2.placeholder = null;
                         }
                     }
                 });
@@ -16073,113 +16540,145 @@ public class GT {
 
             try {
                 final String[] key = {null};
-                boolean finalIsCache = glideBean.isCaches;
+                boolean finalIsCache = glideBean2.isCaches;
                 Observable.getDefault().execute(new Observable.RunJavaR<GlideBean>() {
                     @Override
                     public GlideBean run() {
-                        if (glideBean.isGIF) {
-                            //GIF 处理逻辑
-                            ViewUtils.GTImageView gtIv = null;
-                            if (glideBean.roundCorner != 0) {
-                                gtIv = new ViewUtils.GTImageView(getActivity(), glideBean.roundCorner);
-                            } else {
-                                gtIv = new ViewUtils.GTImageView(getActivity(), glideBean.roundCorner_topLeft, glideBean.roundCorner_topRight, glideBean.roundCorner_bottomLeft, glideBean.roundCorner_bottomRight);
+                        ViewUtils.GTImageView gtIv = null;
+                        if (glideBean2.isGIF) {
+                            if (iv instanceof GT.ViewUtils.GTImageView || gifTag != null) {
+                                if (gifTag != null) {
+                                    gtIv = (ViewUtils.GTImageView) gifTag;
+                                } else {
+                                    gtIv = (ViewUtils.GTImageView) iv;
+                                }
+                                if (glideBean2.roundCorner != 0) {
+                                    gtIv.setRadius(glideBean2.roundCorner);
+                                } else {
+                                    gtIv.setLeftTopRadius(glideBean2.roundCorner_topLeft);
+                                    gtIv.setRightTopRadius(glideBean2.roundCorner_topRight);
+                                    gtIv.setLeftBottomRadius(glideBean2.roundCorner_bottomLeft);
+                                    gtIv.setRightBottomRadius(glideBean2.roundCorner_bottomRight);
+                                }
+                                gtIv.setGifResource(glideBean2.resource);
+                                return null;
                             }
-                            gtIv.setUrl(String.valueOf(glideBean.resource));
-                            glideBean.imgObjet = gtIv;
+
+                            //GIF 处理逻辑
+                            if (gtIv == null) {
+                                //ImageView 第一次加载 gif 会走下面逻辑
+                                if (glideBean2.roundCorner != 0) {
+                                    gtIv = new ViewUtils.GTImageView(getActivity(), glideBean2.roundCorner);
+                                } else {
+                                    gtIv = new ViewUtils.GTImageView(getActivity(), glideBean2.roundCorner_topLeft, glideBean2.roundCorner_topRight, glideBean2.roundCorner_bottomLeft, glideBean2.roundCorner_bottomRight);
+                                }
+                                iv.setTag(iv.getId() + gifTagId, gtIv);//缓存第一次创建的 gif 加载组件
+                            }
+                            gtIv.setUrl(String.valueOf(glideBean2.resource));
+                            glideBean2.imgObjet = gtIv;
                         } else {
+                            //缓存图片
+                            Bitmap bitmapFromMemCache = null;
+
                             //非 GIF 处理逻辑
                             boolean isSaveSD = false;
                             try {
-                                if (glideBean.resource instanceof String) { //网络请求 或 本地路径加载 ,需要三级缓存
-                                    String url = glideBean.resource.toString();
+                                if (glideBean2.resource instanceof String) { //网络请求 或 本地路径加载 ,需要三级缓存
+                                    String url = glideBean2.resource.toString();
                                     if (key[0] == null) {
                                         key[0] = url;
                                     }
 
+                                    bitmapFromMemCache = LruCacheUtil.getBitmapFromMemCache(key[0]);
+
                                     //使用缓存，内存缓存
-                                    if (isCache && finalIsCache && keyList.containsKey(key[0])) {
-                                        glideBean.imgObjet = keyList.get(key[0]);
-                                        if (glideBean.imgObjet != null && LOG.GT_LOG_TF) {
+                                    if (isCache && finalIsCache && bitmapFromMemCache != null) {
+                                        glideBean2.imgObjet = bitmapFromMemCache;
+                                        if (glideBean2.imgObjet != null && LOG.GT_LOG_TF) {
                                             logt("使用 使用内存缓存图片");
                                         }
                                     }
 
                                     //从本地取图片，本地缓存
-                                    if (isCache && finalIsCache && glideBean.imgObjet == null) {
-                                        glideBean.imgObjet = ImageViewTools.getBitmapFromLocal(key[0], CACHE_PATH);
-                                        if (glideBean.imgObjet != null && LOG.GT_LOG_TF) {
+                                    if (isCache && finalIsCache && glideBean2.imgObjet == null) {
+                                        glideBean2.imgObjet = ImageViewTools.getBitmapFromLocal(key[0], CACHE_PATH, true);
+                                        if (glideBean2.imgObjet != null && LOG.GT_LOG_TF) {
                                             logt("使用 本地缓存");
                                         }
                                     }
 
                                     //使用网络缓存或请求,开启网络缓存
-                                    if (glideBean.imgObjet == null) {
+                                    if (glideBean2.imgObjet == null) {
                                         //网络加载或本地加载图片
                                         if (url.contains("http")) {
-                                            glideBean.imgObjet = ImageViewTools.getImageBitmap(url);//Bitmap 网络
-                                            if (glideBean.imgObjet != null && LOG.GT_LOG_TF) {
+                                            glideBean2.imgObjet = ImageViewTools.getImageBitmap(url);//Bitmap 网络
+                                            if (glideBean2.imgObjet != null && LOG.GT_LOG_TF) {
                                                 logt("使用 网络下载图片");
                                             }
                                         } else {
-                                            glideBean.imgObjet = ImageViewTools.getLoacalBitmap(url);//Bitmap 本地
-                                            if (glideBean.imgObjet != null && LOG.GT_LOG_TF) {
+                                            glideBean2.imgObjet = ImageViewTools.getLoacalBitmap(url);//Bitmap 本地
+                                            if (glideBean2.imgObjet != null && LOG.GT_LOG_TF) {
                                                 logt("使用 本地图片");
                                             }
                                         }
                                         isSaveSD = true;
                                     }
-                                } else if (glideBean.resource instanceof File) {
+                                } else if (glideBean2.resource instanceof File) {
                                     //加载本地图片(需要加缓存)
-                                    String filePath = ((File) glideBean.resource).getPath();
+                                    String filePath = ((File) glideBean2.resource).getPath();
                                     if (key[0] == null) {
                                         key[0] = filePath;
                                     }
-
+                                    bitmapFromMemCache = LruCacheUtil.getBitmapFromMemCache(key[0]);
                                     //使用缓存
-                                    if (isCache && finalIsCache && keyList.containsKey(key[0])) {
+                                    if (isCache && finalIsCache && bitmapFromMemCache != null) {
                                         isCache = true;
-                                        glideBean.imgObjet = keyList.get(key[0]);
+                                        glideBean2.imgObjet = bitmapFromMemCache;
                                     }
 
-                                    if (glideBean.imgObjet == null) {
-                                        glideBean.imgObjet = ImageViewTools.getLoacalBitmap(filePath);//Bitmap
+                                    if (glideBean2.imgObjet == null) {
+                                        glideBean2.imgObjet = ImageViewTools.getLoacalBitmap(filePath);//Bitmap
                                         isSaveSD = true;
                                     }
-                                } else if (glideBean.resource instanceof Byte[]) {
+                                } else if (glideBean2.resource instanceof Byte[]) {
                                     //流加载图片(需要加缓存)
-                                    byte[] bytes = (byte[]) glideBean.resource;
-                                    String byteStr = glideBean.resource.toString();
+                                    byte[] bytes = (byte[]) glideBean2.resource;
+                                    String byteStr = glideBean2.resource.toString();
                                     if (key[0] == null) {
                                         key[0] = byteStr;
                                     }
 
+                                    bitmapFromMemCache = LruCacheUtil.getBitmapFromMemCache(key[0]);
+
                                     //使用缓存
-                                    if (isCache && finalIsCache && keyList.containsKey(key[0])) {
+                                    if (isCache && finalIsCache && bitmapFromMemCache != null) {
                                         isCache = true;
-                                        glideBean.imgObjet = keyList.get(key[0]);
+                                        glideBean2.imgObjet = bitmapFromMemCache;
                                     }
 
-                                    if (glideBean.imgObjet == null) {
+                                    if (glideBean2.imgObjet == null) {
                                         Bitmap bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
                                         bitmap.copyPixelsFromBuffer(ByteBuffer.wrap(bytes));
-                                        glideBean.imgObjet = bitmap;//Bitmap
+                                        glideBean2.imgObjet = bitmap;//Bitmap
                                         isSaveSD = true;
                                     }
-                                } else if (glideBean.resource instanceof Uri) {
+                                } else if (glideBean2.resource instanceof Uri) {
                                     //加载路径图片(需要加缓存)
-                                    String uriKey = String.valueOf(glideBean.resource);
+                                    String uriKey = String.valueOf(glideBean2.resource);
                                     if (key[0] == null) {
                                         key[0] = uriKey;
                                     }
+
+                                    bitmapFromMemCache = LruCacheUtil.getBitmapFromMemCache(key[0]);
+
                                     //使用缓存
-                                    if (isCache && finalIsCache && keyList.containsKey(key[0])) {
+                                    if (isCache && finalIsCache && bitmapFromMemCache != null) {
                                         isCache = true;
-                                        glideBean.imgObjet = keyList.get(key[0]);
+                                        glideBean2.imgObjet = bitmapFromMemCache;
                                     }
 
-                                    if (glideBean.imgObjet == null) {
-                                        Uri uri = (Uri) glideBean.resource;
+                                    if (glideBean2.imgObjet == null) {
+                                        Uri uri = (Uri) glideBean2.resource;
 
                                         Context context = iv.getContext();
 
@@ -16190,139 +16689,147 @@ public class GT {
                                             context = GT_Fragment.getGt_fragment().getActivity();
                                         }
 
-                                        glideBean.imgObjet = ImageViewTools.uriToBitmap(context, uri);//Bitmap
+                                        glideBean2.imgObjet = ImageViewTools.uriToBitmap(context, uri);//Bitmap
                                         isSaveSD = true;
                                     }
-                                } else if (glideBean.resource instanceof Bitmap) {
+                                } else if (glideBean2.resource instanceof Bitmap) {
                                     //加载 Bitmap 资源
-                                    Bitmap bitmap = (Bitmap) glideBean.resource;
+                                    Bitmap bitmap = (Bitmap) glideBean2.resource;
                                     if (key[0] == null) {
                                         key[0] = String.valueOf(bitmap.hashCode());
                                     }
-                                    glideBean.imgObjet = bitmap;//Bitmap
-                                } else if (glideBean.resource instanceof Integer) {
+                                    glideBean2.imgObjet = bitmap;//Bitmap
+                                } else if (glideBean2.resource instanceof Integer) {
                                     //加载项目中已有资源
                                     if (key[0] == null) {
-                                        key[0] = String.valueOf(glideBean.resource);
+                                        key[0] = String.valueOf(glideBean2.resource);
                                     }
-                                    glideBean.imgObjet = ImageViewTools.getBitmap((Integer) glideBean.resource);
-                                } else if (glideBean.resource instanceof Drawable) {
+                                    glideBean2.imgObjet = ImageViewTools.getBitmap((Integer) glideBean2.resource);
+                                } else if (glideBean2.resource instanceof Drawable) {
                                     //加载 Drawable 资源
-                                    Drawable drawable = (Drawable) glideBean.resource;
+                                    Drawable drawable = (Drawable) glideBean2.resource;
                                     if (key[0] == null) {
                                         key[0] = String.valueOf(drawable.hashCode());
                                     }
 
                                     Bitmap bitmap = ImageViewTools.drawable2Bitmap(drawable);
 
-                                    glideBean.imgObjet = bitmap;//Bitmap
-                                } else if (glideBean.resource instanceof ImageView) {
+                                    glideBean2.imgObjet = bitmap;//Bitmap
+                                } else if (glideBean2.resource instanceof ImageView) {
                                     //加载组件图片
-                                    ImageView iv2 = (ImageView) glideBean.resource;
+                                    ImageView iv2 = (ImageView) glideBean2.resource;
                                     if (key[0] == null) {
                                         key[0] = String.valueOf(iv2.hashCode());
                                     }
-                                    glideBean.imgObjet = iv2;//ImageView
+                                    glideBean2.imgObjet = iv2;//ImageView
                                 }
 
-                                keyList.put(key[0], glideBean.imgObjet);//存储缓存
+                                //开始内部缓存图片
+                                if (glideBean2.imgObjet instanceof Bitmap) {
+                                    LruCacheUtil.addBitmapToMemoryCache(key[0], (Bitmap) glideBean2.imgObjet);//存储缓存
+                                }
 
                                 //开始处理图片
-                                if (glideBean.imgObjet instanceof Bitmap) {
+                                if (glideBean2.imgObjet instanceof Bitmap) {
 
-                                    Bitmap bitmap = (Bitmap) glideBean.imgObjet;
+                                    Bitmap bitmap = (Bitmap) glideBean2.imgObjet;
 
                                     //是否缩略图
-                                    if (glideBean.isThumbnail) {
-                                        bitmap = ImageViewTools.getThumbnail(bitmap, glideBean.width, glideBean.height);
-                                        glideBean.isThumbnail = false;
+                                    if (glideBean2.isThumbnail) {
+                                        bitmap = ImageViewTools.getThumbnail(bitmap, glideBean2.width, glideBean2.height);
+                                        glideBean2.isThumbnail = false;
                                     }
 
                                     //是否压缩
-                                    if (glideBean.isCompression) {
+                                    if (glideBean2.isCompression) {
                                         // 检测到文件太大，就需要做压缩处理(默认执行压缩处理)
-                                        if (glideBean.compressionRatio != -1) {
-                                            bitmap = ImageViewTools.compressImage(bitmap, glideBean.compressionRatio);
+                                        if (glideBean2.compressionRatio != -1) {
+                                            bitmap = ImageViewTools.compressImage(bitmap, glideBean2.compressionRatio);
                                         } else {//在进过压缩的时候，再返回 异步框架会来不及
                                             bitmap = ImageViewTools.comp(bitmap);
                                         }
                                     } else {
-                                        glideBean.compressionRatio = -1;
-                                        glideBean.isCompression = true;
+                                        glideBean2.compressionRatio = -1;
+                                        glideBean2.isCompression = true;
                                     }
 
                                     //高斯模糊
-                                    if (glideBean.blurRadius != 0) {
-                                        bitmap = ImageViewTools.blurBitmap(getActivity(), bitmap, glideBean.blurRadius);
-                                        glideBean.blurRadius = 0;
+                                    if (glideBean2.blurRadius != 0) {
+                                        bitmap = ImageViewTools.blurBitmap(getActivity(), bitmap, glideBean2.blurRadius);
+                                        glideBean2.blurRadius = 0;
                                     }
 
                                     int width = 0, height = 0;
 
                                     //处理圆角
-                                    if (glideBean.roundCorner > 0) {
-                                        bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, glideBean.roundCorner, ImageViewTools.RoundedCorners.CORNER_ALL, width, height);
-                                    } else if (glideBean.roundCorner_topLeft > 0 || glideBean.roundCorner_topRight > 0 || glideBean.roundCorner_bottomLeft > 0 || glideBean.roundCorner_bottomRight > 0) {
+                                    if (glideBean2.roundCorner > 0) {
+                                        bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, glideBean2.roundCorner, ImageViewTools.RoundedCorners.CORNER_ALL, width, height);
+                                    } else if (glideBean2.roundCorner_topLeft > 0 || glideBean2.roundCorner_topRight > 0 || glideBean2.roundCorner_bottomLeft > 0 || glideBean2.roundCorner_bottomRight > 0) {
 
                                         //上圆角
-                                        if (glideBean.roundCorner_topLeft > 0 && glideBean.roundCorner_topRight > 0 && glideBean.roundCorner_topLeft == glideBean.roundCorner_topRight) {
-                                            bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, glideBean.roundCorner_topLeft, ImageViewTools.RoundedCorners.CORNER_TOP, width, height);
-                                            glideBean.roundCorner_topLeft = glideBean.roundCorner_topRight = 0;
+                                        if (glideBean2.roundCorner_topLeft > 0 && glideBean2.roundCorner_topRight > 0 && glideBean2.roundCorner_topLeft == glideBean2.roundCorner_topRight) {
+                                            bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, glideBean2.roundCorner_topLeft, ImageViewTools.RoundedCorners.CORNER_TOP, width, height);
+                                            glideBean2.roundCorner_topLeft = glideBean2.roundCorner_topRight = 0;
                                         }
 
                                         //下圆角
-                                        if (glideBean.roundCorner_bottomLeft > 0 && glideBean.roundCorner_bottomRight > 0 && glideBean.roundCorner_bottomLeft == glideBean.roundCorner_bottomRight) {
-                                            bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, glideBean.roundCorner_bottomLeft, ImageViewTools.RoundedCorners.CORNER_BOTTOM, width, height);
-                                            glideBean.roundCorner_bottomLeft = glideBean.roundCorner_bottomRight = 0;
+                                        if (glideBean2.roundCorner_bottomLeft > 0 && glideBean2.roundCorner_bottomRight > 0 && glideBean2.roundCorner_bottomLeft == glideBean2.roundCorner_bottomRight) {
+                                            bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, glideBean2.roundCorner_bottomLeft, ImageViewTools.RoundedCorners.CORNER_BOTTOM, width, height);
+                                            glideBean2.roundCorner_bottomLeft = glideBean2.roundCorner_bottomRight = 0;
                                         }
 
                                         //左圆角
-                                        if (glideBean.roundCorner_topLeft > 0 && glideBean.roundCorner_bottomLeft > 0 && glideBean.roundCorner_topLeft == glideBean.roundCorner_bottomLeft) {
-                                            bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, glideBean.roundCorner_topLeft, ImageViewTools.RoundedCorners.CORNER_LEFT, width, height);
-                                            glideBean.roundCorner_topLeft = glideBean.roundCorner_bottomLeft = 0;
+                                        if (glideBean2.roundCorner_topLeft > 0 && glideBean2.roundCorner_bottomLeft > 0 && glideBean2.roundCorner_topLeft == glideBean2.roundCorner_bottomLeft) {
+                                            bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, glideBean2.roundCorner_topLeft, ImageViewTools.RoundedCorners.CORNER_LEFT, width, height);
+                                            glideBean2.roundCorner_topLeft = glideBean2.roundCorner_bottomLeft = 0;
                                         }
 
                                         //右圆角
-                                        if (glideBean.roundCorner_topRight > 0 && glideBean.roundCorner_bottomRight > 0 && glideBean.roundCorner_topRight == glideBean.roundCorner_bottomRight) {
-                                            bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, glideBean.roundCorner_topRight, ImageViewTools.RoundedCorners.CORNER_RIGHT, width, height);
-                                            glideBean.roundCorner_topRight = glideBean.roundCorner_bottomRight = 0;
+                                        if (glideBean2.roundCorner_topRight > 0 && glideBean2.roundCorner_bottomRight > 0 && glideBean2.roundCorner_topRight == glideBean2.roundCorner_bottomRight) {
+                                            bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, glideBean2.roundCorner_topRight, ImageViewTools.RoundedCorners.CORNER_RIGHT, width, height);
+                                            glideBean2.roundCorner_topRight = glideBean2.roundCorner_bottomRight = 0;
                                         }
 
 
                                         //左上圆角
-                                        if (glideBean.roundCorner_topLeft > 0) {
-                                            bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, glideBean.roundCorner_topLeft, ImageViewTools.RoundedCorners.CORNER_TOP_LEFT, width, height);
+                                        if (glideBean2.roundCorner_topLeft > 0) {
+                                            bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, glideBean2.roundCorner_topLeft, ImageViewTools.RoundedCorners.CORNER_TOP_LEFT, width, height);
                                         }
 
                                         //右上
-                                        if (glideBean.roundCorner_topRight > 0) {
-                                            bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, glideBean.roundCorner_topRight, ImageViewTools.RoundedCorners.CORNER_TOP_RIGHT, width, height);
+                                        if (glideBean2.roundCorner_topRight > 0) {
+                                            bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, glideBean2.roundCorner_topRight, ImageViewTools.RoundedCorners.CORNER_TOP_RIGHT, width, height);
                                         }
 
                                         //左下圆角
-                                        if (glideBean.roundCorner_bottomLeft > 0) {
-                                            bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, glideBean.roundCorner_bottomLeft, ImageViewTools.RoundedCorners.CORNER_BOTTOM_LEFT, width, height);
+                                        if (glideBean2.roundCorner_bottomLeft > 0) {
+                                            bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, glideBean2.roundCorner_bottomLeft, ImageViewTools.RoundedCorners.CORNER_BOTTOM_LEFT, width, height);
                                         }
 
                                         //右下圆角
-                                        if (glideBean.roundCorner_bottomRight > 0) {
-                                            bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, glideBean.roundCorner_bottomRight, ImageViewTools.RoundedCorners.CORNER_BOTTOM_RIGHT, width, height);
+                                        if (glideBean2.roundCorner_bottomRight > 0) {
+                                            bitmap = ImageViewTools.RoundedCorners.fillet(bitmap, glideBean2.roundCorner_bottomRight, ImageViewTools.RoundedCorners.CORNER_BOTTOM_RIGHT, width, height);
                                         }
 
                                         //全部初始化
-                                        glideBean.roundCorner = 0;
-                                        glideBean.roundCorner_topLeft = 0;
-                                        glideBean.roundCorner_topRight = 0;
-                                        glideBean.roundCorner_bottomLeft = 0;
-                                        glideBean.roundCorner_bottomRight = 0;
+                                        glideBean2.roundCorner = 0;
+                                        glideBean2.roundCorner_topLeft = 0;
+                                        glideBean2.roundCorner_topRight = 0;
+                                        glideBean2.roundCorner_bottomLeft = 0;
+                                        glideBean2.roundCorner_bottomRight = 0;
                                     }
-
                                     //是否保存本地
-                                    if (isSaveSD) {
-                                        bitmap = ImageViewTools.saveBitmapToLocal(key[0], bitmap, CACHE_PATH);
+                                    if (isSaveSD && isCache) {
+                                        Bitmap finalBitmap = bitmap;
+                                        instance.execute(new Runnable() {
+                                            @Override
+                                            public void run() {
+                                                ImageViewTools.saveBitmapToLocal(key[0], finalBitmap, CACHE_PATH, true);
+                                            }
+                                        });
                                     }
 
-                                    glideBean.imgObjet = bitmap;
+                                    glideBean2.imgObjet = bitmap;
                                 }
 
                             } catch (Exception e) {
@@ -16332,47 +16839,68 @@ public class GT {
 
                             }
                         }
-                        return glideBean;
+                        return glideBean2;
                     }
                 }).execute(new Observable.RunAndroidV<GlideBean>() {
                     @Override
                     public void run(GlideBean glideBean) {
-
                         if (iv == null || glideBean == null || glideBean.imgObjet == null) {
                             loadError(glideBean, iv, new Exception("图片组件或资源为空"));
                             return;
                         }
 
                         //已加载图片 如果与 即将要加载的图片是一样的，那就跳过，不进行重复加载
-                        Object obj2 = objList.get(String.valueOf(iv.hashCode()));
-                        if (obj2 != null && String.valueOf(obj2).equals(String.valueOf(glideBean.imgObjet))) {
+                        String obj2 = objList.get(iv.hashCode());
+                        if (obj2 != null && obj2 == glideBean.imgObjet.toString()) {
                             return;
                         }
 
                         try {
-
                             if (glideBean.isAnimation) {
                                 iv.setAlpha(0.1f);
                             }
 
                             if (String.valueOf(glideBean.imgObjet).contains(ViewUtils.GTImageView.class.getSimpleName())) {
+                                ViewUtils.GTImageView gtIv = null;
                                 //GIF
-                                ViewUtils.GTImageView gtIv = (ViewUtils.GTImageView) glideBean.imgObjet;
-                                gtIv.setAlpha(iv.getAlpha());
-                                gtIv.setBackground(iv.getBackground());
-                                gtIv.setScaleType(iv.getScaleType());
-                                gtIv.setTag(iv.getTag());
-                                gtIv.setVisibility(iv.getVisibility());
-                                gtIv.setMaxWidth(iv.getMaxWidth());
-                                gtIv.setMaxHeight(iv.getMaxHeight());
-                                gtIv.setLayoutParams(iv.getLayoutParams());
-                                gtIv.setPlaceholder(glideBean.placeholder);
-                                gtIv.setError(glideBean.error);
-                                gtIv.setGifResource(glideBean.resource);
-                                ViewGroup viewGroup = (ViewGroup) iv.getParent();
-                                if (viewGroup != null) {
-                                    viewGroup.removeView(iv);
-                                    viewGroup.addView(gtIv);
+                                if (!(iv instanceof GT.ViewUtils.GTImageView)) {
+                                    gtIv = (ViewUtils.GTImageView) glideBean.imgObjet;
+                                    gtIv.setId(iv.getId());
+                                    gtIv.setAlpha(iv.getAlpha());
+                                    gtIv.setBackground(iv.getBackground());
+                                    gtIv.setScaleType(iv.getScaleType());
+                                    gtIv.setTag(iv.getTag());
+                                    gtIv.setGifSpeed(glideBean.gifSpeed);
+                                    gtIv.setVisibility(iv.getVisibility());
+                                    gtIv.setMaxWidth(iv.getMaxWidth());
+                                    gtIv.setMaxHeight(iv.getMaxHeight());
+                                    gtIv.setLayoutParams(iv.getLayoutParams());
+                                    gtIv.setPlaceholder(glideBean.placeholder);
+                                    gtIv.setError(glideBean.error);
+                                    gtIv.setGifResource(glideBean.resource);
+                                    gtIv.setAnimation(iv.getAnimation());
+                                    gtIv.setClickable(iv.isClickable());
+                                    gtIv.setFocusable(iv.isFocusable());
+                                    gtIv.setBaseline(iv.getBaseline());
+                                    gtIv.setClipBounds(iv.getClipBounds());
+                                    gtIv.setImageMatrix(iv.getMatrix());
+                                    gtIv.setMinimumHeight(iv.getMinimumHeight());
+                                    gtIv.setMinimumWidth(iv.getMinimumWidth());
+                                    gtIv.setScrollX(iv.getScrollX());
+                                    gtIv.setScrollY(iv.getScrollY());
+
+                                    //拷贝view事件
+                                    GT.AnnotationAssist.copyViewEvent(iv, gtIv, View.OnClickListener.class, true);
+                                    GT.AnnotationAssist.copyViewEvent(iv, gtIv, View.OnLongClickListener.class, true);
+                                    GT.AnnotationAssist.copyViewEvent(iv, gtIv, View.OnTouchListener.class, true);
+                                    GT.AnnotationAssist.copyViewEvent(iv, gtIv, View.OnFocusChangeListener.class, true);
+                                    GT.AnnotationAssist.copyViewEvent(iv, gtIv, View.OnKeyListener.class, true);
+
+                                    //替换视图
+                                    GT.ImageViewTools.replacementView(iv, gtIv);
+                                } else {
+                                    gtIv = (ViewUtils.GTImageView) iv;
+                                    gtIv.setGifResource(glideBean.resource);
                                 }
                                 view[0] = gtIv;
                             } else {
@@ -16386,47 +16914,66 @@ public class GT {
                                 } else if (glideBean.imgObjet instanceof Integer) {
                                     Resources resources = iv.getResources();
                                     iv.setImageResource((Integer) glideBean.imgObjet);
-                                } else if (glideBean.imgObjet instanceof ImageView) {
-                                    ImageView iv2 = (ImageView) glideBean.imgObjet;
-                                    iv.setBackground(iv2.getBackground());
-                                    iv.setImageBitmap(iv2.getDrawingCache());
-                                    iv.setImageDrawable(iv2.getDrawable());
-                                    iv.setScaleType(iv2.getScaleType());
-                                    iv.setTag(iv2.getTag());
-                                    iv.setVisibility(iv2.getVisibility());
-                                    iv.setMaxWidth(iv2.getMaxWidth());
-                                    iv.setMaxHeight(iv2.getMaxHeight());
                                 }
                                 view[0] = iv;
                             }
                         } catch (Exception e) {
                             loadError(glideBean, iv, e);
                         } finally {
-                            objList.put(String.valueOf(view[0].hashCode()), glideBean.imgObjet);
+                            if (view != null && view[0] != null)
+                                objList.put(view[0].hashCode(), glideBean.imgObjet.toString());
                             if (glideBean.isAnimation) {
                                 Thread.getInstance(0).execute(new Runnable() {
                                     @Override
                                     public void run() {
                                         //最大显示不能大于 设置的默认透明度
-                                        for (float i = 0; i < alpha; ) {
-                                            i += 0.02f;
-                                            Thread.sleep(3);
-                                            if (view[0] == null) break;
-                                            if (i > alpha) i = alpha;
-                                            float finalI = i;
-                                            Thread.runAndroid(new Runnable() {
-                                                @Override
-                                                public void run() {
-                                                    if (view[0] == null) return;
-                                                    view[0].setAlpha(finalI);
+                                        if (view[0] == null) return;
+                                        Object tag = view[0].getTag(iv.getId());
+                                        if (tag != null && tag instanceof Float) {
+                                            float alpha = (float) tag;
+                                            for (float i = 0; i < alpha; ) {
+                                                i += 0.1f;
+                                                Thread.sleep(1);
+                                                if (view[0] == null) {
+                                                    view[0].setAlpha(1f);
+                                                    break;
                                                 }
-                                            });
+                                                if (i > alpha) i = alpha;
+                                                float finalI = i;
+                                                Thread.runAndroid(new Runnable() {
+                                                    @Override
+                                                    public void run() {
+                                                        if (view[0] == null) {
+                                                            view[0].setAlpha(1f);
+                                                            return;
+                                                        }
+                                                        view[0].setAlpha(finalI);
+                                                        if (finalI >= alpha) {
+                                                            view[0].setTag(iv.getId(), null);
+                                                        }
+
+                                                    }
+                                                });
+                                            }
+                                        } else {
+                                            view[0].setAlpha(1f);
                                         }
                                     }
                                 });
                             }
-                        }
+                            //释放资源
+                            glideBean.imgObjet = null;
+                            glideBean.resource = null;
+                            glideBean.placeholder = null;
+                            glideBean.error = null;
+                            glideBean = null;
 
+                            glideBean2.imgObjet = null;
+                            glideBean2.resource = null;
+                            glideBean2.placeholder = null;
+                            glideBean2.error = null;
+                            glideBean2 = null;
+                        }
 
                     }
                 });
@@ -16435,8 +16982,10 @@ public class GT {
                     logt("e:" + e);
                 }
             } finally {
-                glideBean.placeholder = null;
-                glideBean.error = null;
+                //是否总资源
+                glideBean2.imgObjet = null;
+                glideBean2.placeholder = null;
+                glideBean2.error = null;
             }
             return glide;
         }
@@ -16488,8 +17037,10 @@ public class GT {
 
         //释放缓存
         public static void close() {
+            gifCacheMovieList.clear();
             objList.clear();
-            keyList.clear();
+            LruCacheUtil.clearCache();
+            Runtime.getRuntime().gc();
         }
 
     }
@@ -17361,7 +17912,7 @@ public class GT {
                                     dataInputStream = new DataInputStream(socket.getInputStream());//服务器 输入
                                 } else {
                                     //等待断开重连
-                                    GT.Thread.sleep(2000);
+                                    Thread.sleep(2000);
                                     socket = null;
                                 }
 
@@ -17408,7 +17959,7 @@ public class GT {
                                 }
                             } else {
                                 //断线重连
-                                GT.Thread.sleep(2000);
+                                Thread.sleep(2000);
 //                                logt("客户端等待:" + socket);
 
 //                                if (socket != null) {
@@ -18324,6 +18875,14 @@ public class GT {
                 return String.format(Locale.getDefault(), "%02d:%02d", time / 60, time % 60);
             else
                 return String.format(Locale.getDefault(), "%02d:%02d:%02d", time / 3600, time % 3600 / 60, time % 60);
+        }
+
+
+        /**
+         * 获取时间戳
+         */
+        public static long getTimestamp() {
+            return System.currentTimeMillis();
         }
 
 
@@ -19589,6 +20148,177 @@ public class GT {
      */
     public static class ApplicationUtils {
 
+        /**
+         * 打印 对象属性
+         *
+         * @param obj
+         * @return
+         */
+        public static String toStrings(Object obj) {
+            try {
+                StringBuilder stringBuilder = new StringBuilder();
+                Class<?> javaClass = obj.getClass();
+                String className = javaClass.getSimpleName();
+                stringBuilder.append(className + "{");
+                for (Field field : javaClass.getDeclaredFields()) {
+                    field.setAccessible(true);
+                    Class<?> type = field.getType();
+                    String name = field.getName();
+                    Object value = field.get(obj);
+                    if (type == String.class) {
+                        stringBuilder.append(name + "='" + value + "', ");
+                    } else if (type == Boolean.class) {
+                        stringBuilder.append(name + "=" + value + ", ");
+                    } else if (type == Short.class) {
+                        stringBuilder.append(name + "=" + value + ", ");
+                    } else if (type == Integer.class) {
+                        stringBuilder.append(name + "=" + value + ", ");
+                    } else if (type == Long.class) {
+                        stringBuilder.append(name + "=" + value + ", ");
+                    } else if (type == Float.class) {
+                        stringBuilder.append(name + "=" + value + ", ");
+                    } else if (type == Double.class) {
+                        stringBuilder.append(name + "=" + value + ", ");
+                    } else if (type == ArrayList.class) {
+                        stringBuilder.append(name + "=" + value + ", ");
+                    } else if (type == Map.class) {
+                        stringBuilder.append(name + "=" + value + ", ");
+                    } else {
+                        stringBuilder.append(name + "=" + value + ", ");
+                    }
+                }
+                var toString = stringBuilder.toString();
+                toString = toString.substring(0, toString.length() - 2) + "}";
+                return toString;
+            } catch (IllegalAccessException e) {
+                throw new RuntimeException(e);
+            }
+
+        }
+
+        //获取状态栏高度
+        public static int getStatusBarHeight(Context context) {
+            int result = 0;
+            int resourceId = context.getResources().getIdentifier("status_bar_height", "dimen", "android");
+            if (resourceId > 0) {
+                result = context.getResources().getDimensionPixelSize(resourceId);
+            }
+            return result;
+        }
+
+        /**
+         * 添加快捷方式
+         * 用法:
+         * //自定义意图,可以跳转 网页，可以跳转Activity
+         * Intent intent = new Intent();
+         * Uri content_url = Uri.parse("https://www.baidu.com");
+         * intent.setData(content_url);
+         * //最后添加
+         * GT.ApplicationUtils.addShortCut(MainActivity2.this, intent, "快捷方式名称", "231", com.gsls.gt.R.mipmap.gt_logo);
+         *
+         * @param context
+         * @param intent
+         * @param title
+         * @param id
+         * @param resId
+         */
+        public static void addShortCut(Context context, Intent intent, String title, String id, @DrawableRes int resId) {
+            if (context == null || intent == null) return;
+            if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O) {
+                ShortcutManager shortcutManager = (ShortcutManager) context.getSystemService(Context.SHORTCUT_SERVICE);
+                if (shortcutManager.isRequestPinShortcutSupported()) {
+                    intent.setAction(Intent.ACTION_VIEW);
+                    if (title == null) {
+                        title = GT.ApplicationUtils.getAppName(context) + ".lnk";
+                    }
+                    ShortcutInfo info = new ShortcutInfo.Builder(context, id)
+                            .setIcon(Icon.createWithResource(context, resId))
+                            .setShortLabel(title).setIntent(intent).build();
+                    PendingIntent pendingIntent = PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_MUTABLE);
+                    shortcutManager.requestPinShortcut(info, pendingIntent.getIntentSender());
+                }
+            }
+        }
+
+        /**
+         * 跳转QQ个人聊天界面
+         *
+         * @param context
+         * @param qq      跳转的QQ号
+         * @return true:跳转成功 false:跳转失败
+         */
+        public static boolean joinQQ(Context context, String qq) {
+            try {
+                //第二种方式：可以跳转到添加好友，如果qq号是好友了，直接聊天
+                String url = "mqqwpa://im/chat?chat_type=wpa&uin=" + qq;//uin是发送过去的qq号码
+                context.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+                return true;
+            } catch (Exception e) {
+//                e.printStackTrace();
+                return false;
+            }
+        }
+
+        /**
+         * 跳转QQ群界面
+         *
+         * @param context
+         * @param key       添加的群秘钥
+         * @param isNewTask 是否启动新的进程，true:按下返回进入QQ,false:按下返回进入App
+         * @return
+         */
+        public static boolean joinQQGroup(Context context, String key, boolean isNewTask) {
+            Intent intent = new Intent();
+            intent.setData(Uri.parse("mqqopensdkapi://bizAgent/qm/qr?url=http%3A%2F%2Fqm.qq.com%2Fcgi-bin%2Fqm%2Fqr%3Ffrom%3Dapp%26p%3Dandroid%26jump_from%3Dwebapi%26k%3D" + key));
+            if (isNewTask) {
+                // 此Flag可根据具体产品需要自定义，如设置，则在加群界面按返回，返回手Q主界面，不设置，按返回会返回到呼起产品界面
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            }
+            try {
+                context.startActivity(intent);
+                return true;
+            } catch (Exception e) {
+                // 未安装手Q或安装的版本不支持
+                return false;
+            }
+        }
+
+        /**
+         * 发送邮箱
+         *
+         * @param context 上下文
+         * @param sender  发送人邮箱
+         * @param cc      抄送人邮箱
+         * @param title   邮件标题 (非必填)
+         * @param content 邮件内容 (非必填)
+         */
+        public static boolean senEmail(Activity context, String sender, String cc, String title, String content) {
+            if (context == null) return false;
+            try {
+                Intent intent = new Intent(Intent.ACTION_SENDTO);
+
+                intent.setData(Uri.parse("mailto:"));
+                Intent emailIntent = new Intent(Intent.ACTION_SEND);
+                if (sender != null && sender.length() > 0) {
+                    emailIntent.putExtra(Intent.EXTRA_EMAIL, new String[]{sender});
+                }
+                if (cc != null && cc.length() > 0) {
+                    emailIntent.putExtra(Intent.EXTRA_CC, new String[]{cc});
+                }
+                if (title != null && title.length() > 0) {
+                    emailIntent.putExtra(Intent.EXTRA_SUBJECT, title);
+                }
+                if (content != null && content.length() > 0) {
+                    emailIntent.putExtra(Intent.EXTRA_TEXT, content);
+                }
+                emailIntent.setSelector(intent);
+                context.startActivity(emailIntent);
+                return true;
+            } catch (android.content.ActivityNotFoundException e) {
+                return false;
+            }
+        }
+
         private static long exitTime = 0;
 
         /**
@@ -19738,215 +20468,6 @@ public class GT {
             return list;
         }
 
-        /********************************************* 分享功能 *********************************/
-
-        /**
-         * 分享文字
-         *
-         * @param activity
-         * @param title
-         * @param content
-         */
-        public static void senText(Activity activity, String title, String content) {
-            Intent shareIntent = new Intent();
-            shareIntent.setAction(Intent.ACTION_SEND);
-            shareIntent.setType("text/plain");
-            shareIntent.putExtra(Intent.EXTRA_TEXT, content);
-            shareIntent = Intent.createChooser(shareIntent, title);
-            activity.startActivity(shareIntent);
-        }
-
-        /**
-         * 分享文件
-         *
-         * @param activity
-         * @param sharTitle
-         * @param filePath
-         */
-        public static void shareFile(Activity activity, String sharTitle, String filePath) {
-            Intent intent = new Intent(Intent.ACTION_SEND);// 发送多个文件
-            intent.setType("*/*");
-            intent.putExtra(Intent.EXTRA_STREAM, Uri.fromFile(new File(filePath)));
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            activity.startActivity(Intent.createChooser(intent, sharTitle));
-
-        }
-
-        /**
-         * 分享图片（不推荐方式）
-         *
-         * @param activity
-         * @param bitmap
-         */
-        public static void shareImageBitmap_F(Activity activity, Bitmap bitmap, String title) {
-            Intent intent = new Intent(Intent.ACTION_SEND);
-            intent.setType("image/*");
-            Uri u = Uri.parse(MediaStore.Images.Media.insertImage(activity.getContentResolver(), bitmap, null, null));//将截图bitmap存系统相册
-            intent.putExtra(Intent.EXTRA_STREAM, u);
-            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            activity.startActivity(Intent.createChooser(intent, title));
-        }
-
-        /**
-         * 分享图片
-         *
-         * @param activity
-         * @param uri
-         */
-        public static void shareImageUri(Activity activity, Uri uri) {
-            Intent intent = new Intent(Intent.ACTION_SEND);
-            intent.setType("image/*");
-            intent.putExtra(Intent.EXTRA_STREAM, uri);
-            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            activity.startActivity(Intent.createChooser(intent, "分享图片"));
-        }
-
-        /**
-         * 需要添加这个配置：AUTHORITY == com.gsls.gt.fileprovider
-         * <p>
-         * <provider
-         * android:name="androidx.core.content.FileProvider"
-         * android:authorities="com.gsls.gt.fileprovider"
-         * android:exported="false"
-         * android:grantUriPermissions="true">
-         * <meta-data
-         * android:name="android.support.FILE_PROVIDER_PATHS"
-         * android:resource="@xml/file_paths" />
-         * </provider>
-         * <p>
-         * file_paths.xml :
-         * <paths>
-         * <external-path path="." name="external_storage_root" />
-         * </paths>
-         * 分享图片(推荐方式)
-         *
-         * @param activity
-         * @param view
-         * @param AUTHORITY
-         */
-        public static void shareImageView_T(Activity activity, View view, String AUTHORITY) {
-            Bitmap bitmapFromView = createBitmapFromView(view);
-            String gtPath = FileUtils.getGTPath(activity) + "share/";
-            Uri uri = saveBitmapToSD(activity, bitmapFromView, gtPath, GT_Date.getDateTime_CH() + "-gt_share.png", AUTHORITY);
-            shareImageUri(activity, uri);
-        }
-
-        /**
-         * 分享图片(推荐方式)
-         *
-         * @param activity
-         * @param bitmapFromView
-         * @param AUTHORITY
-         */
-        public static void shareBitmapView_T(Activity activity, Bitmap bitmapFromView, String AUTHORITY) {
-            String gtPath = FileUtils.getGTPath(activity) + "share/";
-            Uri uri = saveBitmapToSD(activity, bitmapFromView, gtPath, GT_Date.getDateTime_CH() + "-gt_share.png", AUTHORITY);
-            shareImageUri(activity, uri);
-        }
-
-        /**
-         * 指定分享的渠道（不推荐方式）
-         *
-         * @param context
-         * @param bitmap
-         * @param shareType 指定分享渠道
-         */
-        public void shareImageType_F(Context context, Bitmap bitmap, String shareType) {
-            try {
-                ComponentName componentName = null;
-                switch (shareType) {
-                    case "新浪"://新浪
-                        componentName = new ComponentName("com.sina.weibo", "com.sina.weibo.composerinde.ComposerDispatchActivity");
-                        break;
-                    case "QQ空间"://QQ空间
-//                       componentName = new ComponentName("com.qzone", "com.qzonex.module.operation.ui.QZonePublishMoodActivity");
-                        return;
-                    case "QQ"://QQ
-                        componentName = new ComponentName("com.tencent.mobileqq", "com.tencent.mobileqq.activity.JumpActivity");
-                        break;
-                    case "微信"://微信
-                        componentName = new ComponentName("com.tencent.mm", "com.tencent.mm.ui.tools.ShareImgUI");
-                        break;
-                    case "微信朋友圈"://微信朋友圈
-                        componentName = new ComponentName("com.tencent.mm", "com.tencent.mm.ui.tools.ShareToTimeLineUI");
-                        break;
-                    case "微信收藏"://微信收藏
-                        componentName = new ComponentName("com.tencent.mm", "com.tencent.mm.ui.tools.AddFavoriteUI");
-                        break;
-                    case "分享更多"://分享更多
-                        try {
-                            shareImageBitmap_F((Activity) context, bitmap, "选择分享渠道");
-                        } catch (Exception e) {
-                            GT.toast(context, "暂未安装改APP,分享失败.");
-                        }
-                        return;
-                }
-                Uri uriToImage = Uri.parse(MediaStore.Images.Media.insertImage(context.getContentResolver(), bitmap, null, null));
-                Intent shareIntent = new Intent();
-                shareIntent.setAction(Intent.ACTION_SEND);
-                shareIntent.putExtra(Intent.EXTRA_STREAM, uriToImage);
-                shareIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                shareIntent.setType("image/*");
-                // 遍历所有支持发送图片的应用。找到需要的应用
-                shareIntent.setComponent(componentName);
-                context.startActivity(Intent.createChooser(shareIntent, "Share"));
-            } catch (Exception e) {
-                GT.errs("分享异常:" + e);
-            }
-        }
-
-        /**
-         * 指定分享的渠道（推荐方式）
-         *
-         * @param context
-         * @param bitmap
-         * @param shareType 指定分享渠道
-         */
-        public void shareImageType_T(Context context, Bitmap bitmap, String shareType, String AUTHORITY) {
-            try {
-                ComponentName componentName = null;
-                switch (shareType) {
-                    case "新浪"://新浪
-                        componentName = new ComponentName("com.sina.weibo", "com.sina.weibo.composerinde.ComposerDispatchActivity");
-                        break;
-                    case "QQ空间"://QQ空间
-//                       componentName = new ComponentName("com.qzone", "com.qzonex.module.operation.ui.QZonePublishMoodActivity");
-                        return;
-                    case "QQ"://QQ
-                        componentName = new ComponentName("com.tencent.mobileqq", "com.tencent.mobileqq.activity.JumpActivity");
-                        break;
-                    case "微信"://微信
-                        componentName = new ComponentName("com.tencent.mm", "com.tencent.mm.ui.tools.ShareImgUI");
-                        break;
-                    case "微信朋友圈"://微信朋友圈
-                        componentName = new ComponentName("com.tencent.mm", "com.tencent.mm.ui.tools.ShareToTimeLineUI");
-                        break;
-                    case "微信收藏"://微信收藏
-                        componentName = new ComponentName("com.tencent.mm", "com.tencent.mm.ui.tools.AddFavoriteUI");
-                        break;
-                    case "分享更多"://分享更多
-                        try {
-                            shareImageBitmap_F((Activity) context, bitmap, "选择分享渠道");
-                        } catch (Exception e) {
-                            GT.toast(context, "暂未安装改APP,分享失败.");
-                        }
-                        return;
-                }
-                String gtPath = FileUtils.getGTPath(context) + "share/";
-                Uri uriToImage = saveBitmapToSD(context, bitmap, gtPath, GT_Date.getDateTime_CH() + "-gt_share.png", AUTHORITY);
-                Intent shareIntent = new Intent();
-                shareIntent.setAction(Intent.ACTION_SEND);
-                shareIntent.putExtra(Intent.EXTRA_STREAM, uriToImage);
-                shareIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                shareIntent.setType("image/*");
-                // 遍历所有支持发送图片的应用。找到需要的应用
-                shareIntent.setComponent(componentName);
-                context.startActivity(Intent.createChooser(shareIntent, "Share"));
-            } catch (Exception e) {
-                GT.errs("分享异常:" + e);
-            }
-        }
-
         /**
          * 保存方法
          * 需要添加这个配置：AUTHORITY == com.gsls.gt.fileprovider
@@ -20031,7 +20552,12 @@ public class GT {
                 }
             }
             view.clearFocus();
-            Bitmap bitmap = Bitmap.createBitmap(view.getWidth(), view.getHeight(), Bitmap.Config.ARGB_8888);
+            int width = view.getWidth();
+            int height = view.getHeight();
+            if (width <= 0 || height <= 0) {
+                return null;
+            }
+            Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
             if (bitmap != null) {
                 Canvas canvas = new Canvas(bitmap);
                 view.draw(canvas);
@@ -20196,6 +20722,65 @@ public class GT {
         }
 
         /**
+         * 监听软键盘高度
+         *
+         * @param activity
+         * @param onListener
+         */
+        public static void monitorSoftKeyboardHeight(Activity activity, GT.OneListener<Integer> onListener) {
+            if (activity == null || onListener == null) return;
+            monitorSoftKeyboardHeight(activity.getWindow().getDecorView(), onListener);
+        }
+
+        /**
+         * 监听软键盘高度
+         *
+         * @param decorView  建议是 activity.getWindow().getDecorView();
+         * @param onListener
+         */
+        public static void monitorSoftKeyboardHeight(View decorView, GT.OneListener<Integer> onListener) {
+            if (decorView == null || onListener == null) return;
+            decorView.setOnApplyWindowInsetsListener((v, insets) -> {
+                int bottom;
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                    bottom = insets.getInsets(WindowInsets.Type.ime()).bottom;
+                    decorView.setPadding(0, 0, 0, bottom);
+                    onListener.onOneListener(bottom);
+                } else {
+                    int height = decorView.getHeight();
+                    if (height >= 2400) {
+                        bottom = (int) (decorView.getHeight() / 2.55);//2412
+                    } else {
+                        bottom = (int) (decorView.getHeight() / 2.2);//2160
+                    }
+                    onListener.onOneListener(bottom);
+                }
+                return insets;
+            });
+        }
+
+        /**
+         * 更新图库
+         *
+         * @param activity
+         * @param file
+         */
+        public static void updateImg(Activity activity, File file) {
+            if (activity == null || file == null) return;
+            String path = file.getPath();
+            String fileName = GT.FileUtils.getFileName(path);
+            // 通知系统更新图库
+            if (file.exists()) {
+                try {
+                    MediaStore.Images.Media.insertImage(activity.getContentResolver(), path, fileName, null);// 把文件插入到系统图库
+                    activity.sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, Uri.fromFile(new File(path))));// 发送广播通知系统
+                } catch (FileNotFoundException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+
+        /**
          * 将字符串复制到粘贴板上
          *
          * @param context
@@ -20346,12 +20931,12 @@ public class GT {
          * @param context
          * @return
          */
-        public static ArrayList<HashMap<String, Object>> getAllAppData(Context context) {
+        public static ArrayList<ArrayMap<String, Object>> getAllAppData(Context context) {
             PackageManager pckMan = context.getPackageManager();
-            ArrayList<HashMap<String, Object>> items = new ArrayList<HashMap<String, Object>>();
+            ArrayList<ArrayMap<String, Object>> items = new ArrayList<ArrayMap<String, Object>>();
             List<PackageInfo> packageInfo = pckMan.getInstalledPackages(0);
             for (PackageInfo pInfo : packageInfo) {
-                HashMap<String, Object> item = new HashMap<String, Object>();
+                ArrayMap<String, Object> item = new ArrayMap<String, Object>();
                 item.put("appimage", pInfo.applicationInfo.loadIcon(pckMan));
                 item.put("packageName", pInfo.packageName);
                 item.put("versionCode", pInfo.versionCode);
@@ -20867,8 +21452,8 @@ public class GT {
 
         //是否为平板
         public static boolean isPad2(AppCompatActivity appCompatActivity) {
-            int width = GT.WindowUtils.getWindowUtilsWidth(appCompatActivity);
-            int height = GT.WindowUtils.getWindowUtilsHeight(appCompatActivity);
+            int width = WindowUtils.getWindowUtilsWidth(appCompatActivity);
+            int height = WindowUtils.getWindowUtilsHeight(appCompatActivity);
             if (width * 2 < height) {
                 return false;
             } else {
@@ -20956,6 +21541,761 @@ public class GT {
             return data;
         }
 
+        /**
+         * 清除所有空格
+         *
+         * @param data
+         * @return
+         */
+        public static String notBlanks(String data) {
+            if (data == null) return "";
+            return data.replaceAll("\\s*", "");
+        }
+
+        /**
+         * 获取 Assets 文件里的具体值
+         *
+         * @param context
+         * @param assetsName
+         * @return
+         */
+        public static void getAssetsValue(Context context, String assetsName, OnListener<String> onListener) {
+            Thread.getInstance(0).execute(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        //获取输入流
+                        InputStream inputStream = context.getResources().getAssets().open(assetsName);//这里的名字是你的txt 文本文件名称,在App,main文件夹下建一个assets文件夹，放入txt文本。
+                        String data = ImageViewTools.inputStreamToString(inputStream);
+                        onListener.onListener(data);
+                    } catch (IOException e1) {
+                        e1.printStackTrace();
+                    }
+                }
+            });
+        }
+
+        //获取手机信息
+        public static String appendPhoneInfo(Context context) {
+            StringBuilder sb = new StringBuilder();
+            try {
+                PackageManager pm = context.getPackageManager();
+                PackageInfo pi = pm.getPackageInfo(context.getPackageName(), PackageManager.GET_ACTIVITIES);
+                //App版本
+                sb.append("App Version: ");
+                sb.append(pi.versionName);
+                sb.append("_");
+                sb.append(pi.versionCode + "\n");
+
+                //Android版本号
+                sb.append("OS Version: ");
+                sb.append(Build.VERSION.RELEASE);
+                sb.append("_");
+                sb.append(Build.VERSION.SDK_INT + "\n");
+
+                //手机制造商
+                sb.append("Vendor: ");
+                sb.append(Build.MANUFACTURER + "\n");
+
+                //手机型号
+                sb.append("Model: ");
+                sb.append(Build.MODEL + "\n");
+
+                //CPU架构
+                sb.append("CPU: ");
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    sb.append(Arrays.toString(Build.SUPPORTED_ABIS));
+                } else {
+                    sb.append(Build.CPU_ABI);
+                }
+            } catch (Exception e) {
+
+            }
+            return sb.toString();
+        }
+
+    }
+
+    //分享工具类
+    public static class ShareUtils {
+
+        /********************************************* 分享功能 *********************************/
+
+        /**
+         * 关于文中 AUTHORITY 参数描述 如下：
+         * 需要在 配置文件中(AndroidManifest.xml) 添加这个配置：AUTHORITY
+         * <p>
+         * <provider
+         * android:name="androidx.core.content.FileProvider"
+         * android:authorities="com.gsls.gt.fileprovider"
+         * android:exported="false"
+         * android:grantUriPermissions="true">
+         * <meta-data
+         * android:name="android.support.FILE_PROVIDER_PATHS"
+         * android:resource="@xml/file_paths" />
+         * </provider>
+         * <p>
+         * file_paths 文件，直接引用GT库中的即可
+         */
+
+        public static final String TYPE_All = "*/*";//所有(不推荐,微信需要指定类型)
+        public static final String TYPE_TEXT = "text/plain";//文本
+        public static final String TYPE_IMAGE = "image/*";//图片
+        public static final String TYPE_VIDEO = "video/*";//视频
+        public static final String TYPE_AUDIO = "audio/*";//音频
+        public static final String TYPE_HTML = "text/html";//html
+        public static final String TYPE_RESTS = "application/*";//其他类型
+
+        public static final String SUCCESS = "SUCCESS";//发送成功
+        public static final String Error = "Error";//发送错误
+        public static final String FAIL = "FAIL";//发送失败
+
+        /**
+         * 分享 GIF 动态图
+         * @param context       上下文
+         * @param url           网图 gif 网址
+         * @param saveFileName  gif 保存文件 纯名称，不包含扩展名 (如："gifName")
+         * @param sendPack      发送指定的平台 可填 null
+         * @param isAcceptor    是否留在接收平台
+         * @param AUTHORITY     发送必要权限 (不了解的可 在GT源码搜索 "关于文中 AUTHORITY 参数描述")
+         * @param oneListener   分享异步反馈，成功或失败和失败原因
+         */
+        public static void shareImageGif(Context context, String url, String saveFileName, String sendPack, boolean isAcceptor, String AUTHORITY, GT.OneListener<String> oneListener) {
+            String savePath = GT.FileUtils.getGTPath(context) + saveFileName + ".gif";
+            GT.HttpUtil.downloadFile(url, savePath, new HttpUtil.OnLoadData() {
+                @Override
+                public void onDownloadSuccess(File file) {
+                    super.onDownloadSuccess(file);
+                    ShareUtils.shareFile(context,file,GT.ShareUtils.TYPE_IMAGE,sendPack,isAcceptor,AUTHORITY,new OneListener<>(){
+                        @Override
+                        public void onOneListener(String obj) {
+                            super.onOneListener(obj);
+                            oneListener.onOneListener(obj);
+                        }
+                    });
+                }
+
+                @Override
+                public void onDownloadFailed(Exception e) {
+                    super.onDownloadFailed(e);
+                    oneListener.onOneListener(String.valueOf(e));
+                }
+            }, true);
+        }
+
+        /**
+         * 万能 分享文件 (异步)
+         *
+         * @param context     上下文
+         * @param file        分享文件
+         * @param type        分享文件类型 (非必填，推荐填)
+         * @param sendPack    指定发送app (非必填，第三方app包名如QQ：com.tencent.mobileqq)
+         * @param isAcceptor  发送完是否留在接收方
+         * @param AUTHORITY   发送必要权限 (不了解的可 在GT源码搜索 "关于文中 AUTHORITY 参数描述")
+         * @param oneListener 发送状态回调 (非必填，推荐填)
+         */
+        public static void shareFile(Context context, File file, String type, String sendPack, boolean isAcceptor, String AUTHORITY, GT.OneListener<String> oneListener) {
+            if (!file.exists()) {
+                if (oneListener != null)
+                    oneListener.onOneListener(FAIL);
+                return;
+            }
+            GT.Thread.getInstance(0).execute(() -> {
+                try {
+                    shareFile(context, file, type, sendPack, isAcceptor, AUTHORITY);
+                    if (oneListener != null)
+                        oneListener.onOneListener(SUCCESS);
+                } catch (Exception e) {
+                    if (oneListener != null)
+                        oneListener.onOneListener(Error);
+                }
+
+            });
+
+        }
+
+        /**
+         * 万能 分享文件 (同步)
+         *
+         * @param context    上下文
+         * @param file       分享文件
+         * @param type       分享文件类型 (非必填，推荐填)
+         * @param sendPack   指定发送app (非必填，第三方app包名如QQ：com.tencent.mobileqq)
+         * @param isAcceptor 发送完是否留在接收方
+         * @param AUTHORITY  发送必要权限 (不了解的可 在GT源码搜索 "关于文中 AUTHORITY 参数描述")
+         */
+        public static void shareFile(Context context, File file, String type, String sendPack, boolean isAcceptor, String AUTHORITY) {
+            if (file == null || !file.exists()) return;
+            Intent intent = new Intent(Intent.ACTION_SEND);
+            if (sendPack != null && sendPack.length() > 0) {
+                intent.setPackage(sendPack);
+            }
+            if (type == null) type = TYPE_All;
+            intent.setType(type);
+            Uri photoUri = FileProvider.getUriForFile(context, AUTHORITY, file);
+            intent.putExtra(Intent.EXTRA_STREAM, photoUri);
+            if (isAcceptor) {
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            }
+            context.startActivity(intent);
+        }
+
+        /**
+         * 万能渠道-分享文字
+         *
+         * @param activity
+         * @param title
+         * @param content
+         */
+        public static void shareText(Activity activity, String title, String content) {
+            Intent shareIntent = new Intent();
+            shareIntent.setAction(Intent.ACTION_SEND);
+            shareIntent.setType("text/plain");
+            shareIntent.putExtra(Intent.EXTRA_TEXT, content);
+            shareIntent = Intent.createChooser(shareIntent, title);
+            activity.startActivity(shareIntent);
+        }
+
+        /**
+         * 单独分享给QQ 文字
+         *
+         * @param context
+         * @param title   分享标题
+         * @param content 内容
+         */
+        public static void shareTextQQ(Context context, String title, String content) {
+            try {
+                Intent intent = new Intent("android.intent.action.SEND");
+                intent.setType("text/plain");
+                intent.putExtra(Intent.EXTRA_SUBJECT, title);
+                intent.putExtra(Intent.EXTRA_TEXT, content);
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                intent.setComponent(new ComponentName("com.tencent.mobileqq", "com.tencent.mobileqq.activity.JumpActivity"));
+                context.startActivity(intent);
+            } catch (Exception e) {
+
+            }
+        }
+
+        /**
+         * 单独分享给微信 文字
+         *
+         * @param context
+         * @param title   分享标题
+         * @param content 内容
+         */
+        public void shareTextWechat(Context context, String title, String content) {
+            try {
+                Intent intent = new Intent();
+                ComponentName cop = new ComponentName("com.tencent.mm", "com.tencent.mm.ui.tools.ShareImgUI");
+                intent.setComponent(cop);
+                intent.setAction(Intent.ACTION_SEND);
+                intent.putExtra(Intent.EXTRA_SUBJECT, title);
+                intent.putExtra("android.intent.extra.TEXT", content);
+                intent.putExtra("Kdescription", !TextUtils.isEmpty(content) ? content : "");
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                context.startActivity(intent);
+            } catch (Exception e) {
+
+            }
+        }
+
+        /**
+         * 单独分享给自定义 应用意图
+         *
+         * @param context
+         * @param title   分享标题
+         * @param content 内容
+         * @param pkg     包名
+         * @param cls     具体接受者-Activity
+         */
+        public void shareTextComponentName(Context context, String title, String content, String pkg, String cls) {
+            try {
+                Intent intent = new Intent();
+                ComponentName cop = new ComponentName(pkg, cls);
+                intent.setComponent(cop);
+                intent.setAction(Intent.ACTION_SEND);
+                intent.putExtra(Intent.EXTRA_SUBJECT, title);
+                intent.putExtra("android.intent.extra.TEXT", content);
+                intent.putExtra("Kdescription", !TextUtils.isEmpty(content) ? content : "");
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                context.startActivity(intent);
+            } catch (Exception e) {
+
+            }
+        }
+
+
+        /**
+         * 单独分享给QQ 图片
+         *
+         * @param context
+         * @param imageUrl 网络图片
+         */
+        public void shareImageQQ(Context context, String imageUrl) {
+            GT.Thread.getInstance(0).execute(new Runnable() {
+                @Override
+                public void run() {
+                    Bitmap imageBitmap = GT.ImageViewTools.getImageBitmap(imageUrl);
+                    GT.Thread.runJava(new Runnable() {
+                        @Override
+                        public void run() {
+                            shareImageQQ(context, imageBitmap);
+                        }
+                    });
+                }
+            });
+        }
+
+        /**
+         * 单独分享给QQ 图片
+         *
+         * @param context
+         * @param bitmap
+         */
+        public void shareImageQQ(Context context, Bitmap bitmap) {
+            try {
+                Uri uriToImage = Uri.parse(MediaStore.Images.Media.insertImage(
+                        context.getContentResolver(), bitmap, null, null));
+                Intent shareIntent = new Intent();
+                shareIntent.setAction(Intent.ACTION_SEND);
+                shareIntent.putExtra(Intent.EXTRA_STREAM, uriToImage);
+                shareIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                shareIntent.setType("image/*");
+                // 遍历所有支持发送图片的应用。找到需要的应用
+                ComponentName componentName = new ComponentName("com.tencent.mobileqq", "com.tencent.mobileqq.activity.JumpActivity");
+
+                shareIntent.setComponent(componentName);
+                context.startActivity(Intent.createChooser(shareIntent, "Share"));
+            } catch (Exception e) {
+            }
+        }
+
+        /**
+         * 单独分享给微信 图片
+         *
+         * @param context
+         * @param imageUrl 网络图片
+         */
+        public void shareImageWechat(Context context, String imageUrl) {
+            GT.Thread.getInstance(0).execute(new Runnable() {
+                @Override
+                public void run() {
+                    Bitmap imageBitmap = GT.ImageViewTools.getImageBitmap(imageUrl);
+                    GT.Thread.runJava(new Runnable() {
+                        @Override
+                        public void run() {
+                            shareImageWechat(context, imageBitmap);
+                        }
+                    });
+                }
+            });
+        }
+
+        /**
+         * 单独分享给微信 图片
+         *
+         * @param context
+         * @param bitmap
+         */
+        public static void shareImageWechat(Context context, Bitmap bitmap) {
+            try {
+                Uri uriToImage = Uri.parse(MediaStore.Images.Media.insertImage(
+                        context.getContentResolver(), bitmap, null, null));
+                Intent shareIntent = new Intent();
+                shareIntent.setAction(Intent.ACTION_SEND);
+                shareIntent.putExtra(Intent.EXTRA_STREAM, uriToImage);
+                shareIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                shareIntent.setType("image/*");
+                // 遍历所有支持发送图片的应用。找到需要的应用
+                ComponentName componentName = new ComponentName("com.tencent.mm", "com.tencent.mm.ui.tools.ShareImgUI");
+                shareIntent.setComponent(componentName);
+                context.startActivity(Intent.createChooser(shareIntent, "Share"));
+            } catch (Exception e) {
+            }
+        }
+
+
+        /**
+         * 单独分享图片给 自定义意图
+         *
+         * @param context
+         * @param bitmap  网络图片
+         * @param content 内容
+         * @param pkg     包名
+         * @param cls     具体接受者-Activity
+         */
+        public void shareImageComponentName(Context context, String imageUrl, String pkg, String cls) {
+            GT.Thread.getInstance(0).execute(new Runnable() {
+                @Override
+                public void run() {
+                    Bitmap imageBitmap = GT.ImageViewTools.getImageBitmap(imageUrl);
+                    GT.Thread.runJava(new Runnable() {
+                        @Override
+                        public void run() {
+                            shareImageComponentName(context, imageBitmap, pkg, cls);
+                        }
+                    });
+                }
+            });
+        }
+
+
+        /**
+         * 单独分享图片给 自定义意图
+         *
+         * @param context
+         * @param bitmap
+         * @param content 内容
+         * @param pkg     包名
+         * @param cls     具体接受者-Activity
+         */
+        public static void shareImageComponentName(Context context, Bitmap bitmap, String pkg, String cls) {
+            try {
+                Uri uriToImage = Uri.parse(MediaStore.Images.Media.insertImage(context.getContentResolver(), bitmap, null, null));
+                Intent shareIntent = new Intent();
+                shareIntent.setAction(Intent.ACTION_SEND);
+                shareIntent.putExtra(Intent.EXTRA_STREAM, uriToImage);
+                shareIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                shareIntent.setType("image/*");
+                // 遍历所有支持发送图片的应用。找到需要的应用
+                ComponentName componentName = new ComponentName(pkg, cls);
+                shareIntent.setComponent(componentName);
+                context.startActivity(Intent.createChooser(shareIntent, "Share"));
+            } catch (Exception e) {
+            }
+        }
+
+
+        /**
+         * 分享图片（不推荐方式）
+         *
+         * @param activity
+         * @param bitmap
+         */
+        public static void shareImageBitmap_F(Activity activity, Bitmap bitmap, String title) {
+            Intent intent = new Intent(Intent.ACTION_SEND);
+            intent.setType("image/*");
+            Uri u = Uri.parse(MediaStore.Images.Media.insertImage(activity.getContentResolver(), bitmap, null, null));//将截图bitmap存系统相册
+            intent.putExtra(Intent.EXTRA_STREAM, u);
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            activity.startActivity(Intent.createChooser(intent, title));
+        }
+
+        /**
+         * 分享图片
+         *
+         * @param activity
+         * @param uri
+         */
+        public static void shareImageUri(Activity activity, Uri uri) {
+            Intent intent = new Intent(Intent.ACTION_SEND);
+            intent.setType("image/*");
+            intent.putExtra(Intent.EXTRA_STREAM, uri);
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            activity.startActivity(Intent.createChooser(intent, "分享图片"));
+        }
+
+        /**
+         * 分享图片(推荐方式)
+         *
+         * @param activity
+         * @param view
+         * @param AUTHORITY (不了解的可 在GT源码搜索 "关于文中 AUTHORITY 参数描述")
+         */
+        public static void shareImageView_T(Activity activity, View view, String AUTHORITY) {
+            Bitmap bitmapFromView = ApplicationUtils.createBitmapFromView(view);
+            if (bitmapFromView == null) return;
+            String gtPath = FileUtils.getGTPath(activity) + "share/";
+            Uri uri = ApplicationUtils.saveBitmapToSD(activity, bitmapFromView, gtPath, GT_Date.getDateTime_CH() + "-gt_share.png", AUTHORITY);
+            shareImageUri(activity, uri);
+        }
+
+        /**
+         * 分享图片(推荐方式)
+         *
+         * @param activity
+         * @param bitmapFromView
+         * @param AUTHORITY
+         */
+        public static void shareBitmapView_T(Activity activity, Bitmap bitmapFromView, String AUTHORITY) {
+            String gtPath = FileUtils.getGTPath(activity) + "share/";
+            Uri uri = ApplicationUtils.saveBitmapToSD(activity, bitmapFromView, gtPath, GT_Date.getDateTime_CH() + "-gt_share.png", AUTHORITY);
+            shareImageUri(activity, uri);
+        }
+
+        /**
+         * 指定分享的渠道（不推荐方式）
+         *
+         * @param context
+         * @param bitmap
+         * @param shareType 指定分享渠道
+         */
+        public void shareImageType_F(Context context, Bitmap bitmap, String shareType) {
+            try {
+                ComponentName componentName = null;
+                switch (shareType) {
+                    case "新浪"://新浪
+                        componentName = new ComponentName("com.sina.weibo", "com.sina.weibo.composerinde.ComposerDispatchActivity");
+                        break;
+                    case "QQ空间"://QQ空间
+                        componentName = new ComponentName("com.qzone", "com.qzonex.module.operation.ui.QZonePublishMoodActivity");
+                        return;
+                    case "QQ"://QQ
+                        componentName = new ComponentName("com.tencent.mobileqq", "com.tencent.mobileqq.activity.JumpActivity");
+                        break;
+                    case "微信"://微信
+                        componentName = new ComponentName("com.tencent.mm", "com.tencent.mm.ui.tools.ShareImgUI");
+                        break;
+                    case "微信朋友圈"://微信朋友圈
+                        componentName = new ComponentName("com.tencent.mm", "com.tencent.mm.ui.tools.ShareToTimeLineUI");
+                        break;
+                    case "微信收藏"://微信收藏
+                        componentName = new ComponentName("com.tencent.mm", "com.tencent.mm.ui.tools.AddFavoriteUI");
+                        break;
+                    case "分享更多"://分享更多
+                        try {
+                            shareImageBitmap_F((Activity) context, bitmap, "选择分享渠道");
+                        } catch (Exception e) {
+                            GT.toast(context, "暂未安装改APP,分享失败.");
+                        }
+                        return;
+                }
+                Uri uriToImage = Uri.parse(MediaStore.Images.Media.insertImage(context.getContentResolver(), bitmap, null, null));
+                Intent shareIntent = new Intent();
+                shareIntent.setAction(Intent.ACTION_SEND);
+                shareIntent.putExtra(Intent.EXTRA_STREAM, uriToImage);
+                shareIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                shareIntent.setType("image/*");
+                // 遍历所有支持发送图片的应用。找到需要的应用
+                shareIntent.setComponent(componentName);
+                context.startActivity(Intent.createChooser(shareIntent, "Share"));
+            } catch (Exception e) {
+                GT.errs("分享异常:" + e);
+            }
+        }
+
+        /**
+         * 指定分享的渠道（推荐方式）
+         *
+         * @param context
+         * @param bitmap
+         * @param shareType 指定分享渠道
+         * @param AUTHORITY (不了解的可 在GT源码搜索 "关于文中 AUTHORITY 参数描述")
+         */
+        public void shareImageType_T(Context context, Bitmap bitmap, String shareType, String AUTHORITY) {
+            try {
+                ComponentName componentName = null;
+                switch (shareType) {
+                    case "新浪"://新浪
+                        componentName = new ComponentName("com.sina.weibo", "com.sina.weibo.composerinde.ComposerDispatchActivity");
+                        break;
+                    case "QQ空间"://QQ空间
+                        componentName = new ComponentName("com.qzone", "com.qzonex.module.operation.ui.QZonePublishMoodActivity");
+                        return;
+                    case "QQ"://QQ
+                        componentName = new ComponentName("com.tencent.mobileqq", "com.tencent.mobileqq.activity.JumpActivity");
+                        break;
+                    case "微信"://微信
+                        componentName = new ComponentName("com.tencent.mm", "com.tencent.mm.ui.tools.ShareImgUI");
+                        break;
+                    case "微信朋友圈"://微信朋友圈
+                        componentName = new ComponentName("com.tencent.mm", "com.tencent.mm.ui.tools.ShareToTimeLineUI");
+                        break;
+                    case "微信收藏"://微信收藏
+                        componentName = new ComponentName("com.tencent.mm", "com.tencent.mm.ui.tools.AddFavoriteUI");
+                        break;
+                    case "分享更多"://分享更多
+                        try {
+                            shareImageBitmap_F((Activity) context, bitmap, "选择分享渠道");
+                        } catch (Exception e) {
+                            GT.toast(context, "暂未安装改APP,分享失败.");
+                        }
+                        return;
+                }
+                String gtPath = FileUtils.getGTPath(context) + "share/";
+                Uri uriToImage = ApplicationUtils.saveBitmapToSD(context, bitmap, gtPath, GT_Date.getDateTime_CH() + "-gt_share.png", AUTHORITY);
+                Intent shareIntent = new Intent();
+                shareIntent.setAction(Intent.ACTION_SEND);
+                shareIntent.putExtra(Intent.EXTRA_STREAM, uriToImage);
+                shareIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                shareIntent.setType("image/*");
+                // 遍历所有支持发送图片的应用。找到需要的应用
+                shareIntent.setComponent(componentName);
+                context.startActivity(Intent.createChooser(shareIntent, "Share"));
+            } catch (Exception e) {
+                GT.errs("分享异常:" + e);
+            }
+        }
+
+    }
+
+    //跳转工具类
+    public static class SkipUtils {
+
+        //壁纸
+        public static void skipWallpaper(Context context, String title) {
+            Intent chooseIntent = new Intent(Intent.ACTION_SET_WALLPAPER);
+            context.startActivity(Intent.createChooser(chooseIntent, title));
+        }
+
+        //系统设置
+        public static void skipSystemSettings(Context context) {
+            Intent intent = new Intent(Settings.ACTION_SETTINGS);
+            context.startActivity(intent);
+        }
+
+        //无线与网络
+        public static void skipWirelessAndNetworking(Context context) {
+            Intent intent = new Intent(Settings.ACTION_AIRPLANE_MODE_SETTINGS);
+            context.startActivity(intent);
+        }
+
+        //WIFI列表
+        public static void skipWIFI(Context context) {
+            Intent intent = new Intent(Settings.ACTION_WIFI_SETTINGS);
+            context.startActivity(intent);
+        }
+
+        //蓝牙
+        public static void skipBluetooth(Context context) {
+            Intent intent = new Intent(Settings.ACTION_BLUETOOTH_SETTINGS);
+            context.startActivity(intent);
+        }
+
+        //移动网络
+        public static void skipMobileNetwork(Context context) {
+            Intent intent = new Intent(Settings.ACTION_DATA_ROAMING_SETTINGS);
+            context.startActivity(intent);
+        }
+
+        //应用详情
+        public static void skipApplicationDetails(Context context) {
+            Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.getPackageName(), null));
+            context.startActivity(intent);
+        }
+
+
+        //开发者选项
+        public static void skipDeveloperOptions(Context context) {
+            Intent intent = new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS);
+            context.startActivity(intent);
+        }
+
+        //所有应用
+        public static void skipAllApplications(Context context) {
+            Intent intent = new Intent(Settings.ACTION_APPLICATION_SETTINGS);
+            context.startActivity(intent);
+        }
+
+        //日期和时间
+        public static void skipDateAddTime(Context context) {
+            Intent intent = new Intent(Settings.ACTION_DATE_SETTINGS);
+            context.startActivity(intent);
+        }
+
+        //关于本机
+        public static void skipAboutThisMachine(Context context) {
+            Intent intent = new Intent(Settings.ACTION_DEVICE_INFO_SETTINGS);
+            context.startActivity(intent);
+        }
+
+        //显示与亮度
+        public static void skipDisplayAndBrightness(Context context) {
+            Intent intent = new Intent(Settings.ACTION_DISPLAY_SETTINGS);
+            context.startActivity(intent);
+        }
+
+        //无障碍服务
+        public static void skipBarrierFreeService(Context context) {
+            Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+            context.startActivity(intent);
+        }
+
+        //管理输入法
+        public static void skipManageInputMethods(Context context) {
+            Intent intent = new Intent(Settings.ACTION_INPUT_METHOD_SETTINGS);
+            context.startActivity(intent);
+        }
+
+        //语言
+        public static void skipLanguage(Context context) {
+            Intent intent = new Intent(Settings.ACTION_LOCALE_SETTINGS);
+            context.startActivity(intent);
+        }
+
+        //存储空间
+        public static void skipStorageSpace(Context context) {
+            Intent intent = new Intent(Settings.ACTION_INTERNAL_STORAGE_SETTINGS);
+            context.startActivity(intent);
+        }
+
+        //位置信息
+        public static void skipLocationInformation(Context context) {
+            Intent intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
+            context.startActivity(intent);
+        }
+
+        //NFC
+        public static void skipNFC(Context context) {
+            Intent intent = new Intent(Settings.ACTION_NFC_SETTINGS);
+            context.startActivity(intent);
+        }
+
+        //APN
+        public static void skipAPN(Context context) {
+            Intent intent = new Intent(Settings.ACTION_APN_SETTINGS);
+            context.startActivity(intent);
+        }
+
+        //权限与隐私
+        public static void skipRightsAndPrivacy(Context context) {
+            Intent intent = new Intent(Settings.ACTION_PRIVACY_SETTINGS);
+            context.startActivity(intent);
+        }
+
+        //搜索界面设置
+        public static void skipSearchInterfaceSettings(Context context) {
+            Intent intent = new Intent(Settings.ACTION_SEARCH_SETTINGS);
+            context.startActivity(intent);
+        }
+
+        //密码与安全
+        public static void skipPasswordAndSecurity(Context context) {
+            Intent intent = new Intent(Settings.ACTION_SECURITY_SETTINGS);
+            context.startActivity(intent);
+        }
+
+        //声音与振动
+        public static void skipSoundAndVibration(Context context) {
+            Intent intent = new Intent(Settings.ACTION_SOUND_SETTINGS);
+            context.startActivity(intent);
+        }
+
+        //用户与账号
+        public static void skipUsersAndAccounts(Context context) {
+            Intent intent = new Intent(Settings.ACTION_SYNC_SETTINGS);
+            context.startActivity(intent);
+        }
+
+        //添加账号
+        public static void skipAddAccounts(Context context) {
+            Intent intent = new Intent(Settings.ACTION_ADD_ACCOUNT);
+            context.startActivity(intent);
+        }
+
+        //个人字典
+        public static void skipPersonalDictionary(Context context) {
+            Intent intent = new Intent(Settings.ACTION_USER_DICTIONARY_SETTINGS);
+            context.startActivity(intent);
+        }
+
+        //屏保
+        public static void skipMobileScreen(Context context) {
+            Intent intent = new Intent(Settings.ACTION_DREAM_SETTINGS);
+            context.startActivity(intent);
+        }
+
     }
 
     //App 资源工具类
@@ -20992,7 +22332,7 @@ public class GT {
         }
 
         public static <T> T view(Object findObject, @IdRes int id) {
-            findObject = GT.AnnotationAssist.returnActivityOrView(findObject)[0];
+            findObject = AnnotationAssist.returnActivityOrView(findObject)[0];
             if (findObject instanceof Activity) {
                 return (T) ((Activity) findObject).findViewById(id);
             } else if (findObject instanceof View) {
@@ -21305,6 +22645,321 @@ public class GT {
      */
     public static class ImageViewTools {
 
+        /**
+         * 替换视图
+         *
+         * @param oldView 旧的视图
+         * @param newView 新的视图
+         */
+        public static void replacementView(View oldView, View newView) {
+            ViewParent parent = oldView.getParent();
+            if (parent == null) return;
+            if (parent instanceof ViewGroup viewGroup) {
+                for (int i = 0; i < viewGroup.getChildCount(); i++) {
+                    View childAt = viewGroup.getChildAt(i);
+                    if (childAt == oldView) {
+                        viewGroup.removeView(childAt);
+                        viewGroup.addView(newView, i);
+                        return;
+                    }
+                }
+
+            }
+        }
+
+        /**
+         * 解析二维码
+         *
+         * @param bitmap
+         * @param onListener
+         * @param isSynchronization 是否同步解析 false:异步解析 true:同步解析
+         */
+        public static void getQrCodeInformation(Bitmap bitmap, GT.OnListener<String> onListener, boolean... isSynchronization) {
+            if (isSynchronization != null && isSynchronization.length > 0 && isSynchronization[0]) {
+                getQrCodeInformation(bitmap, onListener);
+            } else {
+                GT.Thread.getInstance(0).execute(new Runnable() {
+                    @Override
+                    public void run() {
+                        getQrCodeInformation(bitmap, onListener);
+                    }
+                });
+            }
+        }
+
+        /**
+         * 解析二维码（默认同步解析）
+         *
+         * @param bitmap
+         * @param onListener
+         */
+        public static void getQrCodeInformation(Bitmap bitmap, GT.OneListener<String> onListener) {
+            int width = bitmap.getWidth();
+            int height = bitmap.getHeight();
+            int[] ps = new int[width * height];
+            bitmap.getPixels(ps, 0, width, 0, 0, width, height);
+            LuminanceSource src = new RGBLuminanceSource(width, height, ps);
+            Binarizer rizer = new HybridBinarizer(src);
+            BinaryBitmap bbmap = new BinaryBitmap(rizer);
+            QRCodeReader read = new QRCodeReader();
+            try {
+                Result result = read.decode(bbmap);
+                //根据获取到的文本内容进行下一步处理,这里是打开网址
+                String value = result.getText();
+                onListener.onOneListener(value);
+            } catch (Exception e) {
+                onListener.onOneListener(null);
+                e.printStackTrace();
+            }
+        }
+
+        /**
+         * 扫二维码请参考: https://blog.csdn.net/u010618194/article/details/77891313
+         * 带 logo二维码
+         *
+         * @param content      字符串内容
+         * @param width        二维码宽度
+         * @param height       二维码高度
+         * @param color_black  黑色色块
+         * @param color_white  白色色块
+         * @param resLogo      logo图片 (非必填)
+         * @param logoPercent  logo所占百分比
+         * @param bitmap_black 用来代替黑色色块的图片 (非必填：不推荐填)
+         * @return
+         */
+        public static Bitmap createQRCodeBitmap(Context context, String content, int width, int height, int color_black, int color_white, int resLogo, float logoPercent, Bitmap... bitmap_black) {
+            return createQRCodeBitmap(content, width, width, "UTF-8", "L", "0", color_black, color_white, GTEKt.bitmap(context, resLogo), logoPercent, bitmap_black);
+        }
+
+        /**
+         * 扫二维码请参考: https://blog.csdn.net/u010618194/article/details/77891313
+         * 带 logo二维码
+         *
+         * @param content      字符串内容
+         * @param width        二维码宽度
+         * @param height       二维码高度
+         * @param color_black  黑色色块
+         * @param color_white  白色色块
+         * @param logoBitmap   logo图片 (非必填)
+         * @param logoPercent  logo所占百分比
+         * @param bitmap_black 用来代替黑色色块的图片 (非必填：不推荐填)
+         * @return
+         */
+        public static Bitmap createQRCodeBitmap(String content, int width, int height, int color_black, int color_white, Bitmap logoBitmap, float logoPercent, Bitmap... bitmap_black) {
+            return createQRCodeBitmap(content, width, width, "UTF-8", "L", "0", color_black, color_white, logoBitmap, logoPercent, bitmap_black);
+        }
+
+        /**
+         * 扫二维码请参考: https://blog.csdn.net/u010618194/article/details/77891313
+         *
+         * @param content                字符串内容
+         * @param width                  二维码宽度
+         * @param height                 二维码高度
+         * @param character_set          编码方式（一般使用UTF-8）
+         * @param error_correction_level 容错率 L：7% M：15% Q：25% H：35%
+         * @param margin                 空白边距（二维码与边框的空白区域）
+         * @param color_black            黑色色块
+         * @param color_white            白色色块
+         * @param logoBitmap             logo图片 (非必填)
+         * @param logoPercent            logo所占百分比
+         * @param bitmap_black           用来代替黑色色块的图片 (非必填：不推荐填)
+         * @return
+         */
+        public static Bitmap createQRCodeBitmap(String content, int width, int height, String character_set,
+                                                String error_correction_level, String margin, int color_black,
+                                                int color_white, Bitmap logoBitmap, float logoPercent, Bitmap... bitmap_black) {
+            // 字符串内容判空
+            if (TextUtils.isEmpty(content)) {
+                return null;
+            }
+            // 宽和高>=0
+            if (width < 0 || height < 0) {
+                return null;
+            }
+            try {
+                //设置二维码相关配置,生成BitMatrix(位矩阵)对象
+                Hashtable<EncodeHintType, String> hints = new Hashtable<>();
+                // 字符转码格式设置
+                if (!TextUtils.isEmpty(character_set)) {
+                    hints.put(EncodeHintType.CHARACTER_SET, character_set);
+                }
+                // 容错率设置
+                if (!TextUtils.isEmpty(error_correction_level)) {
+                    hints.put(EncodeHintType.ERROR_CORRECTION, error_correction_level);
+                }
+                // 空白边距设置
+                if (!TextUtils.isEmpty(margin)) {
+                    hints.put(EncodeHintType.MARGIN, margin);
+                }
+
+                //将配置参数传入到QRCodeWriter的encode方法生成BitMatrix(位矩阵)对象
+                BitMatrix bitMatrix = new QRCodeWriter().encode(content, BarcodeFormat.QR_CODE, width, height, hints);
+
+                //创建像素数组,并根据BitMatrix(位矩阵)对象为数组元素赋颜色值
+                Bitmap black = null;
+                if (bitmap_black != null && bitmap_black.length > 0) {
+                    //从当前位图按一定的比例创建一个新的位图
+                    black = Bitmap.createScaledBitmap(bitmap_black[0], width, height, false);
+                }
+
+                //创建像素数组,并根据BitMatrix(位矩阵)对象为数组元素赋颜色值
+                int[] pixels = new int[width * height];
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++) {
+                        //bitMatrix.get(x,y)方法返回true是黑色色块，false是白色色块
+                        if (bitMatrix.get(x, y)) {
+                            if (black != null) {//图片不为null，则将黑色色块换为新位图的像素。
+                                pixels[y * width + x] = black.getPixel(x, y);
+                            } else {
+                                pixels[y * width + x] = color_black;//黑色色块像素设置
+                            }
+                        } else {
+                            pixels[y * width + x] = color_white;// 白色色块像素设置
+                        }
+                    }
+                }
+
+                //创建Bitmap对象,根据像素数组设置Bitmap每个像素点的颜色值,并返回Bitmap对象
+                Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+                bitmap.setPixels(pixels, 0, width, 0, 0, width, height);
+
+                //为二维码添加logo图标
+                if (logoBitmap != null) {
+                    return addLogo(bitmap, logoBitmap, logoPercent);
+                }
+                return bitmap;
+            } catch (WriterException e) {
+                e.printStackTrace();
+                return null;
+            }
+        }
+
+        /**
+         * 扫二维码请参考: https://blog.csdn.net/u010618194/article/details/77891313
+         * 向二维码中间添加logo图片(图片合成)
+         *
+         * @param srcBitmap   原图片（生成的简单二维码图片）
+         * @param logoBitmap  logo图片
+         * @param logoPercent 百分比 (用于调整logo图片在原图片中的显示大小, 取值范围[0,1] )
+         * @return
+         */
+        private static Bitmap addLogo(Bitmap srcBitmap, Bitmap logoBitmap, float logoPercent) {
+            if (srcBitmap == null) {
+                return null;
+            }
+            if (logoBitmap == null) {
+                return srcBitmap;
+            }
+            //传值不合法时使用0.2F
+            if (logoPercent < 0F || logoPercent > 1F) {
+                logoPercent = 0.2F;
+            }
+
+            /** 1. 获取原图片和Logo图片各自的宽、高值 */
+            int srcWidth = srcBitmap.getWidth();
+            int srcHeight = srcBitmap.getHeight();
+            int logoWidth = logoBitmap.getWidth();
+            int logoHeight = logoBitmap.getHeight();
+
+            /** 2. 计算画布缩放的宽高比 */
+            float scaleWidth = srcWidth * logoPercent / logoWidth;
+            float scaleHeight = srcHeight * logoPercent / logoHeight;
+
+            /** 3. 使用Canvas绘制,合成图片 */
+            Bitmap bitmap = Bitmap.createBitmap(srcWidth, srcHeight, Bitmap.Config.ARGB_8888);
+            Canvas canvas = new Canvas(bitmap);
+            canvas.drawBitmap(srcBitmap, 0, 0, null);
+            canvas.scale(scaleWidth, scaleHeight, srcWidth / 2, srcHeight / 2);
+            canvas.drawBitmap(logoBitmap, srcWidth / 2 - logoWidth / 2, srcHeight / 2 - logoHeight / 2, null);
+
+            return bitmap;
+        }
+
+        /**
+         * 扫二维码请参考: https://blog.csdn.net/u010618194/article/details/77891313
+         * 字符串转二维码
+         *
+         * @param contents 内容
+         * @return
+         * @throws WriterException
+         */
+        public static Bitmap encodeAsBitmap(String contents) throws WriterException {
+            return encodeAsBitmap(contents, Color.WHITE, Color.BLACK);
+        }
+
+        /**
+         * 扫二维码请参考: https://blog.csdn.net/u010618194/article/details/77891313
+         * 字符串转二维码
+         *
+         * @param contents 内容
+         * @param colorBG  二维码背景颜色
+         * @param colorQR  二维码实体颜色
+         * @return
+         * @throws WriterException
+         */
+        public static Bitmap encodeAsBitmap(String contents, int colorBG, int colorQR) throws WriterException {
+            return encodeAsBitmap(contents, colorBG, colorQR, 100, 100);
+        }
+
+        /**
+         * 扫二维码请参考: https://blog.csdn.net/u010618194/article/details/77891313
+         * 字符串转二维码
+         *
+         * @param contents 内容
+         * @param colorBG  二维码背景颜色
+         * @param colorQR  二维码实体颜色
+         * @param width    宽度
+         * @param height   高度
+         * @return
+         * @throws WriterException
+         */
+        public static Bitmap encodeAsBitmap(String contents, int colorBG, int colorQR, int width, int height) throws WriterException {
+            MultiFormatWriter barcodeWriter = new MultiFormatWriter();
+            BitMatrix matrix;
+            try {
+                matrix = barcodeWriter.encode(contents, BarcodeFormat.QR_CODE, width, height);
+            } catch (IllegalArgumentException iae) {
+                return null;
+            }
+            int[] pixels = new int[width * height];
+            for (int y = 0; y < height; y++) {
+                int offset = y * width;
+                for (int x = 0; x < width; x++) {
+                    pixels[offset + x] = matrix.get(x, y) ? colorQR : colorBG;
+                }
+            }
+            Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+            bitmap.setPixels(pixels, 0, width, 0, 0, width, height);
+            return bitmap;
+        }
+
+        //InputStream 转 String
+        public static String inputStreamToString(InputStream inputStream) {
+            InputStreamReader inputStreamReader = null;
+            try {
+                inputStreamReader = new InputStreamReader(inputStream, "UTF-8");
+            } catch (UnsupportedEncodingException e1) {
+                e1.printStackTrace();
+            }
+            BufferedReader reader = new BufferedReader(inputStreamReader);
+            //创建字符缓冲流
+            StringBuffer sb = new StringBuffer("");
+            String line;
+            try {
+                //读取每行路由数据
+                while ((line = reader.readLine()) != null) {
+                    //添加到字符缓冲流中
+                    sb.append(line);
+                    //一条一行
+                    sb.append("\n");
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            //返回路由字符串
+            return sb.toString();
+        }
+
         public static Bitmap base64ToBitmap(String base64String) {
             Bitmap bitmap = null;
             byte[] bitmapArray = new byte[0];
@@ -21316,7 +22971,6 @@ public class GT {
             }
             return bitmap;
         }
-
 
         /**
          * 获取非 Gif 圆角差值
@@ -21419,14 +23073,19 @@ public class GT {
          * @param inputStream
          * @return
          */
-        public static Bitmap getBitmap(InputStream inputStream) {
-            BitmapFactory.Options bitmapOptions = new BitmapFactory.Options();
+        public static Bitmap getBitmap(InputStream inputStream, boolean... isDispose) {
+            if (isDispose != null && isDispose.length > 0 && isDispose[0]) {
+                BitmapFactory.Options bitmapOptions = new BitmapFactory.Options();
 //            bitmapOptions.inSampleSize = 1;
-            bitmapOptions.inPreferredConfig = Bitmap.Config.RGB_565;
-            bitmapOptions.inPurgeable = true;
-            bitmapOptions.inInputShareable = true;
+                bitmapOptions.inPreferredConfig = Bitmap.Config.RGB_565;
+                bitmapOptions.inPurgeable = true;
+                bitmapOptions.inInputShareable = true;
 //            bitmapOptions.inJustDecodeBounds  = true;
-            return BitmapFactory.decodeStream(inputStream, null, bitmapOptions);
+                return BitmapFactory.decodeStream(inputStream, null, bitmapOptions);
+            } else {
+                return BitmapFactory.decodeStream(inputStream);
+            }
+
         }
 
         /**
@@ -21446,7 +23105,7 @@ public class GT {
          * @return
          */
         public static Bitmap getBitmap(Drawable drawable) {
-
+            if (drawable == null) return null;
             Bitmap bitmap = null;
 
             if (drawable.getIntrinsicWidth() <= 0 || drawable.getIntrinsicHeight() <= 0) {
@@ -21483,6 +23142,7 @@ public class GT {
         public static Bitmap uriToBitmap2(Context context, Uri uri) {
             String[] pathColumns = {MediaStore.Images.Media.DATA};
             Cursor c = context.getContentResolver().query(uri, pathColumns, null, null, null);
+            if (c == null) return null;
             c.moveToFirst();
             int columnIndex = c.getColumnIndex(MediaStore.Images.ImageColumns.DATA);
             String picturePath = c.getString(columnIndex);
@@ -21573,16 +23233,14 @@ public class GT {
          * @return
          */
 
-        private static final Map<String, Bitmap> mapBitmap = new HashMap<>();
+        private static final Map<String, Bitmap> mapBitmap = new ArrayMap<>();
 
         //自带内存缓存的 图片资源 转 Bitmap
         public static Bitmap ObjectToBitmap(Object resource) {
-
             Bitmap imgObjet = mapBitmap.get(String.valueOf(resource));
             if (imgObjet == null) {
                 if (resource instanceof String) { //网络请求 或 本地路径加载 ,需要三级缓存
                     String url = resource.toString();
-
                     //使用网络缓存或请求,开启网络缓存
                     if (imgObjet == null) {
                         //网络加载或本地加载图片
@@ -21716,15 +23374,9 @@ public class GT {
 
         // Drawable转换成Bitmap
         public static Bitmap drawable2Bitmap(Drawable drawable) {
-            Bitmap bitmap = Bitmap
-                    .createBitmap(
-                            drawable.getIntrinsicWidth(),
-                            drawable.getIntrinsicHeight(),
-                            drawable.getOpacity() != PixelFormat.OPAQUE ? Bitmap.Config.ARGB_8888
-                                    : Bitmap.Config.RGB_565);
+            Bitmap bitmap = Bitmap.createBitmap(drawable.getIntrinsicWidth(), drawable.getIntrinsicHeight(), drawable.getOpacity() != PixelFormat.OPAQUE ? Bitmap.Config.ARGB_8888 : Bitmap.Config.RGB_565);
             Canvas canvas = new Canvas(bitmap);
-            drawable.setBounds(0, 0, drawable.getIntrinsicWidth(),
-                    drawable.getIntrinsicHeight());
+            drawable.setBounds(0, 0, drawable.getIntrinsicWidth(), drawable.getIntrinsicHeight());
             drawable.draw(canvas);
             return bitmap;
         }
@@ -21744,15 +23396,15 @@ public class GT {
         public static Bitmap getBitmapFromLocal(String url, String CACHE_PATH, boolean... isMD5) {
             String fileName = url;//把图片的url当做文件名,并进行MD5加密
             try {
-                if (isMD5.length > 0 && isMD5[0]) {
-                    fileName = Encryption.MD5.encryptMD5(url);
+                if (isMD5 != null && isMD5.length > 0 && isMD5[0]) {
+                    fileName = Encryption.MD5.encryptMD5(url);//把图片的url当做文件名,并进行MD5加密
                 }
                 File file = new File(CACHE_PATH, fileName);
-
-                if (!file.exists()) return null;
-
+                if (!file.exists()) {
+                    return null;
+                }
                 // 检测到文件太大，就需要做压缩处理
-                Bitmap bitmap = BitmapFactory.decodeStream(new FileInputStream(file));
+                Bitmap bitmap = BitmapFactory.decodeStream(new FileInputStream(file));//58毫秒
                 return bitmap;
             } catch (Exception e) {
                 e.printStackTrace();
@@ -21779,29 +23431,47 @@ public class GT {
         }
 
         /**
+         * 从本地读取图片
+         *
+         * @param url
+         */
+        public static Bitmap getBitmapAbsolutePath(File file) {
+            if (file == null) return null;
+            try {
+                if (!file.exists()) return null;
+                return BitmapFactory.decodeFile(file.getAbsolutePath());
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            return null;
+        }
+
+        /**
          * 从网络获取图片后,保存至本地缓存
          *
          * @param url
          * @param bitmap
          */
-        public static Bitmap saveBitmapToLocal(String url, Bitmap bitmap, String CACHE_PATH) {
+        public static Bitmap saveBitmapToLocal(String url, Bitmap bitmap, String CACHE_PATH, boolean... isMD5) {
             try {
-                String fileName = Encryption.MD5.encryptMD5(url);//把图片的url当做文件名,并进行MD5加密
+                String fileName = url;
+                if (isMD5 != null && isMD5.length > 0 && isMD5[0]) {
+                    fileName = Encryption.MD5.encryptMD5(url);//把图片的url当做文件名,并进行MD5加密
+                }
                 File file = new File(CACHE_PATH, fileName);
                 //通过得到文件的父文件,判断父文件是否存在
                 File parentFile = file.getParentFile();
                 if (!parentFile.exists()) {
                     parentFile.mkdirs();
                 }
-
+                File file2 = new File(CACHE_PATH, fileName);
                 //把图片保存至本地
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, new FileOutputStream(file));
+                bitmap.compress(Bitmap.CompressFormat.WEBP, 100, new FileOutputStream(file));
             } catch (Exception e) {
                 e.printStackTrace();
             }
             return bitmap;
         }
-
 
         public static InputStream getImageInputStreamFile(String filePath) {
             if (filePath.contains("/")) {
@@ -21817,7 +23487,6 @@ public class GT {
             return null;
         }
 
-
         public static InputStream getImageInputStream(File file) {
             if (!file.exists()) return null;
             try {
@@ -21829,12 +23498,11 @@ public class GT {
 
         }
 
-
         /**
          * 获取网络图片
          *
          * @param imageurl 图片网络地址
-         * @return Bitmap 返回位图
+         * @return InputStream 返回位图
          */
         public static InputStream getImageInputStream(String imageurl) {
             URL url;
@@ -21847,33 +23515,57 @@ public class GT {
                 connection.setDoInput(true);
                 connection.setUseCaches(true); //设置使用网络缓存
                 inputStream = connection.getInputStream();
-//                inputStream.close();
+                inputStream.close();
             } catch (Exception e) {
                 e.printStackTrace();
             }
             return inputStream;
         }
 
+        /**
+         * 异步获取网络图片
+         *
+         * @param imageurl 图片网络地址
+         * @return Bitmap 返回位图
+         */
+        public static void getImageBitmap(String imageurl, GT.OneListener<Bitmap> oneListener) {
+            GT.Thread.getInstance(0).execute(new Runnable() {
+                @Override
+                public void run() {
+                    Bitmap bitmap = getImageBitmap(imageurl);
+                    GT.Thread.runAndroid(new Runnable() {
+                        @Override
+                        public void run() {
+                            oneListener.onOneListener(bitmap);
+                        }
+                    });
+                }
+            });
+        }
 
+        /**
+         * 同步获取网络图片
+         *
+         * @param imageurl 图片网络地址
+         * @return Bitmap 返回位图
+         */
         public static Bitmap getImageBitmap(String imageurl) {
-            URL url;
-            HttpURLConnection connection = null;
             Bitmap bitmap = null;
             try {
-                url = new URL(imageurl);
-                connection = (HttpURLConnection) url.openConnection();
-                connection.setConnectTimeout(6000); //超时设置
+                URL url = new URL(imageurl);
+                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                connection.setConnectTimeout(5000); //超时设置
                 connection.setDoInput(true);
                 connection.setUseCaches(true); //设置使用网络缓存
-                InputStream inputStream = connection.getInputStream();
-                bitmap = GT.ImageViewTools.getBitmap(inputStream);
+                InputStream inputStream = connection.getInputStream();//295/254/260
+                bitmap = ImageViewTools.getBitmap(inputStream, true);//30
                 inputStream.close();
+                connection.disconnect();
             } catch (Exception e) {
                 e.printStackTrace();
             }
             return bitmap;
         }
-
 
         /**
          * 图片压缩：质量压缩方法
@@ -21893,13 +23585,13 @@ public class GT {
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             if (beforeBitmap != null) {
                 // 第一个参数：图片压缩的格式；第二个参数：压缩的比率；第三个参数：压缩的数据存放到bos中
-                beforeBitmap.compress(Bitmap.CompressFormat.PNG, 100, bos);
+                beforeBitmap.compress(Bitmap.CompressFormat.WEBP, 80, bos);
 
                 // 循环判断压缩后的图片大小是否满足要求，这里限制100kb，若不满足则继续压缩，每次递减10%压缩
                 int options = 100;
                 while (bos.toByteArray().length / 1024 > (100 * ratio)) {
                     bos.reset();// 置为空
-                    beforeBitmap.compress(Bitmap.CompressFormat.PNG, options, bos);
+                    beforeBitmap.compress(Bitmap.CompressFormat.WEBP, options, bos);
                     options -= 10;
                 }
 
@@ -21955,45 +23647,45 @@ public class GT {
             // 缩放图片动作 缩放比例
             matrix.postScale(scale, scale);
             // 创建一个新的Bitmap 从原始图像剪切图像
-            Bitmap afterBitmap = Bitmap.createBitmap(beforBitmap, 0, 0,
-                    (int) beforeWidth, (int) beforeHeight, matrix, true);
+            Bitmap afterBitmap = Bitmap.createBitmap(beforBitmap, 0, 0, (int) beforeWidth, (int) beforeHeight, matrix, true);
             return afterBitmap;
         }
 
         //混合压缩
-        public static Bitmap comp(Bitmap image) {
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            image.compress(Bitmap.CompressFormat.PNG, 100, baos);
-            if (baos.toByteArray().length / 1024 > 1024) {//判断如果图片大于1M,进行压缩避免在生成图片（BitmapFactory.decodeStream）时溢出
-                baos.reset();//重置baos即清空baos
-                image.compress(Bitmap.CompressFormat.PNG, 50, baos);//这里压缩50%，把压缩后的数据存放到baos中
-            } else {
-                return image;
+        public static Bitmap comp(Bitmap bitmap) {
+            try {
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                if (baos.toByteArray().length / 1024 > 1024) {//判断如果图片大于1M,进行压缩避免在生成图片（BitmapFactory.decodeStream）时溢出
+                    baos.reset();//重置baos即清空baos
+                    bitmap.compress(Bitmap.CompressFormat.WEBP, 50, baos);//这里压缩50%，把压缩后的数据存放到baos中
+                } else {
+                    return bitmap;
+                }
+                ByteArrayInputStream isBm = new ByteArrayInputStream(baos.toByteArray());
+                BitmapFactory.Options newOpts = new BitmapFactory.Options();
+                //开始读入图片，此时把options.inJustDecodeBounds 设回true了
+                newOpts.inJustDecodeBounds = true;
+                bitmap = BitmapFactory.decodeStream(isBm, null, newOpts);
+                newOpts.inJustDecodeBounds = false;
+                int w = newOpts.outWidth;
+                int h = newOpts.outHeight;
+                //现在主流手机比较多是800*480分辨率
+                float hh = 800f;//这里设置高度为800f
+                float ww = 480f;//这里设置宽度为480f
+                //缩放比。由于是固定比例缩放，只用高或者宽其中一个数据进行计算即可
+                int be = 1;//be=1表示不缩放
+                if (w > h && w > ww) {//如果宽度大的话根据宽度固定大小缩放
+                    be = (int) (newOpts.outWidth / ww);
+                } else if (w < h && h > hh) {//如果高度高的话根据宽度固定大小缩放
+                    be = (int) (newOpts.outHeight / hh);
+                }
+                if (be <= 0) be = 1;
+                newOpts.inSampleSize = be;//设置缩放比例
+                //重新读入图片，注意此时已经把options.inJustDecodeBounds 设回false了
+                isBm = new ByteArrayInputStream(baos.toByteArray());
+                bitmap = BitmapFactory.decodeStream(isBm, null, newOpts);
+            } catch (Exception e) {
             }
-            ByteArrayInputStream isBm = new ByteArrayInputStream(baos.toByteArray());
-            BitmapFactory.Options newOpts = new BitmapFactory.Options();
-            //开始读入图片，此时把options.inJustDecodeBounds 设回true了
-            newOpts.inJustDecodeBounds = true;
-            Bitmap bitmap = BitmapFactory.decodeStream(isBm, null, newOpts);
-            newOpts.inJustDecodeBounds = false;
-            int w = newOpts.outWidth;
-            int h = newOpts.outHeight;
-            //现在主流手机比较多是800*480分辨率，所以高和宽我们设置为
-            float hh = 800f;//这里设置高度为800f
-            float ww = 480f;//这里设置宽度为480f
-            //缩放比。由于是固定比例缩放，只用高或者宽其中一个数据进行计算即可
-            int be = 1;//be=1表示不缩放
-            if (w > h && w > ww) {//如果宽度大的话根据宽度固定大小缩放
-                be = (int) (newOpts.outWidth / ww);
-            } else if (w < h && h > hh) {//如果高度高的话根据宽度固定大小缩放
-                be = (int) (newOpts.outHeight / hh);
-            }
-            if (be <= 0)
-                be = 1;
-            newOpts.inSampleSize = be;//设置缩放比例
-            //重新读入图片，注意此时已经把options.inJustDecodeBounds 设回false了
-            isBm = new ByteArrayInputStream(baos.toByteArray());
-            bitmap = BitmapFactory.decodeStream(isBm, null, newOpts);
             return compressImage(bitmap);//压缩好比例大小后再进行质量压缩
         }
 
@@ -22321,7 +24013,6 @@ public class GT {
             return outputBitmap;
         }
 
-
         //圆角
         public static class RoundedCorners {
             public static final int CORNER_NONE = 0;
@@ -22524,7 +24215,6 @@ public class GT {
 
         }
 
-
     }
 
     /**
@@ -22557,8 +24247,7 @@ public class GT {
          * @param comment     压缩文件的注释
          * @throws IOException 当压缩过程出错时抛出
          */
-        public static void zipFiles(Collection<File> resFileList, String zipFile, String comment)
-                throws IOException {
+        public static void zipFiles(Collection<File> resFileList, String zipFile, String comment) throws IOException {
             ZipOutputStream zipout = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(zipFile), BUFF_SIZE));
             for (File resFile : resFileList) {
                 zipFile(resFile, zipout, "");
@@ -22620,8 +24309,7 @@ public class GT {
          * @throws ZipException 压缩格式有误时抛出
          * @throws IOException  IO错误时抛出
          */
-        public static ArrayList<File> upZipSelectedFile(String zipFile, String folderPath,
-                                                        String nameContains) throws ZipException, IOException {
+        public static ArrayList<File> upZipSelectedFile(String zipFile, String folderPath, String nameContains) throws ZipException, IOException {
             ArrayList<File> fileList = new ArrayList<File>();
 
             File desDir = new File(folderPath);
@@ -22685,8 +24373,7 @@ public class GT {
          * @throws ZipException 压缩文件格式有误时抛出
          * @throws IOException  IO操作有误时抛出
          */
-        public static Enumeration<?> getEntriesEnumeration(String zipFile) throws ZipException,
-                IOException {
+        public static Enumeration<?> getEntriesEnumeration(String zipFile) throws ZipException, IOException {
             ZipFile zf = new ZipFile(zipFile);
             return zf.entries();
         }
@@ -22722,10 +24409,8 @@ public class GT {
          * @throws FileNotFoundException 找不到文件时抛出
          * @throws IOException           当压缩过程出错时抛出
          */
-        private static void zipFile(File resFile, ZipOutputStream zipout, String rootpath)
-                throws FileNotFoundException, IOException {
-            rootpath = rootpath + (rootpath.trim().length() == 0 ? "" : File.separator)
-                    + resFile.getName();
+        private static void zipFile(File resFile, ZipOutputStream zipout, String rootpath) throws FileNotFoundException, IOException {
+            rootpath = rootpath + (rootpath.trim().length() == 0 ? "" : File.separator) + resFile.getName();
             rootpath = new String(rootpath.getBytes("8859_1"), "GB2312");
             if (resFile.isDirectory()) {
                 File[] fileList = resFile.listFiles();
@@ -22734,8 +24419,7 @@ public class GT {
                 }
             } else {
                 byte buffer[] = new byte[BUFF_SIZE];
-                BufferedInputStream in = new BufferedInputStream(new FileInputStream(resFile),
-                        BUFF_SIZE);
+                BufferedInputStream in = new BufferedInputStream(new FileInputStream(resFile), BUFF_SIZE);
                 zipout.putNextEntry(new ZipEntry(rootpath));
                 int realLength;
                 while ((realLength = in.read(buffer)) != -1) {
@@ -22757,6 +24441,21 @@ public class GT {
     public static class AppIteration {
         //更新 APP 版本
         public static class UpdateApp {
+
+
+            /**
+             * 卸载第三方或子App
+             * 需要权限:<uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES"/>
+             *
+             * @param context
+             * @param packageName
+             */
+            public static void uninstallPackage(Context context, String packageName) {
+                Intent intent = new Intent(Intent.ACTION_DELETE);
+                intent.setData(Uri.parse("package:" + packageName));
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                context.startActivity(intent);
+            }
 
 
             /**
@@ -22819,6 +24518,35 @@ public class GT {
                 }
                 intent.setDataAndType(uri, "application/vnd.android.package-archive");
                 activity.startActivity(intent);
+            }
+
+            /**
+             * 请自行添加读写权限
+             * 下载app
+             *
+             * @param context     上下文 (必填)
+             * @param downloadUrl app下载网址 (必填)
+             * @param apkSavePath apk保存路径 (非必填)
+             * @param listener    下载回调 (必填)
+             */
+            public static void downloadApp(String downloadUrl, Context context, String apkSavePath, HttpUtil.OnLoadData listener) {
+                if (downloadUrl == null || context == null || listener == null) return;
+
+                String apkName = apkSavePath;//初始值是默认外界调用的
+
+                //如果没有设置 初始值就默认创建路径
+                if (apkSavePath == null) {
+                    apkSavePath = GT.FileUtils.getAppDirectory(context) + "/updatePack/";
+                    apkName = apkSavePath + GT.ApplicationUtils.getAppName(context) + "-" + GT.ApplicationUtils.getVerName(context) + ".app";
+                }
+
+                //目录是否存在
+                if (!GT.FileUtils.fileExist(apkSavePath)) {
+                    new File(apkSavePath).mkdirs();//创建当前目录
+                }
+
+                //添加 app 保存扩展名
+                GT.HttpUtil.downloadFile(downloadUrl, apkName, listener);
             }
 
         }
@@ -22963,8 +24691,7 @@ public class GT {
                     fopt.mkdirs();
                 } else {
 //                    logt("存在，清空这个文件夹里所有文件");
-                    if (isEmptyFile)
-                        FileUtils.deleteAllFiles(fopt, false);
+                    if (isEmptyFile) FileUtils.deleteAllFiles(fopt, false);
                 }
 
                 try {
@@ -22978,8 +24705,7 @@ public class GT {
 //                        logt("getAbsolutePath2:" + fopt.getAbsolutePath());
 
                         // 2.加载指定的修复的dex文件的Loader
-                        DexClassLoader dexLoader = new DexClassLoader(
-                                dex.getAbsolutePath(),// 修复好的dex（补丁）所在目录
+                        DexClassLoader dexLoader = new DexClassLoader(dex.getAbsolutePath(),// 修复好的dex（补丁）所在目录
                                 fopt.getAbsolutePath(),// 存放dex的解压目录（用于jar、zip、apk格式的补丁）
                                 null,// 加载dex时需要的库
                                 pathLoader// 父类加载器
@@ -23313,8 +25039,8 @@ public class GT {
                     fMActiveResources.setAccessible(true);
                     Object thread = getActivityThread(context, activityThread);
                     @SuppressWarnings("unchecked")
-                    HashMap<?, WeakReference<Resources>> map =
-                            (HashMap<?, WeakReference<Resources>>) fMActiveResources.get(thread);
+                    ArrayMap<?, WeakReference<Resources>> map =
+                            (ArrayMap<?, WeakReference<Resources>>) fMActiveResources.get(thread);
                     references = map.values();
                 }
                 //将的到的弱引用集合遍历得到Resources，将Resources中的mAssets字段替换为newAssetManager
@@ -23496,7 +25222,7 @@ public class GT {
          */
         public static class DES {
 
-            private static String paw =
+            private final static String PAW =
                     "         4&(\n" +
                             "       ` ~&&\\yM#1\n" +
                             "        ,_'Q!!NMW&\n" +
@@ -23523,7 +25249,7 @@ public class GT {
              * @return
              */
             public static String encryptPassword(Object clearText, Object password) {
-                password += paw;
+                password += PAW;
                 try {
                     DESKeySpec keySpec = null;
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
@@ -23550,7 +25276,7 @@ public class GT {
              * @return
              */
             public static String decryptPassword(Object encryptedPwd, Object password) {
-                password += paw;
+                password += PAW;
                 try {
                     DESKeySpec keySpec = null;
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
@@ -23722,7 +25448,6 @@ public class GT {
              * @return Array containind decoded data.
              */
             public static byte[] decode(String encoded) {
-
                 if (encoded == null) {
                     return null;
                 }
@@ -23869,7 +25594,6 @@ public class GT {
          * @功能：申请白名单 需要添加权限：<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
          */
         public static void whiteList(Activity activity) {
-
             //申请白名单
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 PowerManager powerManager = (PowerManager) activity.getSystemService(POWER_SERVICE);
@@ -23881,7 +25605,107 @@ public class GT {
                     activity.startActivity(intent);
                 }
             }
+        }
 
+        /**
+         * 通知栏权限
+         * <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+         * 跳转通知栏权限页面,引导用户开启权限
+         *
+         * @param context
+         */
+        public static void openNotificationSettingsForApp(Context context) {
+            // Links to this app's notification settings.
+            Intent intent = new Intent();
+            intent.setAction("android.settings.APP_NOTIFICATION_SETTINGS");
+            intent.putExtra("app_package", context.getPackageName());
+            intent.putExtra("app_uid", context.getApplicationInfo().uid);
+            // for Android 8 and above
+            intent.putExtra("android.provider.extra.APP_PACKAGE", context.getPackageName());
+            context.startActivity(intent);
+        }
+
+        /**
+         * 通知栏权限动态申请
+         * <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+         *
+         * @param context
+         * @param oneListener 权限申请回调
+         */
+        public static void notification(FragmentActivity activity, GT.OneListener<Boolean> oneListener) {
+            //权限动态申请
+            GT.AppAuthorityManagement.Permission.init(activity, new String[]{
+                    Manifest.permission.POST_NOTIFICATIONS
+            }).permissions(new GT.AppAuthorityManagement.Permission.OnPermissionListener() {
+                @Override
+                public void onExplainRequestReason(GT.AppAuthorityManagement.Permission.PermissionDescription onPDListener) {
+                    onPDListener.setAcceptAdvice(true);//核心，设置拒绝授权
+                }
+
+                @Override
+                public boolean onForwardToSettings() {
+                    //特殊权限特殊处理，如：需要进入 系统设置 中或 应用信息中的代码可自定义填写
+                    return true;//默认是false 一定有改过来设置为 true
+                }
+
+                @Override
+                public void request(boolean allGranted, String[] grantedList, String[] deniedList, String message) {
+                    if (allGranted) {
+                        //全部授权
+                        oneListener.onOneListener(allGranted);
+                    } else {
+                        //未全部授权
+                        oneListener.onOneListener(allGranted);
+                    }
+                }
+            });
+        }
+
+        /**
+         *
+         第一步：
+         //创建一个 MyDeviceAdminReceiver 类并继承 DeviceAdminReceiver
+         public class MyDeviceAdminReceiver extends DeviceAdminReceiver{}
+
+         第二步：需要在 AndroidManifest.xml 中静态注册
+         <receiver
+         android:name=".MyDeviceAdminReceiver"
+         android:description="@string/app_name"
+         android:exported="true"
+         android:label="防卸载"
+         android:permission="android.permission.BIND_DEVICE_ADMIN">
+         <meta-data
+         android:name="android.app.device_admin"
+         android:resource="@xml/deviceadmin" />
+
+         <intent-filter>
+         <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+         </intent-filter>
+         </receiver>
+         */
+
+        /**
+         * 激活设备超级管理员,将获得一下权限
+         * 1.恢复出厂设置
+         * 2.修改屏幕解锁密码
+         * 3.修改屏幕密码规则长度和字符
+         * 4.监视屏幕解锁次数
+         * 5.锁屏幕
+         * 6.设置锁屏密码有效期
+         * 7.设置应用数据加密
+         * 8.禁止相机服务，所有app将无法使用相机
+         *
+         * @param context
+         * @param cls     继承 DeviceAdminReceiver 类的自定义 MyDeviceAdminReceiver
+         * @param data    说明
+         */
+        public static void activation(Context context, Class<?> cls, String data) {
+            Intent intent = new Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN);
+            // 初始化要激活的组件
+            ComponentName mDeviceAdminSample = new ComponentName(context, cls);
+            intent.putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, mDeviceAdminSample);
+            intent.putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, data);
+            context.startActivity(intent);
         }
 
         /**
@@ -23891,32 +25715,33 @@ public class GT {
 
             private static final String TAG_PERMISSION = "TAG_PERMISSION";
             private static final String TAG_EACH_PERMISSION = "TAG_EACH_PERMISSION";
-            private static Permission Permission = null;
+            private static Permission permission = null;
             private static FragmentManager fragmentManager;
             private static PermissionFragment fragment;
             private PermissionDescription permissionDescription;
-            private static String[] permission;
+            private String[] permissionArray;
 
-            public static Permission init(FragmentActivity context, String... permission) {
-                if (Permission == null) {
-                    synchronized (GT.class) {
-                        if (Permission == null) {
-                            Permission = new Permission();
+            public static Permission init(FragmentActivity context, String... permissionArray) {
+                if (Permission.permission == null) {
+                    synchronized (Permission.class) {
+                        if (Permission.permission == null) {
+                            Permission.permission = new Permission();
                         }
                     }
                 }
-                if (permission == null || permission.length == 0) {
+                if (permissionArray == null || permissionArray.length == 0) {
                     GT.err("Permission list is empty. Application failed!");
-                    return Permission;
+                    return Permission.permission;
                 }
-                Permission.permission = permission;
+                Permission.permission.permissionArray = permissionArray;
                 fragmentManager = context.getSupportFragmentManager();
                 fragment = (PermissionFragment) context.getSupportFragmentManager().findFragmentByTag(TAG_EACH_PERMISSION);
-                return Permission;
+                return Permission.permission;
             }
 
             public Permission permissions(OnPermissionListener onPermissionListener) {
-                GT.Thread.getInstance(0).execute(new Runnable() {
+
+                Thread.getInstance(0).execute(new Runnable() {
                     @Override
                     public void run() {
                         Thread.runAndroid(new Runnable() {
@@ -23930,14 +25755,11 @@ public class GT {
                                 permissionDescription = new PermissionDescription();
 
                                 if (fragment == null) {
-                                    fragment = PermissionFragment.newInstance(permission, onPermissionListener, Permission, permissionDescription);
+                                    fragment = PermissionFragment.newInstance(permissionArray, onPermissionListener, permission, permissionDescription);
                                 }
 
                                 if (fragmentManager != null) {
-                                    fragmentManager
-                                            .beginTransaction()
-                                            .add(fragment, TAG_PERMISSION)
-                                            .commitAllowingStateLoss();
+                                    fragmentManager.beginTransaction().add(fragment, TAG_PERMISSION).commitAllowingStateLoss();
                                     try {
                                         fragmentManager.executePendingTransactions();
                                     } catch (IllegalStateException e) {
@@ -23951,7 +25773,7 @@ public class GT {
                         });
                     }
                 });
-                return Permission;
+                return permission;
             }
 
 
@@ -24091,14 +25913,17 @@ public class GT {
                         }
 
                         if (isAllGranted) {
-                            onPermissionListener.request(true, permission, new String[]{}, "All permissions approved");
+                            if (onPermissionListener != null)
+                                onPermissionListener.request(true, permission, new String[]{}, "All permissions approved");
+                            onPermissionListener = null;
                             return;
                         }
 
                         //调用授权说明对话框
-                        onPermissionListener.onExplainRequestReason(permissionDescription);
+                        if (onPermissionListener != null)
+                            onPermissionListener.onExplainRequestReason(permissionDescription);
 
-                        GT.Thread.getInstance(0).execute(new Runnable() {
+                        Thread.getInstance(0).execute(new Runnable() {
                             @Override
                             public void run() {
                                 int i = 0;
@@ -24109,27 +25934,31 @@ public class GT {
                                 if (permissionDescription.isValidClose()) {//判断是否有效关闭
                                     if (permissionDescription.isAcceptAdvice()) {//判断用户是否同意授权
                                         if (permission != null && permission.length != 0) {
-                                            if (onPermissionListener.onForwardToSettings()) {//是否继续进行权限申请
+                                            if (onPermissionListener != null && onPermissionListener.onForwardToSettings()) {//是否继续进行权限申请
                                                 requestPermissions(permission, 1);//开始授权
                                             } else {//特殊权限方法
-                                                onPermissionListener.request(false, new String[]{}, permission, "Stop the authorization");
+                                                if (onPermissionListener != null)
+                                                    onPermissionListener.request(false, new String[]{}, permission, "Stop the authorization");
+                                                onPermissionListener = null;
                                             }
                                         }
                                     } else {//用户拒绝授权
-                                        onPermissionListener.request(false, new String[]{}, permission, "The user rejected the authorization");
+                                        if (onPermissionListener != null)
+                                            onPermissionListener.request(false, new String[]{}, permission, "The user rejected the authorization");
+                                        onPermissionListener = null;
                                     }
                                 }
                             }
                         });
 
                     } else {
-                        onPermissionListener.request(false, new String[]{}, permission, "Add the authorization information in the Permissions method");
+                        if (onPermissionListener != null)
+                            onPermissionListener.request(false, new String[]{}, permission, "Add the authorization information in the Permissions method");
+                        onPermissionListener = null;
                         return;
                     }
 
-
                 }
-
 
                 @Override
                 public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
@@ -24158,13 +25987,19 @@ public class GT {
                     }
 
                     if (deniedList.size() == 0) {
-                        onPermissionListener.request(true, grantedArray, deniedArray, "All permissions approved");
+                        if (onPermissionListener != null)
+                            onPermissionListener.request(true, grantedArray, deniedArray, "All permissions approved");
+                        onPermissionListener = null;
                     } else {
-                        onPermissionListener.request(false, grantedArray, deniedArray, "All permissions are not approved");
+                        if (onPermissionListener != null)
+                            onPermissionListener.request(false, grantedArray, deniedArray, "All permissions are not approved");
+                        onPermissionListener = null;
                     }
 
 
                 }
+
+
             }
 
 
@@ -25449,7 +27284,7 @@ public class GT {
          * 1.出现添加布局、初始化布局、加载数据方法
          * 2.获取组件还是使用原始的 findViewById
          */
-        public abstract static class BaseActivity extends AppCompatActivity implements GT.Frame.ViewModelFeedback {
+        public abstract static class BaseActivity extends AppCompatActivity implements Frame.ViewModelFeedback {
 
             @Override
             public void onViewModeFeedback(Object... obj) {
@@ -25460,6 +27295,8 @@ public class GT {
             private static int cutIndex = 0;//GT内置提供的切换特效
             private static int startAnim = 0;//用户自定义
             private static int closeAnim = 0;//用户自定义
+
+            private String cacheKey;//缓存关键字
 
             /**
              * 设置 Activity 切换特效
@@ -25511,15 +27348,57 @@ public class GT {
             public void loadData() {
             }
 
+            //是否缓存开启数据
+            protected boolean isCacheData() {
+                return false;
+            }
+
+            protected void putCache(String key, Object obj) {
+                if (key == null) {
+                    key = getPackageName() + getClass().getName();
+                }
+                GT_Cache.putCacheData(key, obj);
+            }
+
+            protected <T> T getCache(String key, Class<T> classz) {
+                if (key == null) {
+                    key = getPackageName() + getClass().getName();
+                }
+                return GT_Cache.getCacheData(key, classz);
+            }
+
+            protected void putCacheMap(Map<String, Object> map) {
+                GT_Cache.putCacheMap(map);
+            }
+
+            //简单缓存 存储 与 获取
+            @Override
+            public void getCache(String json) {
+
+            }
+
+            @Override
+            public String putCache() {
+                return null;
+            }
+
             @Override
             protected void onCreate(Bundle savedInstanceState) {
                 super.onCreate(savedInstanceState);
                 gt_fragment = GT_Fragment.gt_fragment;
                 int loadLayout = loadLayout();
                 if (loadLayout != 0 && loadLayout != -1) {
+
+                    //初始化 本地页面缓存
+                    if (isCacheData()) {
+                        GT_Cache.initCache(this);
+                        cacheKey = getPackageName() + getClass().getName();
+                    }
+
                     initDrawView();// 设置绘制前的数据
                     setContentView(loadLayout);// 加载布局
                     initView(savedInstanceState);// 初始化 UI
+                    getCache(GT_Cache.getCacheData(cacheKey, String.class));//获取缓存数据
                     loadData();// 功能方法
                 }
 
@@ -25700,27 +27579,35 @@ public class GT {
             @Override
             protected void onDestroy() {
                 super.onDestroy();
+                Object bean = putCache();
+                if (bean != null) {
+                    GT_Cache.putCacheData(cacheKey, bean);
+                }
                 Runtime.getRuntime().gc();
             }
 
             public boolean onKeyDown(int keyCode, KeyEvent event) {
-                if (gt_fragment == null) return true;
-
+                if (gt_fragment == null) return super.onKeyDown(keyCode, event);
+                if (event.getAction() != KeyEvent.ACTION_DOWN || keyCode != KeyEvent.KEYCODE_BACK) {
+                    return false;
+                }
                 //处理其他Fragment 返回退出
                 List<Fragment> stackFragments = gt_fragment.getStackFragments();
+                if (stackFragments == null) return super.onKeyDown(keyCode, event);
                 Collections.reverse(stackFragments);
-                for(Fragment fragment : stackFragments){
-                    if(fragment.isVisible()){
+                for (Fragment fragment : stackFragments) {
+                    if (fragment == null) continue;
+                    if (fragment.isVisible()) {
                         if (!GT_Fragment.backFragmentList.contains(fragment.getClass().getName())) {
-                            if(fragment instanceof GT_Fragment.BaseFragment){
+                            if (fragment instanceof GT_Fragment.BaseFragment) {
                                 GT_Fragment.BaseFragment baseFragment = (GT_Fragment.BaseFragment) fragment;
-                                if(baseFragment.onBackPressed()){
+                                if (baseFragment.onBackPressed()) {//1
                                     return true;
                                 }
                             }
                             gt_fragment.finish();
                             return true;
-                        }else{
+                        } else {
                             break;
                         }
                     }
@@ -25730,30 +27617,32 @@ public class GT {
                 for (Fragment fragment : stackFragments) {
                     if (fragment instanceof GT_Fragment.BaseFragment && gt_fragment.stackTopHashCode.equals(fragment.toString())) {
                         GT_Fragment.BaseFragment baseFragment = (GT_Fragment.BaseFragment) fragment;
-                        boolean isBack = baseFragment.onBackPressed();
+                        boolean isBack = baseFragment.onBackPressed();//2
                         if (!isBack) {
                             List<String> finish1 = gt_fragment.getStackFragmentSimpleNames();
                             baseFragment.onDestroy();
                             gt_fragment.finishs(baseFragment);
-                            GT.Thread.getInstance(0).execute(new Runnable() {
+                            Thread.getInstance(0).execute(new Runnable() {
                                 @Override
                                 public void run() {
-                                    for(int i = 0 ; i < 300; i++){
+                                    for (int i = 0; i < 300; i++) {
                                         List<String> finish2 = gt_fragment.getStackFragmentSimpleNames();
-                                        if(finish1.size() != finish2.size()){
-                                            GT.Thread.runAndroid(new Runnable() {
+                                        if (finish1.size() != finish2.size()) {
+                                            Thread.runAndroid(new Runnable() {
                                                 @Override
                                                 public void run() {
                                                     List<Fragment> stackFragments = gt_fragment.getStackFragments();
+                                                    if (stackFragments == null) return;
                                                     Collections.reverse(stackFragments);
-                                                    if(stackFragments != null && stackFragments.size() > 0){
+                                                    if (stackFragments != null && stackFragments.size() > 0) {
                                                         Fragment fragment1 = stackFragments.get(0);
+                                                        if (fragment1 == null) return;
                                                         String fragmentName = fragment1.getClass().getName();
-                                                        if(gt_fragment.fragmentType.get(fragmentName) == gt_fragment.getHomeFragmentId()){
+                                                        if (gt_fragment.fragmentType.get(fragmentName) == gt_fragment.getHomeFragmentId()) {
                                                             gt_fragment.startFragmentHome(fragment1, gt_fragment.getHomeFragmentId());
-                                                        }else if(gt_fragment.fragmentType.get(fragmentName) == gt_fragment.getMainFragmentId()){
+                                                        } else if (gt_fragment.fragmentType.get(fragmentName) == gt_fragment.getMainFragmentId()) {
                                                             gt_fragment.startFragment(fragment1, gt_fragment.getMainFragmentId());
-                                                        }else{
+                                                        } else {
                                                             gt_fragment.finish();
                                                         }
 
@@ -25762,7 +27651,7 @@ public class GT {
                                             });
                                             break;
                                         }
-                                        GT.Thread.sleep(10);
+                                        Thread.sleep(10);
                                     }
 
                                 }
@@ -25777,6 +27666,53 @@ public class GT {
                     }
                 }
                 return super.onKeyDown(keyCode, event);
+            }
+
+            private static String className = "";
+            private static String functionName = "";
+            //选择单图片
+            private ActivityResultLauncher<Intent> register = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), new ActivityResultCallback<ActivityResult>() {
+                @Override
+                public void onActivityResult(ActivityResult result) {
+                    if (result == null) return;
+                    Intent intent = result.getData();
+                    if (intent == null) return;
+                    if (result.getResultCode() != Activity.RESULT_OK) return;
+
+                    //判断是否只发给特定 class
+                    Class<?> aClass = null;
+                    if (className == null) {
+                        aClass = AnnotationAssist.stringToClass(className);
+                    }
+
+                    if (functionName == null && aClass == null) {
+                        GT.EventBus.posts(result, "onActivityResult");
+                    } else if (functionName != null && aClass == null) {
+                        GT.EventBus.posts(result, functionName);
+                    } else if (functionName == null && aClass != null) {
+                        GT.EventBus.posts(result, "onActivityResult", aClass);
+                    } else if (functionName != null && aClass != null) {
+                        GT.EventBus.posts(result, functionName, aClass);
+                    }
+                }
+            });
+
+            /**
+             * 选择单个图片
+             *
+             * @param className    当前类的 className
+             * @param functionName 返回到当前类的 方法名
+             */
+            public void selectImage(Class classz, String functionName) {
+                Intent intent = new Intent(Intent.ACTION_PICK);
+                if (classz != null) {
+                    this.className = classz.getName();
+                }
+                if (functionName != null) {
+                    this.functionName = functionName;
+                }
+                intent.setType("image/*");     //选择全部照片
+                register.launch(intent);
             }
 
         }
@@ -25933,7 +27869,7 @@ public class GT {
         private static List<BackStackFragmentBean> fragmentBeanList;//存储 Fragment 栈中的 Fragment 信息
         private static List<String> fragmentNames;//存储 Fragment 栈中所有 Fragment 名字
 
-        private static Map<String, Integer> fragmentType = new HashMap<>();//记录 Fragment 参数类型
+        private static Map<String, Integer> fragmentType = new ArrayMap<>();//记录 Fragment 参数类型
 
         private String saveStackData = "[]";//保存当前栈中 Fragment 数据
         private Activity activity;//活动引用
@@ -26304,11 +28240,11 @@ public class GT {
                                 }
 
                                 //下面的就是再循环一遍 Fragment 进行隐藏
-                                GT.Thread.getInstance(0).execute(new Runnable() {
+                                Thread.getInstance(0).execute(new Runnable() {
                                     @Override
                                     public void run() {
-                                        GT.Thread.sleep(300);
-                                        GT.Thread.runAndroid(new Runnable() {
+                                        Thread.sleep(300);
+                                        Thread.runAndroid(new Runnable() {
                                             @Override
                                             public void run() {
                                                 //隐藏相同的页面
@@ -26479,7 +28415,7 @@ public class GT {
          * @param popExit
          */
         public void setFragmentCutEffects(int enter, int exit, int popEnter, int popExit) {
-            cutEffectsIndex = -1;
+            cutEffectsIndex = -2;
             this.enter = enter;
             this.exit = exit;
             this.popEnter = popEnter;
@@ -26494,6 +28430,8 @@ public class GT {
         /**
          * 设置切换特效
          * 8 种切换样式：
+         * -2    自定义动画 (需要通过 setFragmentCutEffects 方法进行设置 动画)
+         * -1    无动画、
          * 0    默认切换、
          * 1    X轴缩放、
          * 2    Y轴缩放、
@@ -26501,7 +28439,8 @@ public class GT {
          * 4    淡入淡出、
          * 5    水平翻页、
          * 6    垂直翻页、
-         * 7    垂直滑动、
+         * 7    弹出、
+         * 8    左右进出、
          *
          * @param cutEffectsIndex
          */
@@ -26525,19 +28464,49 @@ public class GT {
             }
             gt_fragment.setHomeFragmentId(homeFragmentId)//设置首页 五个大菜单 容器
                     .setMainFragmentId(mainFragmentId)//设置所有多级页面的 容器
-                    .switchingMode(GT.GT_Fragment.DIALOG)//使用 hied show 的方式加载 首页(HomeFragment.class)
+                    .switchingMode(GT_Fragment.DIALOG)//使用 hied show 的方式加载 首页(HomeFragment.class)
                     .startFragmentHome(fragmentHomeClass);//使用 主界面方式启动 HomeFragment
             return this;
         }
 
+
+        /**
+         * 22种切换样式：
+         * 0    默认切换、       transaction.setTransition(FragmentTransaction.TRANSIT_FRAGMENT_FADE);//当前默认使用这一个动画 淡入淡出
+         * 1    X轴缩放、		transaction.setCustomAnimations(R.animator.scalex_enter, R.animator.scalex_exit, R.animator.scalex_enter, R.animator.scalex_exit);
+         * 2    Y轴缩放、		transaction.setCustomAnimations(R.animator.scaley_enter, R.animator.scaley_exit, R.animator.scaley_enter, R.animator.scaley_exit);
+         * 3    XY轴绽放、		transaction.setCustomAnimations(R.animator.scalexy_enter, R.animator.scalexy_exit, R.animator.scalexy_enter, R.animator.scalexy_exit);
+         * 4    淡入淡出、		transaction.setCustomAnimations(android.R.animator.fade_in, android.R.animator.fade_out, android.R.animator.fade_in, android.R.animator.fade_out);
+         * 5    水平翻页、		transaction.setCustomAnimations(R.animator.card_flip_horizontal_right_in, R.animator.card_flip_horizontal_left_out, R.animator.card_flip_horizontal_left_in, R.animator.card_flip_horizontal_right_out);
+         * 6    垂直翻页、		transaction.setCustomAnimations(R.animator.card_flip_vertical_right_in, R.animator.card_flip_vertical_left_out, R.animator.card_flip_vertical_left_in, R.animator.card_flip_vertical_right_out);
+         * 7    垂直滑动、		transaction.setCustomAnimations(R.animator.slide_fragment_vertical_right_in, R.animator.slide_fragment_vertical_left_out, R.animator.slide_fragment_vertical_left_in, R.animator.slide_fragment_vertical_right_out);
+         * 8    水平滑动、		transaction.setCustomAnimations(R.animator.slide_fragment_horizontal_right_in, R.animator.slide_fragment_horizontal_left_out, R.animator.slide_fragment_horizontal_left_in, R.animator.slide_fragment_horizontal_right_out);
+         * 9    向上推的水平滑动、transaction.setCustomAnimations(R.animator.slide_fragment_horizontal_right_in, R.animator.slide_fragment_vertical_left_out, R.animator.slide_fragment_vertical_left_in, R.animator.slide_fragment_horizontal_right_out);
+         * 10   向左推的垂直滑动、transaction.setCustomAnimations(R.animator.slide_fragment_vertical_right_in, R.animator.slide_fragment_horizontal_left_out, R.animator.slide_fragment_horizontal_left_in, R.animator.slide_fragment_vertical_right_out);
+         * 11   交叉的滑动、		transaction.setCustomAnimations(R.animator.glide_fragment_horizontal_in, R.animator.glide_fragment_horizontal_out, R.animator.glide_fragment_horizontal_in, R.animator.glide_fragment_horizontal_out);
+         * 12   会隐藏的滑动、    特殊
+         * 13   弹出、			transaction.setCustomAnimations(R.animator.stack_right_in, R.animator.stack_left_out, R.animator.stack_left_in, R.animator.stack_right_out);
+         * 14   魔方、 			transaction.setCustomAnimations(R.animator.cube_right_in, R.animator.cube_left_out, R.animator.cube_left_in, R.animator.cube_right_out);
+         * 15   向下旋转、		transaction.setCustomAnimations(R.animator.rotatedown_right_in, R.animator.rotatedown_left_out, R.animator.rotatedown_left_in, R.animator.rotatedown_right_out);
+         * 16   向上旋转、		transaction.setCustomAnimations(R.animator.rotateup_right_in, R.animator.rotateup_left_out, R.animator.rotateup_left_in, R.animator.rotateup_right_out);
+         * 17   手风琴、			transaction.setCustomAnimations(R.animator.accordion_right_in, R.animator.accordion_left_out, R.animator.accordion_left_in, R.animator.accordion_right_out);
+         * 18   水平翻转、 		transaction.setCustomAnimations(R.animator.table_horizontal_right_in, R.animator.table_horizontal_left_out, R.animator.table_horizontal_left_int, R.animator.table_horizontal_right_out);
+         * 19   垂直翻转、		transaction.setCustomAnimations(R.animator.table_vertical_right_in, R.animator.table_vertical_left_out, R.animator.table_vertical_left_int, R.animator.table_vertical_right_out);
+         * 20   左角落放大、		transaction.setCustomAnimations(R.animator.zoom_from_left_corner_right_in, R.animator.zoom_from_left_corner_left_out, R.animator.zoom_from_left_corner_left_in, R.animator.zoom_from_left_corner_right_out);
+         * 21   右角落放大、		transaction.setCustomAnimations(R.animator.zoom_from_right_corner_right_in, R.animator.zoom_from_right_corner_left_out, R.animator.zoom_from_right_corner_left_in, R.animator.zoom_from_right_corner_right_out);
+         */
         /**
          * 切换特效
          *
          * @param transaction
          */
         private void cutEffects(FragmentTransaction transaction) {
-            if (cutEffectsIndex < 0) return;
+            if (cutEffectsIndex < -2) return;
             switch (cutEffectsIndex) {
+                case -1:
+                    //无动画
+                    transaction.setTransition(FragmentTransaction.TRANSIT_NONE);
+                    break;
                 case 0:
                     //Fragment内置的 淡入淡出
                     transaction.setTransition(FragmentTransaction.TRANSIT_FRAGMENT_FADE);
@@ -26566,9 +28535,17 @@ public class GT {
                     //垂直翻页
                     transaction.setCustomAnimations(R.animator.card_flip_vertical_right_in, R.animator.card_flip_vertical_left_out, R.animator.card_flip_vertical_left_in, R.animator.card_flip_vertical_right_out);
                     break;
+                case 7:
+                    //弹出
+                    transaction.setCustomAnimations(R.animator.stack_right_in, R.animator.stack_left_out, R.animator.stack_left_in, R.animator.stack_right_out);
+                    break;
+                case 8:
+                    //类似 Activity 入栈 出栈
+                    transaction.setCustomAnimations(R.animator.slide_right_in, R.animator.slide_left_out, R.animator.slide_left_in, R.animator.slide_right_out);
+                    break;
                 default:
                     //其它
-                    if (cutEffectsIndex == -1) {
+                    if (cutEffectsIndex == -2) {
                         transaction.setCustomAnimations(enter, exit, popEnter, popExit);//使用自定义的 Fragment 切换特效
                     }
                     break;
@@ -27150,7 +29127,7 @@ public class GT {
          * @return
          */
         public GT_Fragment startFragmentHome(Object fragmentObj, int... resLayouts) {
-            switchingMode(GT.GT_Fragment.DIALOG);
+            switchingMode(GT_Fragment.DIALOG);
             startMode(MODE_HOME);//设置本次 Fragment 的启动模式
             int resLayout = homeFragmentId;
 
@@ -27161,8 +29138,8 @@ public class GT {
             //启动 Fragment
             startFragment(fragmentObj, resLayout);
 
-            startMode(GT.GT_Fragment.MODE_SINGLE_TOP);
-            switchingMode(GT.GT_Fragment.ACTIVITY);
+            startMode(GT_Fragment.MODE_SINGLE_TOP);
+            switchingMode(GT_Fragment.ACTIVITY);
             return this;
         }
 
@@ -27199,31 +29176,7 @@ public class GT {
             });
         }
 
-        /**
-         * 监听 Fragment 返回键
-         *
-         * @param view          Fragment 的 View
-         * @param onKeyListener new  一个内部类
-         *                      注意使用正确实例：
-         *                      <p>
-         *                      private long exitTime = 0;
-         *                      //按两下返回键 弹出退出提示
-         *                      private void onKeyDown(){
-         *                      gt_fragment.onKeyDown(getView(), new View.OnKeyListener() {
-         * @Override public boolean onKey(View view, int keyCode, KeyEvent keyEvent) {
-         * if(keyCode == 4 && keyEvent.getAction() == KeyEvent.ACTION_DOWN){
-         * if((System.currentTimeMillis()-exitTime) > 2000){
-         * exitTime = System.currentTimeMillis();
-         * }else{
-         * GT.toast_s("退出");
-         * }
-         * return true;//只将 返回按键进行监听
-         * }
-         * return false;//其余的如 音量小 音量大什么的，交给 Activity 管理
-         * }
-         * });
-         * }
-         */
+
         public static void onKeyDown(View view, View.OnKeyListener onKeyListener) {
             if (view == null || onKeyListener == null) return;
 
@@ -27268,7 +29221,7 @@ public class GT {
             try {
                 if (fragmentManager != null) {
                     for (Fragment stackFragment : getStackFragments()) {
-                        fragmentManager.popBackStack(name,flags);//将加入退回栈的最顶层 Fragment 进行退栈操作
+                        fragmentManager.popBackStack(name, flags);//将加入退回栈的最顶层 Fragment 进行退栈操作
                     }
                 }
             } catch (Exception e) {
@@ -27282,7 +29235,7 @@ public class GT {
 
         //退出所有 Fragment
         public GT_Fragment finishs(Object fragmentObj) {
-            if(fragmentObj == null) return this;
+            if (fragmentObj == null) return this;
             try {
                 if (fragmentManager != null) {
 
@@ -27650,7 +29603,7 @@ public class GT {
         /**
          * 封装第一代 Fragment
          */
-        public abstract static class BaseFragment extends Fragment implements GT.Frame.ViewModelFeedback {
+        public abstract static class BaseFragment extends Fragment implements Frame.ViewModelFeedback {
 
             /**
              * 设置首页模式(推荐)
@@ -27670,7 +29623,41 @@ public class GT {
 
             }
 
-            private Fragment fragment;
+            //是否缓存开启数据
+            protected boolean isCacheData() {
+                return false;
+            }
+
+            private String cacheKey;
+
+            protected void putCache(String key, Object obj) {
+                if (key == null) {
+                    key = activity.getPackageName() + getClass().getName();
+                }
+                GT_Cache.putCacheData(key, obj);
+            }
+
+            protected <T> T getCache(String key, Class<T> classz) {
+                if (key == null) {
+                    key = activity.getPackageName() + getClass().getName();
+                }
+                return GT_Cache.getCacheData(key, classz);
+            }
+
+            protected void putCacheMap(Map<String, Object> map) {
+                GT_Cache.putCacheMap(map);
+            }
+
+            //简单缓存 存储 与 获取
+            @Override
+            public void getCache(String json) {
+
+            }
+
+            @Override
+            public String putCache() {
+                return null;
+            }
 
             protected boolean isRecoverBundle() {
                 return false;
@@ -27692,6 +29679,11 @@ public class GT {
                     activity = GT_Fragment.gt_fragment.getActivity();
                 }
 
+                //初始化 本地页面缓存
+                if (isCacheData()) {
+                    GT_Cache.initCache(activity);
+                    cacheKey = activity.getPackageName() + getClass().getName();
+                }
             }
 
             /**
@@ -27779,6 +29771,170 @@ public class GT {
 
                 }
                 return t;
+            }
+
+            protected GT_Fragment gt_fragment;
+
+            public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+                View view = inflater.inflate(loadLayout(), container, false);
+                createView(view);
+                return view;
+            }
+
+            /**
+             * 主要实现的功能 当页面可见的时候，才加载当前页面数据。 没有打开的页面，就不会预加载
+             */
+            public void loadData() {
+            }
+
+            //是否解决EditText bug
+            private boolean isSolveEditTextBug = false;
+
+            public boolean isSolveEditTextBug() {
+                return isSolveEditTextBug;
+            }
+
+            /**
+             * 设置是否解决EditText bug
+             *
+             * @param solveEditTextBug
+             */
+            public void setSolveEditTextBug(boolean solveEditTextBug) {
+                isSolveEditTextBug = solveEditTextBug;
+            }
+
+            @Override
+            public void onViewCreated(View view, @Nullable Bundle savedInstanceState) {
+                super.onViewCreated(view, savedInstanceState);
+                view.setOnClickListener(null);//防止点击穿透
+                //如果没有设置背景，那就设置默认背景
+                Drawable background = view.getBackground();
+                if (background == null) {
+                    view.setBackgroundColor(Color.parseColor("#F7F7F7"));
+                }
+
+                if (this.gt_fragment == null) {
+                    this.gt_fragment = GT_Fragment.gt_fragment;
+                }
+
+                initView(view, savedInstanceState);// 主要方法
+                getCache(GT_Cache.getCacheData(cacheKey, String.class));//获取缓存数据
+                loadData();
+
+                if (!(activity instanceof GT_Activity.BaseActivity)) {
+                    isSolveEditTextBug = true;
+                    // 如果切换方式是 Fragment 那就注册返回事件 如果是 Activity 请自行去注册 返回按钮事件
+                    //有用但不可靠的 监听返回键方式，推荐使用继承 GT_Activity 的方式来解决，GT_Activity内部 已封装好
+                    GT_Fragment.onKeyDown(view, new View.OnKeyListener() {
+                        @Override
+                        public boolean onKey(View v, int keyCode, KeyEvent event) {
+                            if (event == null) return false;
+                            if (event.getAction() == KeyEvent.ACTION_UP && keyCode == KeyEvent.KEYCODE_BACK) {
+                                return onBackPressed();//3 回调按下返回键
+                            }
+                            return false;
+                        }
+                    });
+                }
+
+                //是否解决EditText bug
+                if (isSolveEditTextBug) {
+                    //给EditText 组件设置返回事件
+                    Thread.getInstance(0).execute(new Runnable() {
+                        @Override
+                        public void run() {
+                            setViewBackListener(view);
+                            setEditTextRequestFocus(view);
+                        }
+                    });
+                }
+            }
+
+
+            /**
+             * 给EditText 组件设置返回事件
+             *
+             * @param viewGroup
+             */
+            protected void setViewBackListener(View viewLayout) {
+
+                ViewGroup viewGroup = null;
+
+                //如果是Edit类型的那就监听返回事件
+                if (viewLayout instanceof EditText) {
+
+                    if (activity != null) {
+                        Thread.runAndroid(activity, new Runnable() {
+                            @Override
+                            public void run() {
+                                GT_Fragment.onKeyDown(viewLayout, new View.OnKeyListener() {
+                                    @Override
+                                    public boolean onKey(View v, int keyCode, KeyEvent event) {
+                                        if (event == null) return false;
+                                        if (event.getAction() == KeyEvent.ACTION_UP && keyCode == KeyEvent.KEYCODE_BACK) {
+                                            return onBackPressed();//4 回调按下返回键
+                                        }
+                                        return false;
+                                    }
+                                });
+                            }
+                        });
+                    }
+                    return;
+                } else if (viewLayout instanceof ViewGroup) {
+
+                    try {
+                        viewGroup = (ViewGroup) viewLayout;
+                    } catch (Exception e) {
+//                        logs("异常返回 viewGroup:" + viewGroup.getClass());
+                        return;
+                    }
+
+                    int childCount = viewGroup.getChildCount();
+                    if (childCount == 0) return;
+
+                    for (int i = 0; i < childCount; i++) {
+                        View childAt = viewGroup.getChildAt(i);
+                        setViewBackListener(childAt);
+                    }
+                }
+
+            }
+
+            /**
+             * 设置最顶端的EditText为获取焦点
+             *
+             * @param viewLayout
+             */
+            protected boolean setEditTextRequestFocus(View viewLayout) {
+                ViewGroup viewGroup = null;
+                //如果是Edit类型的那就监听返回事件
+                if (viewLayout instanceof EditText) {
+                    if (activity != null) {
+                        Thread.runAndroid(activity, new Runnable() {
+                            @Override
+                            public void run() {
+                                viewLayout.requestFocus();
+                            }
+                        });
+                    }
+                    return true;
+                } else if (viewLayout instanceof ViewGroup) {
+                    try {
+                        viewGroup = (ViewGroup) viewLayout;
+                    } catch (Exception e) {
+                        return false;
+                    }
+                    int childCount = viewGroup.getChildCount();
+                    if (childCount == 0) return false;
+                    for (int i = 0; i < childCount; i++) {
+                        View childAt = viewGroup.getChildAt(i);
+                        if (setEditTextRequestFocus(childAt)) {
+                            return true;
+                        }
+                    }
+                }
+                return false;
             }
 
             //退出所有 Fragment
@@ -27956,167 +30112,6 @@ public class GT {
                 }
             }
 
-            protected GT_Fragment gt_fragment;
-
-            public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
-                View view = inflater.inflate(loadLayout(), container, false);
-                createView(view);
-                return view;
-            }
-
-            /**
-             * 主要实现的功能 当页面可见的时候，才加载当前页面数据。 没有打开的页面，就不会预加载
-             */
-            public void loadData() {
-            }
-
-            //是否解决EditText bug
-            private boolean isSolveEditTextBug = true;
-
-            public boolean isSolveEditTextBug() {
-                return isSolveEditTextBug;
-            }
-
-            /**
-             * 设置是否解决EditText bug
-             *
-             * @param solveEditTextBug
-             */
-            public void setSolveEditTextBug(boolean solveEditTextBug) {
-                isSolveEditTextBug = solveEditTextBug;
-            }
-
-            @Override
-            public void onViewCreated(View view, @Nullable Bundle savedInstanceState) {
-                super.onViewCreated(view, savedInstanceState);
-                this.fragment = this;
-                view.setOnClickListener(null);//防止点击穿透
-                //如果没有设置背景，那就设置默认背景
-                Drawable background = view.getBackground();
-                if (background == null) {
-                    view.setBackgroundColor(Color.parseColor("#F7F7F7"));
-                }
-
-                if (this.gt_fragment == null) {
-                    this.gt_fragment = GT_Fragment.gt_fragment;
-                }
-
-                initView(view, savedInstanceState);// 主要方法
-                loadData();
-
-                if (!(activity instanceof GT_Activity.BaseActivity)) {
-                    // 如果切换方式是 Fragment 那就注册返回事件 如果是 Activity 请自行去注册 返回按钮事件
-                    //有用但不可靠的 监听返回键方式，推荐使用继承 GT_Activity 的方式来解决，GT_Activity内部 已封装好
-                    GT_Fragment.onKeyDown(view, new View.OnKeyListener() {
-                        @Override
-                        public boolean onKey(View v, int keyCode, KeyEvent event) {
-                            if (event.getAction() == KeyEvent.ACTION_UP && keyCode == KeyEvent.KEYCODE_BACK) {
-                                return onBackPressed();// 回调按下返回键
-                            }
-                            return false;
-                        }
-                    });
-                }
-
-                //是否解决EditText bug
-                if (isSolveEditTextBug) {
-                    //给EditText 组件设置返回事件
-                    GT.Thread.getInstance(0).execute(new Runnable() {
-                        @Override
-                        public void run() {
-                            setViewBackListener(view);
-                            setEditTextRequestFocus(view);
-                        }
-                    });
-                }
-
-            }
-
-
-            /**
-             * 给EditText 组件设置返回事件
-             *
-             * @param viewGroup
-             */
-            protected void setViewBackListener(View viewLayout) {
-
-                ViewGroup viewGroup = null;
-
-                //如果是Edit类型的那就监听返回事件
-                if (viewLayout instanceof EditText) {
-
-                    if (activity != null) {
-                        Thread.runAndroid(activity, new Runnable() {
-                            @Override
-                            public void run() {
-                                GT_Fragment.onKeyDown(viewLayout, new View.OnKeyListener() {
-                                    @Override
-                                    public boolean onKey(View v, int keyCode, KeyEvent event) {
-                                        if (event.getAction() == KeyEvent.ACTION_UP && keyCode == KeyEvent.KEYCODE_BACK) {
-                                            return onBackPressed();// 回调按下返回键3
-                                        }
-                                        return false;
-                                    }
-                                });
-                            }
-                        });
-                    }
-                    return;
-                } else if (viewLayout instanceof ViewGroup) {
-
-                    try {
-                        viewGroup = (ViewGroup) viewLayout;
-                    } catch (Exception e) {
-//                        logs("异常返回 viewGroup:" + viewGroup.getClass());
-                        return;
-                    }
-
-                    int childCount = viewGroup.getChildCount();
-                    if (childCount == 0) return;
-
-                    for (int i = 0; i < childCount; i++) {
-                        View childAt = viewGroup.getChildAt(i);
-                        setViewBackListener(childAt);
-                    }
-                }
-
-            }
-
-            /**
-             * 设置最顶端的EditText为获取焦点
-             *
-             * @param viewLayout
-             */
-            protected boolean setEditTextRequestFocus(View viewLayout) {
-                ViewGroup viewGroup = null;
-                //如果是Edit类型的那就监听返回事件
-                if (viewLayout instanceof EditText) {
-                    if (activity != null) {
-                        Thread.runAndroid(activity, new Runnable() {
-                            @Override
-                            public void run() {
-                                viewLayout.requestFocus();
-                            }
-                        });
-                    }
-                    return true;
-                } else if (viewLayout instanceof ViewGroup) {
-                    try {
-                        viewGroup = (ViewGroup) viewLayout;
-                    } catch (Exception e) {
-                        return false;
-                    }
-                    int childCount = viewGroup.getChildCount();
-                    if (childCount == 0) return false;
-                    for (int i = 0; i < childCount; i++) {
-                        View childAt = viewGroup.getChildAt(i);
-                        if (setEditTextRequestFocus(childAt)) {
-                            return true;
-                        }
-                    }
-                }
-                return false;
-            }
 
             /**
              * 返回 true 则劫持返回事件
@@ -28144,6 +30139,14 @@ public class GT {
 
             }
 
+            @Override
+            public void onDestroy() {
+                super.onDestroy();
+                Object bean = putCache();
+                if (bean != null) {
+                    GT_Cache.putCacheData(activity.getPackageName() + getClass().getName(), bean);
+                }
+            }
         }
 
         /**
@@ -28186,14 +30189,14 @@ public class GT {
                 Runtime.getRuntime().gc();
                 EventBus.getDefault().unregister(this);//取消订阅者
 
-                if(popBackStackError.contains(this.toString())){
+                if (popBackStackError.contains(this.toString())) {
                     popBackStackError.remove(this.toString());
                     return;
                 }
                 List<Fragment> stackFragments = gt_fragment.getStackFragments();
                 Collections.reverse(stackFragments);
-                for(Fragment fragment : stackFragments){
-                    if(fragment.isVisible()){
+                for (Fragment fragment : stackFragments) {
+                    if (fragment.isVisible()) {
                         stackTopFragmentName = fragment.getClass().getName();
                         stackTopHashCode = fragment.toString();
                         break;
@@ -28457,7 +30460,7 @@ public class GT {
                 progressDialog.setCancelable(isCancelable);
                 progressDialog.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
 
-                GT.Thread.getInstance(0).execute(new Runnable() {
+                Thread.getInstance(0).execute(new Runnable() {
                     @Override
                     public void run() {
                         boolean isStart = false;        //是否开始加载
@@ -28721,7 +30724,7 @@ public class GT {
         /**
          * 用于辅助 DialogFragment
          */
-        public abstract static class BaseDialogFragment extends DialogFragment implements GT.Frame.ViewModelFeedback {
+        public abstract static class BaseDialogFragment extends DialogFragment implements Frame.ViewModelFeedback {
 
             @Override
             public void onViewModeFeedback(Object... obj) {
@@ -28748,6 +30751,10 @@ public class GT {
             public Window window;
             public Dialog dialog;
 
+            //是否缓存开启数据
+            protected boolean isCacheData() {
+                return false;
+            }
 
             @Override
             public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -28766,7 +30773,7 @@ public class GT {
                 if (window == null) return;
                 //设置充满宽高
                 WindowManager.LayoutParams attributes = window.getAttributes();
-                attributes.gravity = setGravity();
+                attributes.gravity = getGravity();
                 window.setAttributes(attributes);
                 window.setLayout(setWidth(), setHeight());
                 window.setWindowAnimations(setWindowAnimations());//设置打开和关闭动画
@@ -28789,14 +30796,37 @@ public class GT {
 
 
             //设置对话框 显示位置
-            protected int setGravity() {
+            protected int getGravity() {
                 return Gravity.CENTER;
             }
+
+            //设置对话框 显示位置
+            protected int setGravity(int gravity) {
+                return gravity;
+            }
+
+            private String cacheKey;
 
             @Override
             public void onAttach(Context context) {
                 super.onAttach(context);
                 activity = (Activity) context;
+                //初始化 本地页面缓存
+                if (isCacheData()) {
+                    GT_Cache.initCache(activity);
+                    cacheKey = activity.getPackageName() + getClass().getName();
+                }
+            }
+
+            //简单缓存 存储 与 获取
+            @Override
+            public void getCache(String json) {
+
+            }
+
+            @Override
+            public String putCache() {
+                return null;
             }
 
             /**
@@ -29100,7 +31130,7 @@ public class GT {
 
 
             public GT_Fragment startFragment(Object fragmentObj, int... resLayouts) {
-                return GT_Fragment.gt_fragment.startFragment(fragmentObj,resLayouts);
+                return GT_Fragment.gt_fragment.startFragment(fragmentObj, resLayouts);
             }
 
             public GT_Fragment startFragmentHome(Object fragmentObj, int... resLayouts) {
@@ -29174,6 +31204,24 @@ public class GT {
                 isSolveEditTextBug = solveEditTextBug;
             }
 
+            protected void putCache(String key, Object obj) {
+                if (key == null) {
+                    key = activity.getPackageName() + getClass().getName();
+                }
+                GT_Cache.putCacheData(key, obj);
+            }
+
+            protected <T> T getCache(String key, Class<T> classz) {
+                if (key == null) {
+                    key = activity.getPackageName() + getClass().getName();
+                }
+                return GT_Cache.getCacheData(key, classz);
+            }
+
+            protected void putCacheMap(Map<String, Object> map) {
+                GT_Cache.putCacheMap(map);
+            }
+
             @Override
             public void onViewCreated(View view, @Nullable Bundle savedInstanceState) {
                 super.onViewCreated(view, savedInstanceState);
@@ -29183,6 +31231,7 @@ public class GT {
                 if (window == null) return;
 
                 initView(view, savedInstanceState);// 主要方法
+                getCache(GT_Cache.getCacheData(cacheKey, String.class));//获取缓存数据
                 loadData();
                 // 监听单击返回键无效
 
@@ -29201,7 +31250,7 @@ public class GT {
                 //是否解决 EditText bug
                 if (isSolveEditTextBug) {
                     //给EditText 组件设置返回事件
-                    GT.Thread.getInstance(0).execute(new Runnable() {
+                    Thread.getInstance(0).execute(new Runnable() {
                         @Override
                         public void run() {
                             setViewBackListener(view);
@@ -29229,6 +31278,7 @@ public class GT {
                                 GT_Fragment.onKeyDown(viewLayout, new View.OnKeyListener() {
                                     @Override
                                     public boolean onKey(View v, int keyCode, KeyEvent event) {
+                                        if (event == null) return false;
                                         if (event.getAction() == KeyEvent.ACTION_UP && keyCode == KeyEvent.KEYCODE_BACK) {
                                             return onBackPressed();// 回调按下返回键
                                         }
@@ -29306,6 +31356,10 @@ public class GT {
             @Override
             public void onDestroy() {
                 super.onDestroy();
+                Object bean = putCache();
+                if (bean != null) {
+                    GT_Cache.putCacheData(cacheKey, bean);
+                }
                 Runtime.getRuntime().gc();
             }
 
@@ -29775,6 +31829,9 @@ public class GT {
                 width = windowManager.getDefaultDisplay().getWidth();
             }
 
+            private int measuredWidth = 0;
+            private int measuredHeight = 0;
+
             @Override
             public void onBindViewHolder(@NonNull K holder, int position) {
                 T t = beanList.get(position);
@@ -29786,12 +31843,18 @@ public class GT {
 
                 //瀑布流
                 if (holder != null && holder.itemView != null && isFalls) {
-                    ViewGroup.LayoutParams layoutParams = holder.itemView.getLayoutParams();
-                    layoutParams.width = width / 2;
-                    if (random == -1) {
-                        random = (int) (200 + Math.random() * 400);
+
+                    if (measuredHeight == 0) {
+                        int width = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
+                        int height = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
+                        holder.itemView.measure(width, height);
+                        measuredWidth = holder.itemView.getMeasuredWidth();// 获取宽度
+                        measuredHeight = holder.itemView.getMeasuredHeight();// 获取高度
                     }
-                    layoutParams.height = random;
+
+                    ViewGroup.LayoutParams layoutParams = holder.itemView.getLayoutParams();
+                    int height2 = GT.GT_Random.getInt(random / 8, random);
+                    layoutParams.height = measuredHeight + height2;
                     holder.itemView.setLayoutParams(layoutParams);
                 }
             }
@@ -29971,7 +32034,7 @@ public class GT {
         /**
          * 悬浮窗基类
          */
-        public abstract static class BaseFloatingWindow extends Service implements GT.Frame.ViewModelFeedback {
+        public abstract static class BaseFloatingWindow extends Service implements Frame.ViewModelFeedback, LifecycleOwner {
 
             @Override
             public void onViewModeFeedback(Object... obj) {
@@ -29984,6 +32047,15 @@ public class GT {
                 return new ViewModelStore();
             }
 
+            //使用观察者模式
+            private LifecycleRegistry mLifecycleRegistry;
+
+            @Override
+            public Lifecycle getLifecycle() {
+                //利用监听者模式，实时监听 Lifecycle 状态
+                return mLifecycleRegistry;
+            }
+
             public Context context;                           //上下活动
             private WindowManager windowManager;
             private WindowManager.LayoutParams layoutParams;
@@ -29994,7 +32066,7 @@ public class GT {
             protected Timer timer;                               //定时器来检测是否绑定APP
             private boolean isDrag = false;                      //是否可拖动
             private static boolean isShow = true;                //是否显示
-
+            private String cacheKey;//缓存标识
             private static int type_screenType = -1079;          //创建屏幕的类型,默认是使用用户设置的Xml宽高
             private final static int type_self_adaption = -1;    //自适应
             private final static int type_portraitScreen = 0;    //竖屏
@@ -30003,6 +32075,11 @@ public class GT {
             private final static int type_fullScreen = 3;        //自适应全屏
 
             private static double screenSizeCoefficient = 1.8;     //屏幕大小系数,系数越大，创建屏幕越小 注意：该系数不能 <= 0
+
+            //是否缓存开启数据
+            protected boolean isCacheData() {
+                return false;
+            }
 
             public View findViewById(int id) {
                 if (view == null) return null;
@@ -30161,14 +32238,49 @@ public class GT {
 
             protected void show() {
                 if (view != null) {
+                    if (mLifecycleRegistry != null) {
+                        mLifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME);
+                    }
                     view.setVisibility(View.VISIBLE);
                 }
             }
 
             protected void hide() {
                 if (view != null) {
+                    if (mLifecycleRegistry != null) {
+                        mLifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE);
+                    }
                     view.setVisibility(View.GONE);
                 }
+            }
+
+            //简单缓存 存储 与 获取
+            @Override
+            public void getCache(String json) {
+
+            }
+
+            @Override
+            public String putCache() {
+                return null;
+            }
+
+            protected void putCache(String key, Object obj) {
+                if (key == null) {
+                    key = context.getPackageName() + getClass().getName();
+                }
+                GT_Cache.putCacheData(key, obj);
+            }
+
+            protected <T> T getCache(String key, Class<T> classz) {
+                if (key == null) {
+                    key = context.getPackageName() + getClass().getName();
+                }
+                return GT_Cache.getCacheData(key, classz);
+            }
+
+            protected void putCacheMap(Map<String, Object> map) {
+                GT_Cache.putCacheMap(map);
             }
 
             @Override
@@ -30198,8 +32310,32 @@ public class GT {
 
                 setScreenSize();//智能设置屏幕大小。
 
+                //设置监听者
+                if (Build.VERSION.SDK_INT >= 19 && mLifecycleRegistry == null) {
+                    mLifecycleRegistry = new LifecycleRegistry(this);
+                    mLifecycleRegistry.addObserver(new LifecycleEventObserver() {
+                        @Override
+                        public void onStateChanged(@NonNull LifecycleOwner source, @NonNull Lifecycle.Event event) {
+                            if (event == Lifecycle.Event.ON_STOP) {
+                                if (view != null) {
+                                    view.cancelPendingInputEvents();
+                                }
+                            }
+                        }
+                    });
+                    mLifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE);//创建标识
+                    mLifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START);
+                }
+
+                //初始化 本地页面缓存
+                if (isCacheData()) {
+                    GT_Cache.initCache(context);
+                    cacheKey = context.getPackageName() + getClass().getName();
+                }
+
                 //初始化View
                 initView(view);
+                getCache(GT_Cache.getCacheData(cacheKey, String.class));//获取缓存数据
                 windowManager.addView(view, layoutParams);
 
             }
@@ -30329,7 +32465,7 @@ public class GT {
             }
 
             /**
-             * 设置绝对位置
+             * 设置悬浮窗的绝对位置
              *
              * @param x
              * @param y
@@ -30393,6 +32529,7 @@ public class GT {
              */
             public void startFloatingWindow(Context context, Class<?> toFragment) {
                 startService(new Intent(context, toFragment));
+
             }
 
             /**
@@ -30412,6 +32549,13 @@ public class GT {
              * 退出当前 悬浮窗 并传递数据
              */
             public void finish() {
+
+                if (mLifecycleRegistry != null) {
+                    mLifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP);
+                    mLifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY);
+                    mLifecycleRegistry = null;
+                }
+
                 if (windowManager != null) {
                     windowManager.removeView(view);
                     windowManager = null;
@@ -30452,6 +32596,10 @@ public class GT {
                 if (timer != null) {
                     timer.cancel();
                     timer = null;
+                }
+                Object bean = putCache();
+                if (bean != null) {
+                    GT_Cache.putCacheData(cacheKey, bean);
                 }
                 Runtime.getRuntime().gc();
             }
@@ -30527,15 +32675,6 @@ public class GT {
                 EventBus.getDefault().unregister(this);//取消订阅者
             }
 
-
-            /**
-             * 内容由 ViewModel 层去提供
-             *
-             * @param obj
-             */
-           /* public void onViewModeFeedback(Object... obj) {
-
-            }*/
         }
 
         /**
@@ -30558,7 +32697,7 @@ public class GT {
     public static class GT_PopupWindow implements SaveObject.SaveBean {
 
         //封装第一代 PopupWindow
-        public static abstract class BasePopupWindow implements GT.Frame.ViewModelFeedback {
+        public static abstract class BasePopupWindow implements Frame.ViewModelFeedback, LifecycleOwner {
 
             @Override
             public void onViewModeFeedback(Object... obj) {
@@ -30571,10 +32710,25 @@ public class GT {
                 return new ViewModelStore();
             }
 
+            //使用观察者模式
+            private LifecycleRegistry mLifecycleRegistry;
+
+            @Override
+            public Lifecycle getLifecycle() {
+                //利用监听者模式，实时监听 Lifecycle 状态
+                return mLifecycleRegistry;
+            }
+
             private PopupWindow popWindow;
             private View view;
             protected int layout;
             public Context context;
+            private String cacheKey;//缓存标识
+
+            //是否缓存开启数据
+            protected boolean isCacheData() {
+                return false;
+            }
 
             public View getView() {
                 return view;
@@ -30604,7 +32758,32 @@ public class GT {
                 this.context = context;
                 view = LayoutInflater.from(context).inflate(layout, null, false);
                 popWindow = new PopupWindow(view, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, true);
+
+                //设置监听者
+                if (Build.VERSION.SDK_INT >= 19 && mLifecycleRegistry == null) {
+                    mLifecycleRegistry = new LifecycleRegistry(this);
+                    mLifecycleRegistry.addObserver(new LifecycleEventObserver() {
+                        @Override
+                        public void onStateChanged(@NonNull LifecycleOwner source, @NonNull Lifecycle.Event event) {
+                            if (event == Lifecycle.Event.ON_STOP) {
+                                if (view != null) {
+                                    view.cancelPendingInputEvents();
+                                }
+                            }
+                        }
+                    });
+                    mLifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE);//创建标识
+                    mLifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START);
+                }
+
+                //初始化 本地页面缓存
+                if (isCacheData()) {
+                    GT_Cache.initCache(context);
+                    cacheKey = context.getPackageName() + getClass().getName();
+                }
+
                 initView(view, popWindow);
+                getCache(GT_Cache.getCacheData(cacheKey, String.class));//获取缓存数据
                 loadData(view, popWindow);
             }
 
@@ -30627,6 +32806,36 @@ public class GT {
             public void loadData(View view, PopupWindow popWindow) {
             }
 
+            //简单缓存 存储 与 获取
+            @Override
+            public void getCache(String json) {
+
+            }
+
+            @Override
+            public String putCache() {
+                return null;
+            }
+
+
+            protected void putCache(String key, Object obj) {
+                if (key == null) {
+                    key = context.getPackageName() + getClass().getName();
+                }
+                GT_Cache.putCacheData(key, obj);
+            }
+
+            protected <T> T getCache(String key, Class<T> classz) {
+                if (key == null) {
+                    key = context.getPackageName() + getClass().getName();
+                }
+                return GT_Cache.getCacheData(key, classz);
+            }
+
+            protected void putCacheMap(Map<String, Object> map) {
+                GT_Cache.putCacheMap(map);
+            }
+
             //按下其他地方是否销毁
             public boolean onBackPressed() {
                 return false;
@@ -30643,7 +32852,6 @@ public class GT {
              * @param xyga 最多四个参数: int xoff, int yoff, int gravity, int Animation
              */
             public void showBelow(View v, int... xyga) {
-
                 if (popWindow != null && !popWindow.isShowing()) {
                     //设置popupWindow显示的位置，参数依次是参照View，x轴的偏移量，y轴的偏移量
                     switch (xyga.length) {
@@ -30664,6 +32872,7 @@ public class GT {
                             popWindow.showAsDropDown(v);//显示
                             break;
                     }
+                    startData();
                 }
             }
 
@@ -30694,7 +32903,7 @@ public class GT {
                             popWindow.showAtLocation(v, 0, 0, 0);//显示
                             break;
                     }
-
+                    startData();
                 }
             }
 
@@ -30706,6 +32915,7 @@ public class GT {
              */
             public void startPopupWindowBelow(View v, int... xyga) {
                 showBelow(v, xyga);
+                startData();
             }
 
             /**
@@ -30716,15 +32926,39 @@ public class GT {
              */
             public void startPopupWindowAbsolute(View v, int... xyga) {
                 showAbsolute(v, xyga);
+                startData();
+            }
+
+            private void startData() {
+                if (mLifecycleRegistry != null) {
+                    mLifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME);
+                }
             }
 
             //销毁当前对象
             public void finish() {
+                onDestroy();
+            }
+
+            protected void onDestroy() {
+                if (mLifecycleRegistry != null) {
+                    mLifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE);
+                    mLifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP);
+                    mLifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY);
+                    mLifecycleRegistry = null;
+                }
+
                 if (popWindow != null && popWindow.isShowing()) {
                     popWindow.dismiss();
                     popWindow = null;
                     view = null;
                 }
+
+                Object bean = putCache();
+                if (bean != null) {
+                    GT_Cache.putCacheData(cacheKey, bean);
+                }
+
                 Runtime.getRuntime().gc();
             }
 
@@ -30762,15 +32996,6 @@ public class GT {
                 EventBus.getDefault().unregister(this);//取消订阅者
             }
 
-
-            /**
-             * 内容由 ViewModel 层去提供
-             *
-             * @param obj
-             */
-            /*public void onViewModeFeedback(Object... obj) {
-
-            }*/
         }
 
         /**
@@ -30803,11 +33028,20 @@ public class GT {
         /**
          * 封装第一代 View 实例View 有两种方法，2种构造方法
          */
-        public static abstract class BaseView implements GT.Frame.ViewModelFeedback {
+        public static abstract class BaseView implements Frame.ViewModelFeedback, LifecycleOwner {
 
             @Override
             public void onViewModeFeedback(Object... obj) {
 
+            }
+
+            //使用观察者模式
+            private LifecycleRegistry mLifecycleRegistry;
+
+            @Override
+            public Lifecycle getLifecycle() {
+                //利用监听者模式，实时监听 Lifecycle 状态
+                return mLifecycleRegistry;
             }
 
             @NonNull
@@ -30819,6 +33053,183 @@ public class GT {
             private View view;
             protected int layout;
             public Context context;
+            protected GT_Animation animation = GT_Animation.getDefault();
+
+            //默认显示隐藏动画
+            private int height;
+            private int addHeight;
+            private int width;
+            private int time = 500; //默认的动画时间
+            private View view_bg;
+            private View view_main;
+
+            private String cacheKey;//缓存标识
+
+            //是否缓存开启数据
+            protected boolean isCacheData() {
+                return false;
+            }
+
+            public void setTime(int time) {
+                this.time = time;
+            }
+
+
+            /**
+             * 设置隐藏背景
+             */
+            protected void setHideBackground(boolean isShow) {
+                view_bg.setVisibility(isShow ? View.VISIBLE : View.GONE);
+            }
+
+            /**
+             * 设置单击外部不隐藏对话框
+             */
+            protected void setClickExternalNoHideView(boolean isClickHide) {
+                view_bg.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View view) {
+                        if (isClickHide) {
+                            hide();
+                        }
+                    }
+                });
+
+            }
+
+            /**
+             * 设置 默认的 显示 隐藏动画
+             *
+             * @param view_bg   布局背景
+             * @param view_main 当前布局 View
+             */
+            public void loadAnimationView(View view_bg, View view_main) {
+                this.view_bg = view_bg;
+                this.view_main = view_main;
+                if (view_bg != null && view_main != null) {
+                    view_bg.setOnClickListener(new View.OnClickListener() {
+                        @Override
+                        public void onClick(View view) {
+                            hide();
+                        }
+                    });
+                    view_main.setOnClickListener(new View.OnClickListener() {
+                        @Override
+                        public void onClick(View view) {
+
+                        }
+                    });
+                }
+                hide();
+            }
+
+            public void setView_bg(View view_bg) {
+                this.view_bg = view_bg;
+            }
+
+            public void setView_main(View view_main) {
+                this.view_main = view_main;
+            }
+
+            //显示动画
+            public BaseView show() {
+                return show(0);
+            }
+
+            //显示动画
+            public BaseView show(int... addHeight) {
+
+                if (addHeight != null && addHeight.length != 0) {
+                    this.addHeight = addHeight[0];
+                }
+
+                if (mLifecycleRegistry != null) {
+                    mLifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME);
+                }
+                if (view_bg == null || view_main == null) return this;
+                height = view_bg.getHeight();
+                width = view_bg.getWidth();
+                if (height < width) {
+                    height = width;
+                }
+                animation.translateY_T(height, -this.addHeight, time, 0, false, view_main);
+                view_bg.setVisibility(View.VISIBLE);
+                Thread.getInstance(0).execute(() -> {
+                    for (float a = 0; a < 1; ) {
+                        if (view_bg == null) break;
+                        a += 0.01;
+                        Thread.sleep(1);
+                        float finalA = a;
+                        Thread.runAndroid(() -> {
+                            if (view_bg != null) {
+                                view_bg.setAlpha(finalA);
+                            }
+                        });
+                    }
+                });
+                return this;
+            }
+
+            /**
+             * 添加显示的高度，一般与弹出软键盘相关联
+             *
+             * @param addHeight
+             * @return
+             */
+            public BaseView addShowHeight(int addHeight) {
+
+                this.addHeight = addHeight;
+
+                if (mLifecycleRegistry != null) {
+                    mLifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME);
+                }
+                if (view_bg == null || view_main == null) return this;
+                height = view_bg.getHeight();
+                width = view_bg.getWidth();
+                if (height < width) {
+                    height = width;
+                }
+                animation.translateY_T(height, -addHeight, time, 0, false, view_main);
+                return this;
+            }
+
+            private boolean isNoe = true;
+
+            //隐藏动画
+            public BaseView hide() {
+                if (!isNoe) {
+                    if (mLifecycleRegistry != null) {
+                        mLifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE);
+                    }
+                }
+                isNoe = false;
+                if (view_bg == null || view_main == null) return this;
+                height = view_bg.getHeight();
+                width = view_bg.getWidth();
+                if (height == 0) {
+                    animation.translateY_T(0, 3000, 0, 0, false, view_main);
+                    view_bg.setAlpha(0);
+                    view_bg.setVisibility(View.INVISIBLE);
+                } else {
+                    animation.translateY_T(-addHeight, height, time, 0, false, view_main);
+                    Thread.getInstance(0).execute(() -> {
+                        for (float a = 1; a > 0; ) {
+                            a -= 0.01;
+                            Thread.sleep(1);
+                            float finalA = a;
+                            Thread.runAndroid(() -> {
+                                if (view_bg != null) {
+                                    view_bg.setAlpha(finalA);
+                                    view_bg.setVisibility(View.INVISIBLE);
+                                }
+                            });
+
+                        }
+                    });
+                }
+                return this;
+            }
+
 
             public View getView() {
                 return view;
@@ -30845,24 +33256,18 @@ public class GT {
             }
 
             public BaseView() {
-
             }
 
             public BaseView(Context context, ViewGroup viewGroup) {
-                if (viewGroup == null) return;
-                bingData();
-                this.context = context;
-
-                if (layout <= 0) {
-                    layout = loadLayout();
-                }
-                view = LayoutInflater.from(context).inflate(layout, null, false);
-                initView(view);
-                loadData(view);
-                viewGroup.addView(view);
+                init(context, viewGroup);
             }
 
             public BaseView(Context context) {
+                init(context, null);
+            }
+
+            private void init(Context context, ViewGroup viewGroup) {
+                if (context == null) return;
                 bingData();
                 this.context = context;
 
@@ -30870,24 +33275,134 @@ public class GT {
                     layout = loadLayout();
                 }
                 view = LayoutInflater.from(context).inflate(layout, null, false);
+
+                if (mLifecycleRegistry == null) {
+                    mLifecycleRegistry = new LifecycleRegistry(this);
+                }
+
+                if (mLifecycleRegistry != null && Build.VERSION.SDK_INT >= 19) {
+                    mLifecycleRegistry.addObserver(new LifecycleEventObserver() {
+                        @Override
+                        public void onStateChanged(@NonNull LifecycleOwner source, @NonNull Lifecycle.Event event) {
+                            if (event == Lifecycle.Event.ON_STOP) {
+                                if (view != null) {
+                                    view.cancelPendingInputEvents();
+                                }
+                            }
+                        }
+                    });
+                    mLifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE);//创建标识
+                    mLifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START);
+                }
+
+                //初始化 本地页面缓存
+                if (isCacheData()) {
+                    GT_Cache.initCache(context);
+                    cacheKey = context.getPackageName() + getClass().getName();
+                }
+
                 initView(view);
+                getCache(GT_Cache.getCacheData(cacheKey, String.class));//获取缓存数据
                 loadData(view);
+                if (viewGroup != null && viewGroup instanceof ViewGroup) {
+                    viewGroup.addView(view);
+                }
             }
 
             protected void initView(View view) {
-                view.setOnClickListener(new View.OnClickListener() {
+//                setViewBackListener(view);
+              /*  view.setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View v) {
 
                     }
-                });
+                });*/
+            }
+
+
+            /**
+             * 给EditText 组件设置返回事件
+             *
+             * @param viewGroup
+             */
+            protected void setViewBackListener(View viewLayout) {
+
+                ViewGroup viewGroup = null;
+
+                //如果是Edit类型的那就监听返回事件
+                if (viewLayout instanceof EditText) {
+                    if (context != null)
+                        Thread.runAndroid(new Runnable() {
+                            @Override
+                            public void run() {
+                                GT_Fragment.onKeyDown(viewLayout, new View.OnKeyListener() {
+                                    @Override
+                                    public boolean onKey(View v, int keyCode, KeyEvent event) {
+                                        if (event == null) return false;
+                                        if (event.getAction() == KeyEvent.ACTION_UP && keyCode == KeyEvent.KEYCODE_BACK) {
+                                            return onBackPressed();// 回调按下返回键
+                                        }
+                                        return false;
+                                    }
+                                });
+                            }
+                        });
+                    return;
+                } else if (viewLayout instanceof ViewGroup) {
+
+                    try {
+                        viewGroup = (ViewGroup) viewLayout;
+                    } catch (Exception e) {
+//                        logs("异常返回 viewGroup:" + viewGroup.getClass());
+                        return;
+                    }
+
+                    int childCount = viewGroup.getChildCount();
+                    if (childCount == 0) return;
+
+                    for (int i = 0; i < childCount; i++) {
+                        View childAt = viewGroup.getChildAt(i);
+                        setViewBackListener(childAt);
+                    }
+                }
+
             }
 
             public void loadData(View view) {
             }
 
+            //简单缓存 存储 与 获取
+            @Override
+            public void getCache(String json) {
+
+            }
+
+            @Override
+            public String putCache() {
+                return null;
+            }
+
+
+            protected void putCache(String key, Object obj) {
+                if (key == null) {
+                    key = context.getPackageName() + getClass().getName();
+                }
+                GT_Cache.putCacheData(key, obj);
+            }
+
+            protected <T> T getCache(String key, Class<T> classz) {
+                if (key == null) {
+                    key = context.getPackageName() + getClass().getName();
+                }
+                return GT_Cache.getCacheData(key, classz);
+            }
+
+            protected void putCacheMap(Map<String, Object> map) {
+                GT_Cache.putCacheMap(map);
+            }
+
             public Object startView(ViewGroup viewGroup) {
-                GT.Thread.runAndroid(new Runnable() {
+                Thread.runAndroid(new Runnable() {
                     @Override
                     public void run() {
                         viewGroup.addView(view);
@@ -30903,10 +33418,26 @@ public class GT {
 
             //销毁当前对象
             public void finish() {
+                hide();
+                onDestroy();
+            }
+
+            protected void onDestroy() {
                 try {
+                    if (mLifecycleRegistry != null) {
+                        mLifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP);
+                        mLifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY);
+                        mLifecycleRegistry = null;
+                    }
+
                     if (view != null) {
                         ((ViewGroup) view.getParent()).removeView(view);
                         view = null;
+                    }
+
+                    Object bean = putCache();
+                    if (bean != null) {
+                        GT_Cache.putCacheData(cacheKey, bean);
                     }
                     Runtime.getRuntime().gc();
                 } catch (Exception e) {
@@ -30951,6 +33482,7 @@ public class GT {
 
             @Override
             protected void initView(View view) {
+                super.initView(view);
                 GT.build(this);
                 EventBus.getDefault().register(this);//注册订阅者
             }
@@ -31024,7 +33556,7 @@ public class GT {
          * String code2 = "document.getElementById('button1').style.display = 'none';";
          * gtWebView.callJS(code2);
          */
-        public static abstract class BaseWebView extends WebView implements GT.Frame.ViewModelFeedback {
+        public static abstract class BaseWebView extends WebView implements Frame.ViewModelFeedback, LifecycleOwner {
 
             @Override
             public void onViewModeFeedback(Object... obj) {
@@ -31035,6 +33567,15 @@ public class GT {
             @Override
             public ViewModelStore getViewModelStore() {
                 return new ViewModelStore();
+            }
+
+            //使用观察者模式
+            private LifecycleRegistry mLifecycleRegistry;
+
+            @Override
+            public Lifecycle getLifecycle() {
+                //利用监听者模式，实时监听 Lifecycle 状态
+                return mLifecycleRegistry;
             }
 
             public Context context;
@@ -31048,48 +33589,82 @@ public class GT {
             protected String jsToAndroidName = "";//js调用Android 名称
             public WebSettings webSettings;
             public static WebView webView;
-            public GT.GT_WebView.PhotoView photoView;
+            public PhotoView photoView;
+            private String cacheKey;//缓存标识
+
+            //是否缓存开启数据
+            protected boolean isCacheData() {
+                return false;
+            }
 
             public BaseWebView(@NonNull Context context) {
                 super(context);
-                this.context = context;
-                webView = this;
-                initView(context, this);
-                loadData(context, this);
+                onCreateView(context);
             }
 
             public BaseWebView(@NonNull Context context, ViewGroup viewGroup) {
                 super(context);
+                onCreateView(context);
                 if (viewGroup == null) return;
-                this.context = context;
-                webView = this;
-                initView(context, this);
-                loadData(context, this);
                 viewGroup.addView(this);
             }
 
             public BaseWebView(@NonNull Context context, @Nullable AttributeSet attrs) {
                 super(context, attrs);
-                this.context = context;
-                webView = this;
-                initView(context, this);
-                loadData(context, this);
+                onCreateView(context);
             }
 
             public BaseWebView(@NonNull Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
                 super(context, attrs, defStyleAttr);
-                this.context = context;
-                webView = this;
-                initView(context, this);
-                loadData(context, this);
+                onCreateView(context);
             }
 
             public BaseWebView(@NonNull Context context, @Nullable AttributeSet attrs, int defStyleAttr, int defStyleRes) {
                 super(context, attrs, defStyleAttr, defStyleRes);
+                onCreateView(context);
+            }
+
+            protected void onCreateView(Context context) {
                 this.context = context;
+                //初始化 本地页面缓存
+                if (isCacheData()) {
+                    GT_Cache.initCache(context);
+                    cacheKey = context.getPackageName() + getClass().getName();
+                }
                 webView = this;
                 initView(context, this);
+                getCache(GT_Cache.getCacheData(cacheKey, String.class));//获取缓存数据
                 loadData(context, this);
+            }
+
+            //简单缓存 存储 与 获取
+            @Override
+            public void getCache(String json) {
+
+            }
+
+            @Override
+            public String putCache() {
+                return null;
+            }
+
+
+            protected void putCache(String key, Object obj) {
+                if (key == null) {
+                    key = context.getPackageName() + getClass().getName();
+                }
+                GT_Cache.putCacheData(key, obj);
+            }
+
+            protected <T> T getCache(String key, Class<T> classz) {
+                if (key == null) {
+                    key = context.getPackageName() + getClass().getName();
+                }
+                return GT_Cache.getCacheData(key, classz);
+            }
+
+            protected void putCacheMap(Map<String, Object> map) {
+                GT_Cache.putCacheMap(map);
             }
 
             public WebViewUtils.OnLoadWebViewListener getOnLoadWebViewListener() {
@@ -31156,6 +33731,23 @@ public class GT {
 
             protected void initView(Context context, WebView webView) {
 
+                //设置监听者
+                if (Build.VERSION.SDK_INT >= 19 && mLifecycleRegistry == null) {
+                    mLifecycleRegistry = new LifecycleRegistry(this);
+                    mLifecycleRegistry.addObserver(new LifecycleEventObserver() {
+                        @Override
+                        public void onStateChanged(@NonNull LifecycleOwner source, @NonNull Lifecycle.Event event) {
+                            if (event == Lifecycle.Event.ON_STOP) {
+                                if (webView != null) {
+                                    webView.cancelPendingInputEvents();
+                                }
+                            }
+                        }
+                    });
+                    mLifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE);//创建标识
+                    mLifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START);
+                }
+
                 // 特别注意：5.1以上默认禁止了https和http混用，以下方式是开启
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                     webView.getSettings().setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
@@ -31221,7 +33813,7 @@ public class GT {
                 }
 
                 //设置WebView强化功能
-                GT.WebViewUtils.setWebView(context, webView, isCache, isZoom, new DownloadListener() {
+                WebViewUtils.setWebView(context, webView, isCache, isZoom, new DownloadListener() {
                     @Override
                     public void onDownloadStart(String url, String userAgent, String contentDisposition, String mimetype, long contentLength) {
                         //设置 浏览器下载文件
@@ -31244,7 +33836,7 @@ public class GT {
                 public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
                     //设置 H5 调用原生 相册与拍照
                     if (photoView == null) {
-                        photoView = new GT.GT_WebView.PhotoView(context, (ViewGroup) webView.getParent());
+                        photoView = new PhotoView(context, (ViewGroup) webView.getParent());
                     }
                     valueCallback2 = filePathCallback;
                     String[] acceptTypes = fileChooserParams.getAcceptTypes();
@@ -31327,9 +33919,6 @@ public class GT {
                     loadProgress(progress);
                     if (progress >= 100) {
                         isResume = true;
-                        if (photoView == null) {
-                            photoView = new GT.GT_WebView.PhotoView(context, (ViewGroup) webView.getParent());
-                        }
                         onStart();
                     }
                 }
@@ -31402,7 +33991,7 @@ public class GT {
                     uri = intent.getData();
                 } else if (data instanceof Bitmap) {
                     Bitmap bitmap = (Bitmap) data;
-                    uri = GT.ImageViewTools.bitmapToUri(context, bitmap);
+                    uri = ImageViewTools.bitmapToUri(context, bitmap);
                 } else if (data instanceof Uri) {
                     uri = (Uri) data;
                 }
@@ -31497,19 +34086,27 @@ public class GT {
 
             //销毁前 或 app应用在后台时调用
             public void onStop() {
-
+                if (mLifecycleRegistry != null) {
+                    mLifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP);
+                }
             }
 
             @Override
             public void onResume() {
                 super.onResume();
                 isResume = true;
+                if (mLifecycleRegistry != null) {
+                    mLifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME);
+                }
             }
 
             @Override
             public void onPause() {
                 super.onPause();
                 isResume = false;
+                if (mLifecycleRegistry != null) {
+                    mLifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE);
+                }
             }
 
             public void startWebView(ViewGroup viewGroup) {
@@ -31694,7 +34291,9 @@ public class GT {
                     //先销毁 WebView
                     loadDataWithBaseURL(null, "", "text/html", "utf-8", null);
                     clearHistory();//清空缓存
-                    ((ViewGroup) getParent()).removeView(this);//重父类将WebView移除
+                    ViewGroup parent = (ViewGroup) getParent();
+                    parent.removeView(this);//重父类将WebView移除
+                    parent = null;
                     destroy();//销毁WebView
                     context = null;
                     if (photoView != null) {
@@ -31709,6 +34308,15 @@ public class GT {
 
             //已销毁了WebView
             public void onDestroy() {
+                if (mLifecycleRegistry != null) {
+                    mLifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP);
+                    mLifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY);
+                    mLifecycleRegistry = null;
+                }
+                Object bean = putCache();
+                if (bean != null) {
+                    GT_Cache.putCacheData(cacheKey, bean);
+                }
                 Runtime.getRuntime().gc();
             }
 
@@ -32235,7 +34843,7 @@ public class GT {
 
         /************************ Web拍摄相册工具类 ******************************/
 
-        public static class PhotoView extends GT.GT_View.AnnotationView implements View.OnClickListener {
+        public static class PhotoView extends GT_View.AnnotationView implements View.OnClickListener {
             private int height;
 
             private View ll_bottom1;
@@ -32283,10 +34891,10 @@ public class GT {
             @Override
             public void onClick(View view) {
                 if (view.getId() == R.id.tv_photo) {//拍摄
-                    GT.GTActivity.startActivity(context, GT.GTActivity.CODE_PHOTOGRAPH, feedbackMethodName);
+                    GTActivity.startActivity(context, GTActivity.CODE_PHOTOGRAPH, feedbackMethodName);
                     hide();
                 } else if (view.getId() == R.id.tv_img) {//从相册里选择
-                    GT.GTActivity.startActivity(context, GT.GTActivity.CODE_PHOTO, feedbackMethodName);
+                    GTActivity.startActivity(context, GTActivity.CODE_PHOTO, feedbackMethodName);
                     hide();
                 } else if (view.getId() == R.id.btn_cancel) {//取消
                     BaseWebView.valueCallback2.onReceiveValue(null);
@@ -32304,15 +34912,15 @@ public class GT {
                 }
                 height = view_bg.getHeight();
                 view_bg.setVisibility(View.VISIBLE);
-                GT.GT_Animation.getDefault().translateY_T(height, 0, 300, 0, false, ll_bottom1);
-                GT.GT_Animation.getDefault().translateY_T(height, 0, 300, 0, false, btn_cancel);
-                GT.Thread.getInstance(0).execute(() -> {
+                GT_Animation.getDefault().translateY_T(height, 0, 300, 0, false, ll_bottom1);
+                GT_Animation.getDefault().translateY_T(height, 0, 300, 0, false, btn_cancel);
+                Thread.getInstance(0).execute(() -> {
                     for (float a = 0; a < 1; ) {
                         if (view_bg == null) break;
                         a += 0.01;
-                        GT.Thread.sleep(1);
+                        Thread.sleep(1);
                         float finalA = a;
-                        GT.Thread.runAndroid(() -> {
+                        Thread.runAndroid(() -> {
                             if (view_bg != null) {
                                 view_bg.setAlpha(finalA);
                             }
@@ -32324,23 +34932,24 @@ public class GT {
             }
 
             //隐藏动画
-            private void hide() {
+            @Override
+            public GT_View.BaseView hide() {
                 isShow = false;
                 height = view_bg.getHeight();
                 if (height == 0) {
-                    GT.GT_Animation.getDefault().translateY_T(0, 3000, 1, 0, false, ll_bottom1);
-                    GT.GT_Animation.getDefault().translateY_T(0, 3000, 1, 0, false, btn_cancel);
+                    GT_Animation.getDefault().translateY_T(0, 3000, 1, 0, false, ll_bottom1);
+                    GT_Animation.getDefault().translateY_T(0, 3000, 1, 0, false, btn_cancel);
                     view_bg.setAlpha(0);
                     view_bg.setVisibility(View.INVISIBLE);
                 } else {
-                    GT.GT_Animation.getDefault().translateY_T(0, height, 300, 0, false, ll_bottom1);
-                    GT.GT_Animation.getDefault().translateY_T(0, height, 300, 0, false, btn_cancel);
-                    GT.Thread.getInstance(0).execute(() -> {
+                    GT_Animation.getDefault().translateY_T(0, height, 300, 0, false, ll_bottom1);
+                    GT_Animation.getDefault().translateY_T(0, height, 300, 0, false, btn_cancel);
+                    Thread.getInstance(0).execute(() -> {
                         for (float a = 1; a > 0; ) {
                             a -= 0.01;
-                            GT.Thread.sleep(1);
+                            Thread.sleep(1);
                             float finalA = a;
-                            GT.Thread.runAndroid(() -> {
+                            Thread.runAndroid(() -> {
                                 if (view_bg != null) {
                                     view_bg.setAlpha(finalA);
                                     view_bg.setVisibility(View.INVISIBLE);
@@ -32350,8 +34959,9 @@ public class GT {
                         }
                     });
                 }
-
+                return this;
             }
+
 
             @Override
             public void onViewModeFeedback(Object... obj) {
@@ -32373,7 +34983,11 @@ public class GT {
         private static String CHANEL_DESCRIPTION = "GT_Description";
         private static NotificationManagerCompat notificationManagerCompat;
         public static final String SEPARATOR = "_GT_";//分隔符
-        private static final Map<Integer, Object> map = new HashMap<>();
+        private static final Map<Integer, Object> map = new ArrayMap<>();
+
+        public static void close() {
+            map.clear();
+        }
 
         public static NotificationManagerCompat getNotificationManagerCompat(Context... contexts) {
             Context context = getActivity();
@@ -32396,7 +35010,7 @@ public class GT {
          *
          * @return
          */
-        public static abstract class BaseNotification implements SaveObject.SaveBean, GT.Frame.ViewModelFeedback {
+        public static abstract class BaseNotification implements SaveObject.SaveBean, Frame.ViewModelFeedback {
 
             @Override
             public void onViewModeFeedback(Object... obj) {
@@ -32416,9 +35030,9 @@ public class GT {
             public RemoteViews remoteViews2;
             private NotificationCompat.Builder builder;
             private boolean isShowFrontDesk = false;
-            public Map<Integer, PendingIntent> mapClick = new HashMap<>();//用于记录 单击事件
-            public Map<Integer, String> mapUIText = new HashMap<>();//用于记录 所有当前最新UI
-            public Map<Integer, Object> mapUIImage = new HashMap<>();//用于记录 所有当前最新UI
+            public Map<Integer, PendingIntent> mapClick = new ArrayMap<>();//用于记录 单击事件
+            public Map<Integer, String> mapUIText = new ArrayMap<>();//用于记录 所有当前最新UI
+            public Map<Integer, Object> mapUIImage = new ArrayMap<>();//用于记录 所有当前最新UI
             public NotificationManagerCompat notificationManagerCompat;//通知管理器
             //保存基础信息，用于更新UI
             private int icon;
@@ -32429,6 +35043,12 @@ public class GT {
             private Intent intent;
             private long time;
             public int NOTIFYID = 0x1079; //通知id
+            private String cacheKey;//缓存标识
+
+            //是否缓存开启数据
+            protected boolean isCacheData() {
+                return false;
+            }
 
             public Object getTag() {
                 return tag;
@@ -32478,6 +35098,36 @@ public class GT {
                 return null;
             }
 
+            //简单缓存 存储 与 获取
+            @Override
+            public void getCache(String json) {
+
+            }
+
+            @Override
+            public String putCache() {
+                return null;
+            }
+
+
+            protected void putCache(String key, Object obj) {
+                if (key == null) {
+                    key = context.getPackageName() + getClass().getName();
+                }
+                GT_Cache.putCacheData(key, obj);
+            }
+
+            protected <T> T getCache(String key, Class<T> classz) {
+                if (key == null) {
+                    key = context.getPackageName() + getClass().getName();
+                }
+                return GT_Cache.getCacheData(key, classz);
+            }
+
+            protected void putCacheMap(Map<String, Object> map) {
+                GT_Cache.putCacheMap(map);
+            }
+
             protected void bingData() {
             }
 
@@ -32490,7 +35140,13 @@ public class GT {
                 this.context = context;
                 builder = new NotificationCompat.Builder(context);
                 bingData();
+                //初始化 本地页面缓存
+                if (isCacheData()) {
+                    GT_Cache.initCache(context);
+                    cacheKey = context.getPackageName() + getClass().getName();
+                }
                 initView(context);
+                getCache(GT_Cache.getCacheData(cacheKey, String.class));//获取缓存数据
                 loadData(context);
             }
 
@@ -32628,7 +35284,7 @@ public class GT {
                 if (imageId < 0 || resource == null) return this;
                 this.imageId = imageId;
                 this.resource = resource;
-                GT.Thread.getInstance(0).execute(new Runnable() {
+                Thread.getInstance(0).execute(new Runnable() {
                     @Override
                     public void run() {
                         Bitmap bitmap = ImageViewTools.ObjectToBitmap(resource);
@@ -32656,19 +35312,32 @@ public class GT {
                 return this;
             }
 
-
             /**
+             * Android 13 后需要添加权限 <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
              * 提交刷新通知
              *
              * @param builders
              * @return
              */
             public BaseNotification commit(NotificationCompat.Builder... builders) {
+                commit(null, builders);
+                return this;
+            }
+
+            /**
+             * Android 13 后需要添加权限 <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+             * 自动检查权限，并提交刷新通知
+             *
+             * @param activity
+             * @param builders
+             * @return
+             */
+            public BaseNotification commit(FragmentActivity activity, NotificationCompat.Builder... builders) {
                 if (builders.length > 0) {
                     builder = builders[0];
                 }
                 if (resource != null) {
-                    GT.Observable.getDefault().execute(new Observable.RunJavaR<Bitmap>() {
+                    Observable.getDefault().execute(new Observable.RunJavaR<Bitmap>() {
                         @Override
                         public Bitmap run() {
                             return ImageViewTools.ObjectToBitmap(resource);
@@ -32728,7 +35397,11 @@ public class GT {
                         }
                     });
                 } else {
-                    GT_Notification.startNotification(builder, NOTIFYID); //最终发布更新通知栏
+                    if (activity != null) {
+                        GT_Notification.startNotification(activity, builder, NOTIFYID); //最终发布更新通知栏
+                    } else {
+                        GT_Notification.startNotification(builder, NOTIFYID); //最终发布更新通知栏
+                    }
                 }
                 return this;
             }
@@ -32754,8 +35427,15 @@ public class GT {
 
 
             protected void onDestroy() {
-                if (notificationManagerCompat != null)
+                if (notificationManagerCompat != null) {
                     notificationManagerCompat.cancel(NOTIFYID);//清除当前 id 为 NOTIFYID 的通知
+                }
+
+                Object bean = putCache();
+                if (bean != null) {
+                    GT_Cache.putCacheData(cacheKey, bean);
+                }
+
                 Runtime.getRuntime().gc();
             }
 
@@ -32987,7 +35667,7 @@ public class GT {
 
             //是否隐藏
             if (isHide && builder.getPriority() != NotificationCompat.PRIORITY_DEFAULT) {
-                GT.Thread.getInstance(0).execute(new Runnable() {
+                Thread.getInstance(0).execute(new Runnable() {
                     @Override
                     public void run() {
                         Thread.sleep(1000);
@@ -33288,6 +35968,7 @@ public class GT {
         }
 
         /**
+         * Android 13 后需要添加权限 <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
          * 启动通知
          *
          * @param builder   启动的通知
@@ -33301,6 +35982,37 @@ public class GT {
         }
 
         /**
+         * Android 13 后需要添加权限 <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+         * 自动检查权限并申请后，再启动通知
+         *
+         * @param activity  activity
+         * @param builder   启动的通知
+         * @param notifyids 通知 key 若不填默认是最近创建的通知 key
+         */
+        public static void startNotification(FragmentActivity activity, NotificationCompat.Builder builder, int... notifyids) {
+            if (activity != null) {
+                GT.AppAuthorityManagement.notification(activity, new OneListener<>() {
+                    @Override
+                    public void onOneListener(Boolean obj) {
+                        super.onOneListener(obj);
+                        if (obj) {
+                            if (notifyids.length > 0) {
+                                NOTIFYID = notifyids[0];
+                            }
+                            notificationManagerCompat.notify(NOTIFYID, builder.build());
+                        }
+                    }
+                });
+            } else {
+                if (notifyids.length > 0) {
+                    NOTIFYID = notifyids[0];
+                }
+                notificationManagerCompat.notify(NOTIFYID, builder.build());
+            }
+        }
+
+        /**
+         * Android 13 后需要添加权限 <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
          * 启动GT通知
          *
          * @param builder
@@ -33424,7 +36136,7 @@ public class GT {
         }
 
         //解析 xml 布局后的信息
-        private final static Map<String, ViewBean> viewBeanList = new HashMap<>();
+        private final static Map<String, ViewBean> viewBeanList = new ArrayMap<>();
 
         /**
          * 给 Activity 进行绑定的
@@ -33594,8 +36306,10 @@ public class GT {
                 }
 
             } catch (Exception e) {
-                GT.errt("thisObj:" + thisObj);
-                GT.errt("View 与 ViewMode 自动绑定失败，请手动绑定:" + e);
+                if (LOG.GT_LOG_TF) {
+                    GT.errt("thisObj:" + thisObj);
+                    GT.errt("View 与 ViewMode 自动绑定失败，请手动绑定:" + e);
+                }
             }
             return obj;
         }
@@ -34974,21 +37688,22 @@ public class GT {
             private int rightBottomRadius;
             private int leftBottomRadius;
             private Context context;
-            private boolean isOneInit;//是否第一次初始化
 
             //动态图
             private Resources resources;
             private Movie mMovie;
 
             private int dur = 0;
-            private int gifSpeed = 11;//动态图执行速度
+
+            private int gifSpeed = 16;//动态图执行速度
 
             private int mCurrentAnimationTime;//动态图当前显示第几帧
-            private int mCurrentAnimationTime2;//动态图当前显示第几帧
             private float ratioWidth;
             private float ratioHeight;
 
             private String url;
+            private Object resource2;
+
 
             private Object placeholder;//占位图
             private Object error;//加载异常图
@@ -34996,6 +37711,8 @@ public class GT {
             private boolean isCache = true;//是否缓存（推荐打开缓存）
 
             private Paint paint;
+
+            private ExecutorService instance;
 
             //获取 GIF运行速度
             public int getGifSpeed() {
@@ -35020,6 +37737,7 @@ public class GT {
             }
 
             private boolean isRun = true;
+            private static String savePath;
 
             //启动/恢复Gif动画
             public void start() {
@@ -35130,6 +37848,10 @@ public class GT {
             }
 
             private void init(Context context, AttributeSet attrs) {
+                if (instance == null) {
+                    instance = GT.Thread.getInstance(0);
+                }
+
                 paint = new Paint(Paint.ANTI_ALIAS_FLAG);
                 this.context = context;
                 // 读取配置
@@ -35137,7 +37859,15 @@ public class GT {
                 TypedArray typedArray = context.obtainStyledAttributes(attrs, androidx.appcompat.R.styleable.AppCompatImageView);
                 int resourceId = typedArray.getResourceId(androidx.appcompat.R.styleable.AppCompatImageView_android_src, -1);
                 resources = context.getResources();
-                setGifResource(resourceId);
+                if (resourceId > 0) {
+                    instance.execute(() -> {
+                        InputStream inputStream = resources.openRawResource(resourceId);
+                        if (inputStream != null) {
+                            mMovie = Movie.decodeStream(inputStream);
+                            movieLoad(resourceId, mMovie);
+                        }
+                    });
+                }
                 load(array);
                 array.recycle();
                 requestLayout();
@@ -35150,16 +37880,16 @@ public class GT {
              */
             private void load(TypedArray array) {
                 if (radius == 0)
-                    radius = array.getDimensionPixelOffset(com.gsls.gt.R.styleable.GTImageView_radius, defaultRadius);
+                    radius = array.getDimensionPixelOffset(R.styleable.GTImageView_radius, defaultRadius);
 
                 if (leftTopRadius == 0)
-                    leftTopRadius = array.getDimensionPixelOffset(com.gsls.gt.R.styleable.GTImageView_radius_top_left, defaultRadius);
+                    leftTopRadius = array.getDimensionPixelOffset(R.styleable.GTImageView_radius_top_left, defaultRadius);
                 if (rightTopRadius == 0)
-                    rightTopRadius = array.getDimensionPixelOffset(com.gsls.gt.R.styleable.GTImageView_radius_top_right, defaultRadius);
+                    rightTopRadius = array.getDimensionPixelOffset(R.styleable.GTImageView_radius_top_right, defaultRadius);
                 if (rightBottomRadius == 0)
-                    rightBottomRadius = array.getDimensionPixelOffset(com.gsls.gt.R.styleable.GTImageView_radius_bottom_right, defaultRadius);
+                    rightBottomRadius = array.getDimensionPixelOffset(R.styleable.GTImageView_radius_bottom_right, defaultRadius);
                 if (leftBottomRadius == 0)
-                    leftBottomRadius = array.getDimensionPixelOffset(com.gsls.gt.R.styleable.GTImageView_radius_bottom_left, defaultRadius);
+                    leftBottomRadius = array.getDimensionPixelOffset(R.styleable.GTImageView_radius_bottom_left, defaultRadius);
 
                 //如果四个角的值没有设置，那么就使用通用的radius的值。
                 if (defaultRadius == leftTopRadius) {
@@ -35177,10 +37907,6 @@ public class GT {
 
             }
 
-            public void setGifResource(Context... contexts) {
-                setGifResource(url, contexts);
-            }
-
             /**
              * 设置 GIF 动态图
              *
@@ -35188,124 +37914,178 @@ public class GT {
              * @param contexts
              */
             public void setGifResource(Object resource, Context... contexts) {
-                if (contexts.length > 0) {
-                    context = contexts[0];
-                }
-
-                GT.Thread.getInstance(0).execute(new Runnable() {
+                if (resource == null) return;
+                instance.execute(new Runnable() {
                     @Override
                     public void run() {
-                        InputStream inputStream = null;
 
-                        if (resource == null) inputStream = null;
+                        if (mMovie != null && String.valueOf(resource2).equals(String.valueOf(resource))) {
+                            return;
+                        } else {
+                            resource2 = resource;
+                        }
+
+                        if (GT.Glide.gifCacheMovieList.size() != 0 && GT.Glide.gifCacheMovieList.containsKey(resource)) {
+                            Movie movie = GT.Glide.gifCacheMovieList.get(resource);
+                            if (mMovie != null && mMovie == movie) {
+                                return;
+                            }
+                            if (movie != null) {
+                                if ((resource instanceof Integer)) {
+                                    if (movie.width() == 0 && movie.hashCode() == 0) {
+                                        movieLoad(resource, movie);
+                                        return;
+                                    }
+                                } else {
+                                    movieLoad(resource, movie);
+                                    return;
+                                }
+                            }
+                        }
+
+                        InputStream inputStream;
                         if (resource instanceof Integer) {
-
                             int resourceId = (int) resource;
                             if (resourceId == -1) return;
                             inputStream = resources.openRawResource(resourceId);
-
                         } else if (resource instanceof InputStream) {
                             inputStream = (InputStream) resource;
-
+                        } else if (resource instanceof File) {
+                            instance.execute(() -> {
+                                File file = (File) resource;
+                                Movie movie = Movie.decodeFile(file.getPath());
+                                movieLoad(resource, movie);
+                            });
+                            return;
+                        } else if (resource instanceof Movie) {
+                            movieLoad(null, (Movie) resource);
+                            return;
                         } else if (resource instanceof String) {
                             String gifData = String.valueOf(resource);
-                            if (!gifData.contains("http") && !gifData.contains(":")) {//判断是否为本地gif资源
-                                File file = new File(gifData);
-                                if (!file.exists()) return;
-                                try {
-                                    inputStream = new BufferedInputStream(new FileInputStream(file));
-                                } catch (Exception e) {
-                                    return;
-                                }
-                            } else {//加载网络GIF 一定要 开本地存储权限
+                            if (!gifData.contains("http") && !gifData.contains(":")) { //判断是否为本地gif资源
+                                inputStream = fileToInputStream(new File(gifData), isCache);
+                            } else {
                                 //网络动态图 加载
-                                String gifUri = String.valueOf(resource);
-                                String savePath = GT.FileUtils.getGTPath(contexts) + "img/" + GT.Encryption.MD5.encryptMD5(gifUri);//gif一般比较大，所以必须缓存，缓存本地路径
-                                File file = new File(savePath);
-                                if (!file.exists()) {
-                                    GT.HttpUtil.downloadFile(gifUri, savePath, new GT.HttpUtil.OnLoadData() {
-                                        @Override
-                                        public void onDownloadStart(File file) {
-                                            super.onDownloadStart(file);
-                                            if (placeholder != null) {
-                                                GT.Glide.with(this).load(placeholder).into(GTImageView.this, false);
-                                            }
-                                        }
-
-                                        @Override
-                                        public void onDownloading(int progress) {
-                                            super.onDownloading(progress);
-                                        }
-
+                                initFilePath();
+                                String path = savePath + GT.Encryption.MD5.encryptMD5(gifData);
+                                if (!GT.FileUtils.fileExist(path)) {
+                                    GT.HttpUtil.downloadFile(gifData, path, new GT.HttpUtil.OnLoadData<File>() {
                                         @Override
                                         public void onDownloadSuccess(File file) {
                                             super.onDownloadSuccess(file);
-
-//                                    setImageBitmap(null);//清空占位图资源
-                                            setGifResource(file);
-
-                                            if (!isCache) {
-                                                GT.Thread.getInstance(0).execute(() -> {
-                                                    GT.Thread.sleep(100);
-                                                    file.delete();
-                                                });
-                                            }
-
+                                            instance.execute(() -> {
+                                                Movie movie = Movie.decodeFile(file.getPath());
+                                                movieLoad(resource, movie);
+                                            });
                                         }
 
                                         @Override
                                         public void onDownloadFailed(Exception e) {
                                             super.onDownloadFailed(e);
                                             if (error != null) {
-                                                GT.Glide.with(this).load(error).into(GTImageView.this, false);
+                                                GT.Glide.with(this).load(error).into(GTImageView.this, false);//2
                                             }
                                         }
-                                    });
+                                    }, true);
                                 } else {
-                                    setGifResource(file);
-                                    if (!isCache) {
-                                        GT.Thread.getInstance(0).execute(() -> {
-                                            GT.Thread.sleep(100);
-                                            file.delete();
-                                        });
-                                    }
+                                    instance.execute(() -> {
+                                        Movie movie = Movie.decodeFile(path);
+                                        movieLoad(resource, movie);
+                                    });
                                 }
-
-                            }
-                            return;
-                        } else if (resource instanceof File) {
-                            File file = (File) resource;
-                            if (!file.exists()) return;
-                            try {
-                                inputStream = new BufferedInputStream(new FileInputStream(file));
-                            } catch (Exception e) {
                                 return;
                             }
-
                         } else {
                             //当前仅仅支持 四种 Gif 资源类型加载(Integer、InputStream、String、File)，其余的都默认当静态图片加载
-                            GT.Glide.with(this).load(resource).into(GTImageView.this);
+                            GT.Glide.with(this).load(resource).into(GTImageView.this);//3
+                            return;
                         }
-
 
                         if (inputStream == null) return;
                         InputStream finalInputStream = inputStream;
-                        GT.Thread.runAndroid(() -> {
+                        instance.execute(() -> {
                             mMovie = Movie.decodeStream(finalInputStream);
-                            if (mMovie != null) {
-                                setLayerType(View.LAYER_TYPE_SOFTWARE, null);
-                                requestLayout();
-                            }
+                            movieLoad(resource, mMovie);
                         });
-                        return;
+                    }
+
+                    //初始化 路径
+                    private void initFilePath() {
+                        if (savePath == null) {
+                            if (context == null && contexts != null && contexts.length > 0) {
+                                context = contexts[0];
+                            }
+                            if (contexts != null && contexts.length > 0) {
+                                context = contexts[0];
+                                if (context == null) {
+                                    context = GT.getActivity();
+                                }
+                            }
+                            savePath = GT.FileUtils.getGTPath(context) + "img/";//gif一般比较大，所以必须缓存，缓存本地路径
+                            File file = new File(savePath);
+                            if (!file.exists()) {
+                                file.mkdirs();
+                            }
+                        }
                     }
                 });
+            }
+
+            /**
+             * 加载GIF
+             *
+             * @param resource
+             * @param movie
+             */
+            private void movieLoad(Object resource, Movie movie) {
+                if (movie == null) return;
+                mMovie = movie;
+                setLayerType(View.LAYER_TYPE_SOFTWARE, null);
+                //开始执行 GIF
+                GT.Thread.runAndroid(this::requestLayout);
+
+                if (resource != null) {
+                    //开始缓存 mMovie
+                    instance.execute(() -> {
+                        if (!GT.Glide.gifCacheMovieList.containsKey(resource)) {
+                            GT.Glide.gifCacheMovieList.put(resource, movie);
+                        }
+
+                        GT.Thread.sleep(100);
+                        if (mMovie == null) {
+                            setGifResource(resource2);
+                        }
+                    });
+                }
+            }
 
 
+            /**
+             * File 转 InputStream
+             *
+             * @param file
+             * @param isCache
+             * @return
+             */
+            private InputStream fileToInputStream(File file, boolean isCache) {
+                if (file == null || !file.exists()) return null;
+                InputStream inputStream = null;
+                try {
+                    if (!isCache) {
+                        instance.execute(() -> {
+                            GT.Thread.sleep(100);
+                            file.delete();
+                        });
+                    }
+                    inputStream = GT.ImageViewTools.getImageInputStreamFile(file.getPath());
+                } catch (Exception e) {
+
+                }
+                return inputStream;
             }
 
             public void setResource(Object resource) {
-                GT.Glide.with(this).load(resource).into(this);
+                GT.Glide.with(this).load(resource).into(this);//4
             }
 
             /**
@@ -35335,7 +38115,7 @@ public class GT {
                     isOne = true;
                     return;
                 }
-                if (mMovie != null) {
+                if (mMovie != null) {//gif图片
                     int w = mMovie.width();
                     int h = mMovie.height();
                     if (w <= 0) {
@@ -35435,14 +38215,12 @@ public class GT {
                         if (mCurrentAnimationTime == dur) {
                             mCurrentAnimationTime = 0;
                         }
-                        return;
                     } else {//暂停动画
                         mMovie.setTime(mCurrentAnimationTime);
                         float scale = Math.min(ratioWidth, ratioHeight);
                         canvas.scale(scale, scale);
                         mMovie.draw(canvas, 0, 0);
                         canvas.restore();
-                        return;
                     }
                 } else {  //非GIF图片加载
                     initDraw(canvas);
@@ -35452,7 +38230,7 @@ public class GT {
 
             @SuppressLint("WrongCall")
             private void initDraw(Canvas canvas) {
-
+                //静态图绘制
                 Drawable drawable = getDrawable();
                 if (null != drawable) {
                     Bitmap bitmap = GT.ImageViewTools.getBitmap(drawable);
@@ -35479,6 +38257,7 @@ public class GT {
 
                     }
 
+                    //静态图大小设置
                     final Rect rectSrc = new Rect(0, 0, bitmap.getWidth(), bitmap.getHeight());
                     final Rect rectDest = new Rect(0, 0, getWidth(), getHeight());
                     paint.reset();
@@ -35534,11 +38313,7 @@ public class GT {
             @SuppressLint("NewApi")
             private void invalidateView() {
                 if (mVisible) {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
-                        postInvalidateOnAnimation();
-                    } else {
-                        invalidate();
-                    }
+                    postInvalidateOnAnimation();
                 }
             }
 
@@ -35789,7 +38564,9 @@ public class GT {
                     bindingModel = obj;
 
                 } catch (Exception e) {
-                    GT.errt("View 与 ViewMode 自动绑定失败，请手动绑定:" + e);
+                    if (LOG.GT_LOG_TF) {
+                        GT.errt("View 与 ViewMode 自动绑定失败，请手动绑定:" + e);
+                    }
                 }
             }
 
@@ -35859,7 +38636,13 @@ public class GT {
              */
             public void onViewModeFeedback(Object... obj);
 
+            //ViewModel
             public ViewModelStore getViewModelStore();
+
+            public void getCache(String json);
+
+            public String putCache();
+
         }
 
     }
@@ -36488,7 +39271,7 @@ public class GT {
             }
             try {
                 long finalTime = time;
-                GT.Thread.getInstance(0).execute(() -> {
+                Thread.getInstance(0).execute(() -> {
                     boolean isStart = false;//是否开始播放
                     while (mediaPlayer != null && mediaPlayer.isPlaying()) {
                         int currentPosition = mediaPlayer.getCurrentPosition();
@@ -36498,9 +39281,9 @@ public class GT {
                                 onLoadData.onPlayStart(mediaPlayer);
                                 mediaPlayer.setOnCompletionListener(mp -> {
                                     isPlayEnd = true;
-                                    GT.Thread.runAndroid(() -> onLoadData.onPlayProgress(mediaPlayer.getDuration(), mediaPlayer.getCurrentPosition(), 100, mp));
-                                    GT.Thread.sleep(finalTime);
-                                    GT.Thread.runAndroid(() -> onLoadData.onPlayEnd(mp));
+                                    Thread.runAndroid(() -> onLoadData.onPlayProgress(mediaPlayer.getDuration(), mediaPlayer.getCurrentPosition(), 100, mp));
+                                    Thread.sleep(finalTime);
+                                    Thread.runAndroid(() -> onLoadData.onPlayEnd(mp));
                                 });
                             }
                             if (!isPlayEnd) {//是否结束播放
@@ -36508,7 +39291,7 @@ public class GT {
                                 onLoadData.onPlayProgress(mediaPlayer.getDuration(), currentPosition, mProgress, mediaPlayer);
                             }
                         }
-                        GT.Thread.sleep(finalTime);//进度监听间隔
+                        Thread.sleep(finalTime);//进度监听间隔
                     }
                 });
 
@@ -36655,8 +39438,8 @@ public class GT {
         private Context context;
         private static SoundPool soundPool;
         private AudioAttributes attr = null;
-        private static Map<String, Integer> map = new HashMap<>();      //初始化 map  用于存放 音频 key 与 值
-        private static Map<String, Integer> mapMusic = new HashMap<>(); //初始化 mapMusic 用于存放待播放的音频
+        private static Map<String, Integer> map = new ArrayMap<>();      //初始化 map  用于存放 音频 key 与 值
+        private static Map<String, Integer> mapMusic = new ArrayMap<>(); //初始化 mapMusic 用于存放待播放的音频
 
         /**
          * 初始化 Content
@@ -37796,7 +40579,7 @@ public class GT {
                 Annotations.GT_Collection.GT_Map initView = field.getAnnotation(Annotations.GT_Collection.GT_Map.class);
                 if (initView != null) {
 
-                    Map<Object, Object> objectMap = new HashMap<>();//创建一个 Map
+                    Map<Object, Object> objectMap = new ArrayMap<>();//创建一个 Map
                     String[] valueKey = initView.valueKey();
                     if (valueKey.length != 0) {    //如果不为 0 则创建 map 后并注入值 否则仅创建新的 Map 对象
 
@@ -39380,7 +42163,7 @@ public class GT {
         private static class MyInvocationHandler implements InvocationHandler {
 
             private Object object;
-            private Map<String, Method> methodMap = new HashMap<>(1);
+            private Map<String, Method> methodMap = new ArrayMap<>(1);
 
             public MyInvocationHandler(Object object) {
                 this.object = object;
@@ -39668,10 +42451,8 @@ public class GT {
                 T invoke = (T) m.invoke(setObj, setValue);//调用方法
 //                logt("该方法返回值的类型:" + returnType);
                 if (returnType != null) {
-//                    logt("进入 if");
                     return invoke;
                 } else {
-//                    logt("进入 else");
                     return (T) "true";
                 }
             } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
@@ -39842,7 +42623,7 @@ public class GT {
          * @return
          */
         public static Map<String, Object> getReflectVariateValueAll(Object classz) {
-            Map<String, Object> map = new HashMap<>();
+            Map<String, Object> map = new ArrayMap<>();
             Class aClass = null;
             Object obj = null;
             if (classz instanceof Class) {//class 类
@@ -39971,7 +42752,7 @@ public class GT {
          */
         public static <T> Map<String, Object> beanToMap(T t) {
             if (t == null) return null;
-            Map<String, Object> map = new HashMap<>();
+            Map<String, Object> map = new ArrayMap<>();
             Field[] fields = t.getClass().getDeclaredFields();//获致当前 Activity 所有成员变更
             for (Field field : fields) {
                 String type = field.getName();
@@ -40077,10 +42858,322 @@ public class GT {
             return null;
         }
 
+        //=========================================== 反射 Android 系统方法 ===================================
+
+        /**
+         * 拷贝长按单击事件
+         *
+         * @param view                  被拷贝的View
+         * @param toView                拷贝的View
+         * @param isCancelOriginalEvent 是否操作性质为  剪切
+         * @return
+         */
+        public static boolean copyLongClickEvent(View view, View toView, boolean... isCancelOriginalEvent) {
+            if (view == null || toView == null) return false;
+            if (!view.isLongClickable()) return false;
+
+            boolean isCancelEvent = false;
+            if (isCancelOriginalEvent != null && isCancelOriginalEvent.length >= 1) {
+                isCancelEvent = isCancelOriginalEvent[0];
+            }
+
+            //反射点击事件列表
+            Method listenerInfoMethod = null;
+            try {
+                listenerInfoMethod = View.class.getDeclaredMethod("getListenerInfo");
+            } catch (NoSuchMethodException e) {
+                return false;
+            }
+            listenerInfoMethod.setAccessible(true);
+            Object listenerInfo = null;
+            try {
+                listenerInfo = listenerInfoMethod.invoke(view);
+            } catch (IllegalAccessException e) {
+                return false;
+            } catch (InvocationTargetException e) {
+                return false;
+            }
+            //要获取单击监听器则在前面加个m 其他同理 例如长按监听器就是mOnLongClickListener
+            Class<?> listenerInfoClass = listenerInfo.getClass();
+            Field mOnLongClickListenerField = null;
+            try {
+                mOnLongClickListenerField = listenerInfoClass.getDeclaredField("mOnLongClickListener");
+            } catch (NoSuchFieldException e) {
+                return false;
+            }
+            mOnLongClickListenerField.setAccessible(true);
+
+            //通过字段获取此监听器对象
+            try {
+                View.OnLongClickListener onLongClickListener = (View.OnLongClickListener) mOnLongClickListenerField.get(listenerInfo);
+                toView.setOnLongClickListener(onLongClickListener);
+            } catch (IllegalAccessException e) {
+                return false;
+            }
+
+            if (isCancelEvent) {
+                try {
+                    view.setOnLongClickListener(null);
+                } catch (Exception e) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        /**
+         * 拷贝单击事件
+         *
+         * @param view                  被拷贝的View
+         * @param toView                拷贝的View
+         * @param isCancelOriginalEvent 是否操作性质为  剪切
+         * @return
+         */
+        public static boolean copyClickEvent(View view, View toView, boolean... isCancelOriginalEvent) {
+            if (view == null || toView == null) return false;
+            if (!view.isClickable()) return false;
+
+            boolean isCancelEvent = false;
+            if (isCancelOriginalEvent != null && isCancelOriginalEvent.length >= 1) {
+                isCancelEvent = isCancelOriginalEvent[0];
+            }
+
+            //反射点击事件列表
+            Method listenerInfoMethod = null;
+            try {
+                listenerInfoMethod = View.class.getDeclaredMethod("getListenerInfo");
+            } catch (NoSuchMethodException e) {
+                return false;
+            }
+            listenerInfoMethod.setAccessible(true);
+            Object listenerInfo = null;
+            try {
+                listenerInfo = listenerInfoMethod.invoke(view);
+            } catch (IllegalAccessException e) {
+                return false;
+            } catch (InvocationTargetException e) {
+                return false;
+            }
+            //要获取单击监听器则在前面加个m 其他同理 例如长按监听器就是mOnLongClickListener
+            Class<?> listenerInfoClass = listenerInfo.getClass();
+            Field mOnClickListenerField = null;
+            try {
+                mOnClickListenerField = listenerInfoClass.getDeclaredField("mOnClickListener");
+            } catch (NoSuchFieldException e) {
+                return false;
+            }
+            mOnClickListenerField.setAccessible(true);
+
+            //通过字段获取此监听器对象
+            try {
+                View.OnClickListener onClickListener = (View.OnClickListener) mOnClickListenerField.get(listenerInfo);
+                toView.setOnClickListener(onClickListener);
+            } catch (IllegalAccessException e) {
+                return false;
+            }
+
+            if (isCancelEvent) {
+                try {
+                    view.setOnClickListener(null);
+                } catch (Exception e) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        /**
+         * 拷贝View事件
+         *
+         * @param view                  被拷贝的View
+         * @param toView                拷贝的View
+         * @param eventListener         拷贝事件的类型
+         * @param isCancelOriginalEvent 是否操作性质为  剪切
+         * @return
+         */
+        public static <T> boolean copyViewEvent(View view, View toView, Class<T> eventListener, boolean... isCancelOriginalEvent) {
+            if (view == null || toView == null) return false;
+
+            boolean isCancelEvent = false;
+            if (isCancelOriginalEvent != null && isCancelOriginalEvent.length >= 1) {
+                isCancelEvent = isCancelOriginalEvent[0];
+            }
+
+            //反射点击事件列表
+            Method listenerInfoMethod = null;
+            try {
+                listenerInfoMethod = View.class.getDeclaredMethod("getListenerInfo");
+            } catch (NoSuchMethodException e) {
+                return false;
+            }
+            listenerInfoMethod.setAccessible(true);
+            Object listenerInfo;
+            try {
+                listenerInfo = listenerInfoMethod.invoke(view);
+            } catch (IllegalAccessException e) {
+                return false;
+            } catch (InvocationTargetException e) {
+                return false;
+            }
+            //要获取单击监听器则在前面加个m 其他同理 例如长按监听器就是mOnLongClickListener
+            Class<?> listenerInfoClass = listenerInfo.getClass();
+            Field mOnListenerField;
+            try {
+                mOnListenerField = listenerInfoClass.getDeclaredField("m" + eventListener.getSimpleName());
+                mOnListenerField.setAccessible(true);
+            } catch (NoSuchFieldException e) {
+                return false;
+            }
+
+            //通过字段获取此监听器对象
+            try {
+                if (eventListener == View.OnClickListener.class) {
+                    toView.setOnClickListener((View.OnClickListener) mOnListenerField.get(listenerInfo));
+                    if (isCancelEvent) {
+                        try {
+                            view.setOnClickListener(null);
+                        } catch (Exception e) {
+                            return false;
+                        }
+                    }
+                } else if (eventListener == View.OnLongClickListener.class) {
+                    toView.setOnLongClickListener((View.OnLongClickListener) mOnListenerField.get(listenerInfo));
+                    if (isCancelEvent) {
+                        try {
+                            view.setOnLongClickListener(null);
+                        } catch (Exception e) {
+                            return false;
+                        }
+                    }
+                } else if (eventListener == View.OnTouchListener.class) {
+                    toView.setOnTouchListener((View.OnTouchListener) mOnListenerField.get(listenerInfo));
+                    if (isCancelEvent) {
+                        try {
+                            view.setOnTouchListener(null);
+                        } catch (Exception e) {
+                            return false;
+                        }
+                    }
+                } else if (eventListener == View.OnKeyListener.class) {
+                    toView.setOnKeyListener((View.OnKeyListener) mOnListenerField.get(listenerInfo));
+                    if (isCancelEvent) {
+                        try {
+                            view.setOnKeyListener(null);
+                        } catch (Exception e) {
+                            return false;
+                        }
+                    }
+                } else if (eventListener == View.OnFocusChangeListener.class) {
+                    toView.setOnFocusChangeListener((View.OnFocusChangeListener) mOnListenerField.get(listenerInfo));
+                    if (isCancelEvent) {
+                        try {
+                            view.setOnFocusChangeListener(null);
+                        } catch (Exception e) {
+                            return false;
+                        }
+                    }
+                } else if (eventListener == View.OnDragListener.class) {
+                    toView.setOnDragListener((View.OnDragListener) mOnListenerField.get(listenerInfo));
+                    if (isCancelEvent) {
+                        try {
+                            view.setOnDragListener(null);
+                        } catch (Exception e) {
+                            return false;
+                        }
+                    }
+                } else if (eventListener == View.OnHoverListener.class) {
+                    toView.setOnHoverListener((View.OnHoverListener) mOnListenerField.get(listenerInfo));
+                    if (isCancelEvent) {
+                        try {
+                            view.setOnHoverListener(null);
+                        } catch (Exception e) {
+                            return false;
+                        }
+                    }
+                } else if (eventListener == View.OnContextClickListener.class) {
+                    toView.setOnContextClickListener((View.OnContextClickListener) mOnListenerField.get(listenerInfo));
+                    if (isCancelEvent) {
+                        try {
+                            view.setOnContextClickListener(null);
+                        } catch (Exception e) {
+                            return false;
+                        }
+                    }
+                } else if (eventListener == View.OnGenericMotionListener.class) {
+                    toView.setOnGenericMotionListener((View.OnGenericMotionListener) mOnListenerField.get(listenerInfo));
+                    if (isCancelEvent) {
+                        try {
+                            view.setOnGenericMotionListener(null);
+                        } catch (Exception e) {
+                            return false;
+                        }
+                    }
+                } else if (eventListener == View.OnLayoutChangeListener.class) {
+                    //暂无设置
+                } else if (eventListener == View.OnCreateContextMenuListener.class) {
+                    toView.setOnCreateContextMenuListener((View.OnCreateContextMenuListener) mOnListenerField.get(listenerInfo));
+                    if (isCancelEvent) {
+                        try {
+                            view.setOnCreateContextMenuListener(null);
+                        } catch (Exception e) {
+                            return false;
+                        }
+                    }
+                } else if (eventListener == View.OnScrollChangeListener.class) {
+                    toView.setOnScrollChangeListener((View.OnScrollChangeListener) mOnListenerField.get(listenerInfo));
+                    if (isCancelEvent) {
+                        try {
+                            view.setOnScrollChangeListener(null);
+                        } catch (Exception e) {
+                            return false;
+                        }
+                    }
+                } else if (eventListener == View.OnApplyWindowInsetsListener.class) {
+                    toView.setOnApplyWindowInsetsListener((View.OnApplyWindowInsetsListener) mOnListenerField.get(listenerInfo));
+                    if (isCancelEvent) {
+                        try {
+                            view.setOnApplyWindowInsetsListener(null);
+                        } catch (Exception e) {
+                            return false;
+                        }
+                    }
+                } else if (eventListener == View.OnAttachStateChangeListener.class) {
+                    //暂无设置
+                } else if (eventListener == View.OnSystemUiVisibilityChangeListener.class) {
+                    toView.setOnSystemUiVisibilityChangeListener((View.OnSystemUiVisibilityChangeListener) mOnListenerField.get(listenerInfo));
+                    if (isCancelEvent) {
+                        try {
+                            view.setOnSystemUiVisibilityChangeListener(null);
+                        } catch (Exception e) {
+                            return false;
+                        }
+                    }
+                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    if (eventListener == View.OnUnhandledKeyEventListener.class) {
+                        //暂无设置
+                    }
+                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    if (eventListener == View.OnCapturedPointerListener.class) {
+                        toView.setOnCapturedPointerListener((View.OnCapturedPointerListener) mOnListenerField.get(listenerInfo));
+                        if (isCancelEvent) {
+                            try {
+                                view.setOnCapturedPointerListener(null);
+                            } catch (Exception e) {
+                                return false;
+                            }
+                        }
+                    }
+                }
+            } catch (IllegalAccessException e) {
+                return false;
+            }
+            return true;
+        }
+
     }
 
     /**
-     * 动态代理
+     * 动态代理 封装类
      */
     public static class MethodProxy implements InvocationHandler {
 
@@ -40457,7 +43550,7 @@ public class GT {
         //这也是一个定长的线程池，但是可以支持周期性的任务,以下例子表示延迟一秒过后，每两秒执行一次。
         private static ScheduledExecutorService scheduledThreadPool;
         //创建线程池集合
-        private static Map<Object, ExecutorService> mapExecutorService = new HashMap<>();
+        private static Map<Object, ExecutorService> mapExecutorService = new ArrayMap<>();
 
         /**
          * @param name 当前线程池的名称
@@ -41078,9 +44171,25 @@ public class GT {
 
 //=============================================== 接口模块 ===================================================
 
-    //专用于 传递参数返回页面
+    //多参数接口
     public static interface OnListener<T> extends SaveObject.SaveBean {
-        void onListener(T... obj);
+        public void onListener(T... obj);  //返回多个参数，或带有首表示的参数
+    }
+
+    //单参数接口
+    public static class OneListener<T> implements OnListener<T> {
+        public void onOneListener(T obj) {
+
+        }
+
+        public Object onOneReturnListener(T obj) {
+            return null;
+        }
+
+        @Override
+        public void onListener(T... obj) {
+
+        }
     }
 
 //=========================================== GT 桶 =========================================
@@ -41090,11 +44199,10 @@ public class GT {
         public static Application application;//全局 Context
         public static Context context;//全局 Context
         public static ExecutorService thread;//普通逻辑 线程池
-        public static GT_SharedPreferences sp;//sp存储
+        public static GT_SharedPreferences sp_app;//sp存储-属于应用级别的sp存储,所有关于应用级别的都用这个存储，关于用户级别的用另一个存储
         public static final GT_Animation animation = new GT_Animation();//动画
         public static int height, width;//屏幕宽高
         public static boolean isOneInstall;//是否第一次安卓
-        public static boolean isTest = false;//是否为测试服 false: 正式服 true:测试服
         public static boolean isFrontDesk = true;//是否前台
 
         public Application getApplication() {
@@ -41121,12 +44229,12 @@ public class GT {
             GTApplication.thread = thread;
         }
 
-        public GT_SharedPreferences getSp() {
-            return sp;
+        public GT_SharedPreferences getSpApp() {
+            return sp_app;
         }
 
-        public void setSp(GT_SharedPreferences sp) {
-            GTApplication.sp = sp;
+        public void setSp(GT_SharedPreferences sp_app) {
+            GTApplication.sp_app = sp_app;
         }
 
         public int getHeight() {
@@ -41153,14 +44261,6 @@ public class GT {
             GTApplication.isOneInstall = isOneInstall;
         }
 
-        public boolean isIsTest() {
-            return isTest;
-        }
-
-        public void setIsTest(boolean isTest) {
-            GTApplication.isTest = isTest;
-        }
-
         public boolean isIsFrontDesk() {
             return isFrontDesk;
         }
@@ -41175,11 +44275,11 @@ public class GT {
             application = this;
             context = getApplicationContext();//全局 Context
             thread = Thread.getInstance(0);//获取唯一线程池
-            sp = new GT_SharedPreferences(context, context.getPackageName(), true);//sp存储
+            sp_app = new GT_SharedPreferences(context, context.getPackageName(), true);//sp存储,属于应用级别的app
             LOG.LOG_TF = ApplicationUtils.isApkInDebug(this);//设置在测试的时候才会打开日志
-            if ("0".equals(String.valueOf(sp.query("isOneInstall")))) { //判断是否第一次安装
+            if ("0".equals(String.valueOf(sp_app.query("isOneInstall")))) { //判断是否第一次安装
                 isOneInstall = true;
-                sp.save("isOneInstall", 1);//去掉第一次安装的标识
+                sp_app.save("isOneInstall", 1);//去掉第一次安装的标识
             }
 
             //监听是否前台
@@ -41215,9 +44315,9 @@ public class GT {
 
     public static class AppLifecycleManager implements Application.ActivityLifecycleCallbacks {
 
-        private GT.OnListener<Boolean> onFrontDesk;
+        private OnListener<Boolean> onFrontDesk;
 
-        public AppLifecycleManager(GT.OnListener<Boolean> onFrontDesk) {
+        public AppLifecycleManager(OnListener<Boolean> onFrontDesk) {
             this.onFrontDesk = onFrontDesk;
         }
 
@@ -41275,7 +44375,7 @@ public class GT {
          * @param classz             返回数据类型
          */
         public static void startActivity(Context context, int type, String returnFunctionName) {
-            Intent intent = new Intent(context, GT.GTActivity.class);
+            Intent intent = new Intent(context, GTActivity.class);
             intent.putExtra("type", type);
             intent.putExtra("feedBack", returnFunctionName);
             context.startActivity(intent);
@@ -41317,9 +44417,9 @@ public class GT {
                     break;
                 default:
                     logt("非法参数！");
-                    GT.EventBus.posts(new Intent(), feedBack);
-                    GT.EventBus.posts(Uri.parse(""), feedBack);
-                    GT.EventBus.posts(Bitmap.createBitmap(1, 1, Bitmap.Config.ALPHA_8), feedBack);
+                    EventBus.posts(new Intent(), feedBack);
+                    EventBus.posts(Uri.parse(""), feedBack);
+                    EventBus.posts(Bitmap.createBitmap(1, 1, Bitmap.Config.ALPHA_8), feedBack);
                     finish();
                     break;
             }
@@ -41374,7 +44474,7 @@ public class GT {
                 case CODE_PHOTOGRAPH://拍照
                     Bitmap data = (Bitmap) intent.getExtras().get("data");
                     if (data != null) {
-                        uri = GT.ImageViewTools.bitmapToUri(this, data);
+                        uri = ImageViewTools.bitmapToUri(this, data);
                         bitmap = data;
                     }
                     break;
@@ -41411,9 +44511,9 @@ public class GT {
                     intent.putExtra("resultCode", resultCode);
 
                     //目前支持的返回类型
-                    GT.EventBus.posts(intent, feedBack);
-                    GT.EventBus.posts(uri, feedBack);
-                    GT.EventBus.posts(bitmap, feedBack);
+                    EventBus.posts(intent, feedBack);
+                    EventBus.posts(uri, feedBack);
+                    EventBus.posts(bitmap, feedBack);
 
                     //返回 H5 相片资源
                     GT_WebView.BaseWebView.initShowFileChoosers(uri, this);
@@ -41436,7 +44536,6 @@ public class GT {
      * 黑魔法类
      */
     public static class DarknessMagic {
-        //空白...无障碍..
 
         //无障碍服务
         public abstract static class AccessibilityServiceBase extends AccessibilityService {
@@ -41734,6 +44833,7 @@ public class GT {
 
         }
 
+        //无障碍服务 工具类
         public abstract static class AccessibilityServiceUtils<T> {
 
             /**
@@ -42256,7 +45356,7 @@ public class GT {
             public static void autoClickRatio(Activity act, final double ratioX, final double ratioY, int... times) {
                 width = act.getWindowManager().getDefaultDisplay().getWidth();
                 height = act.getWindowManager().getDefaultDisplay().getHeight();
-                GT.Thread.getInstance(0).execute(new Runnable() {
+                Thread.getInstance(0).execute(new Runnable() {
                     @Override
                     public void run() {
                         // 线程睡眠0.3s
@@ -42298,6 +45398,858 @@ public class GT {
 
         }
 
+        //指纹验证,完全自定义对话框,怎么使用的可参考 FingerprintDialogFragment 对话框的使用
+        public static class FingerprintUtils {
+
+            private static FingerprintUtils fingerprintUtils;
+
+            public static FingerprintUtils getInstance() {
+                if (fingerprintUtils == null) {
+                    synchronized (FingerprintUtils.class) {
+                        if (fingerprintUtils == null) {
+                            fingerprintUtils = new FingerprintUtils();
+                        }
+                    }
+                }
+                return fingerprintUtils;
+            }
+
+            public final static String KEY_NAME = "keyName";
+            public final static String KEY_STORE = "AndroidKeyStore";
+            public final static int TYPE_0 = 0;//正常可以 指纹功能
+            public final static int TYPE_1 = 1;//您的手机不支持指纹功能
+            public final static int TYPE_2 = 2;//您还未设置锁屏，请先设置锁屏并添加一个指纹
+            public final static int TYPE_3 = 3;//您至少需要在系统设置中添加一个指纹
+            public final static int TYPE_cancel = 4;//用户手动取消了
+            public final static int TYPE_SUCCESS = 5;//指纹认证成功
+            public final static int TYPE_ERROR = 6;//指纹认证失败，请再试一次
+            public final static int TYPE_ERROR2 = 7;//尝试次数过多，请稍后重试。
+            private CancellationSignal mCancellationSignal;
+            private boolean isSelfCancelled;//标识是否是用户主动取消的认证。
+            private OnListener<Integer> onListener;
+            private Cipher cipher;
+            private FingerprintManager fingerprintManager;
+
+
+            public FingerprintUtils init(Context context, OnListener<Integer> onListener) {
+                if (context == null || onListener == null) return this;
+                int type = supportFingerprint(context);
+                if (type != TYPE_0) {
+                    onListener.onListener(type);
+                    return this;
+                }
+                this.onListener = onListener;
+                KeyStore keyStore = initKey();
+                cipher = initCipher(keyStore);
+                fingerprintManager = context.getSystemService(FingerprintManager.class);
+                return this;
+            }
+
+            private int supportFingerprint(Context context) {
+                if (context == null) return TYPE_1;
+                KeyguardManager keyguardManager = context.getSystemService(KeyguardManager.class);
+                if (keyguardManager == null) return TYPE_1;
+                FingerprintManager fingerprintManager = context.getSystemService(FingerprintManager.class);
+                if (fingerprintManager == null) return TYPE_1;
+                if (!fingerprintManager.isHardwareDetected()) {
+                    return TYPE_1;
+                } else if (!keyguardManager.isKeyguardSecure()) {
+                    return TYPE_2;
+                } else if (!fingerprintManager.hasEnrolledFingerprints()) {
+                    return TYPE_3;
+                }
+                return TYPE_0;
+            }
+
+            private KeyStore initKey() {
+                KeyStore mKeyStore;
+                try {
+                    mKeyStore = KeyStore.getInstance(KEY_STORE);
+                    if (mKeyStore == null) return null;
+                    mKeyStore.load(null);
+                    KeyGenerator keyGenerator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KEY_STORE);
+                    KeyGenParameterSpec.Builder builder = new KeyGenParameterSpec.Builder(KEY_NAME,
+                            KeyProperties.PURPOSE_ENCRYPT |
+                                    KeyProperties.PURPOSE_DECRYPT)
+                            .setBlockModes(KeyProperties.BLOCK_MODE_CBC)
+                            .setUserAuthenticationRequired(true)
+                            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_PKCS7);
+                    keyGenerator.init(builder.build());
+                    keyGenerator.generateKey();
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+                return mKeyStore;
+            }
+
+            public void startListening() {
+                if (cipher == null || fingerprintManager == null) return;
+                isSelfCancelled = false;
+                mCancellationSignal = new CancellationSignal();
+                fingerprintManager.authenticate(new FingerprintManager.CryptoObject(cipher), mCancellationSignal, 0, new FingerprintManager.AuthenticationCallback() {
+                    @Override
+                    public void onAuthenticationError(int errorCode, CharSequence errString) {
+                        if (!isSelfCancelled) {
+                            if (errorCode == FingerprintManager.FINGERPRINT_ERROR_LOCKOUT) {
+                                onListener.onListener(TYPE_ERROR2);//尝试次数过多，请稍后重试。
+                                onListener = null;
+                            }
+                        }
+                    }
+
+                    @Override
+                    public void onAuthenticationHelp(int helpCode, CharSequence helpString) {
+                    }
+
+                    @Override
+                    public void onAuthenticationSucceeded(FingerprintManager.AuthenticationResult result) {
+                        onListener.onListener(TYPE_SUCCESS);//指纹认证成功
+                        onListener = null;
+                    }
+
+                    @Override
+                    public void onAuthenticationFailed() {
+                        onListener.onListener(TYPE_ERROR);//指纹认证失败，请再试一次
+                        onListener = null;
+                    }
+                }, null);
+            }
+
+            private Cipher initCipher(KeyStore keyStore) {
+                if (keyStore == null) return null;
+                Cipher mCipher;
+                try {
+                    SecretKey key = (SecretKey) keyStore.getKey(KEY_NAME, null);
+                    mCipher = Cipher.getInstance(KeyProperties.KEY_ALGORITHM_AES + "/"
+                            + KeyProperties.BLOCK_MODE_CBC + "/"
+                            + KeyProperties.ENCRYPTION_PADDING_PKCS7);
+                    mCipher.init(Cipher.ENCRYPT_MODE, key);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+                return mCipher;
+            }
+
+            public void stopListening() {
+                if (mCancellationSignal != null) {
+                    mCancellationSignal.cancel();
+                    mCancellationSignal = null;
+                    isSelfCancelled = true;
+                    onListener = null;
+                }
+            }
+        }
+
+        /**
+         * 一个封装好的 指纹验证对话框 需要指纹权限:
+         * <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
+         */
+        public static class FingerprintDialogFragment extends GT_Dialog.BaseDialogFragment {
+
+            @Override
+            protected int loadLayout() {
+                return R.layout.fingerprint_dialog;
+            }
+
+            public final static String TITLE = "title";
+            public final static String IS_SHOW_VIEW = "isShowView";
+            public final static String CANCEL_NAME = "cancelName";
+            public final static String Click_External_NoT_Hides = "click_external_not_hides";
+            public final static String TYPE = "type";
+
+            /**
+             * 启动指纹验证对话框
+             *
+             * @param title                指纹验证标题
+             * @param cancelName           验证取消文字
+             * @param isShowView           是否显示UI
+             * @param ClickExternalNoHides 是否单击外部取消对话框
+             * @return
+             */
+            public static FingerprintDialogFragment newInstance(String title, String cancelName, boolean isShowView, boolean... ClickExternalNoHides) {
+                Bundle args = new Bundle();
+                args.putString(TITLE, title);
+                args.putString(CANCEL_NAME, cancelName);
+                args.putBoolean(IS_SHOW_VIEW, isShowView);
+                if (ClickExternalNoHides != null && ClickExternalNoHides.length > 0) {
+                    args.putBoolean(Click_External_NoT_Hides, ClickExternalNoHides[0]);
+                }
+                FingerprintDialogFragment fragment = new FingerprintDialogFragment();
+                fragment.setArguments(args);
+                return fragment;
+            }
+
+            private TextView tv_error_msg;
+            private TextView tv_title;
+            private TextView tv_cancel;
+            private View ll_main;
+            private Intent intent = new Intent();
+
+            private FingerprintUtils init;
+            private boolean isClickExternalNoTHides = true;
+
+            @Override
+            public void onCreate(@Nullable Bundle savedInstanceState) {
+                super.onCreate(savedInstanceState);
+                setStyle(DialogFragment.STYLE_NORMAL, android.R.style.Theme_Material_Light_Dialog);
+            }
+
+            @Override
+            protected void initView(View view, @Nullable Bundle savedInstanceState) {
+                Bundle bundle = getArguments();
+
+                tv_error_msg = view.findViewById(R.id.tv_error_msg);
+                tv_title = view.findViewById(R.id.tv_title);
+                tv_cancel = view.findViewById(R.id.tv_cancel);
+                ll_main = view.findViewById(R.id.ll_main);
+                if (bundle != null) {
+                    boolean isShowView = bundle.getBoolean(IS_SHOW_VIEW);
+                    if (!isShowView) {
+                        ll_main.setVisibility(View.GONE);
+                    }
+                    String title = bundle.getString(TITLE);
+                    String cancel = bundle.getString(CANCEL_NAME);
+                    isClickExternalNoTHides = bundle.getBoolean(Click_External_NoT_Hides);
+                    tv_title.setText(title);
+                    tv_cancel.setText(cancel);
+                }
+
+                if (isClickExternalNoTHides) {
+                    setClickExternalNoHideDialog();
+                }
+                init = FingerprintUtils.getInstance().init(activity, new OnListener<Integer>() {
+                    @Override
+                    public void onListener(Integer... integers) {
+                        if (integers == null || integers.length == 0) return;
+                        intent.putExtra(TYPE, integers[0]);
+                        switch (integers[0]) {
+                            case FingerprintUtils.TYPE_0://正常可以 指纹功能
+                            case FingerprintUtils.TYPE_1://您的手机不支持指纹功能
+                            case FingerprintUtils.TYPE_2://您还未设置锁屏，请先设置锁屏并添加一个指纹
+                            case FingerprintUtils.TYPE_3://您至少需要在系统设置中添加一个指纹
+                            case FingerprintUtils.TYPE_cancel://用户手动取消了
+                            case FingerprintUtils.TYPE_SUCCESS://指纹认证成功
+                            case FingerprintUtils.TYPE_ERROR2://尝试次数过多，请稍后重试。
+                                finish(intent);
+                                break;
+                            case FingerprintUtils.TYPE_ERROR://指纹认证失败，请再试一次
+                                tv_error_msg.setText("指纹认证失败，请再试一次");
+                                break;
+
+                        }
+                    }
+                });
+                tv_cancel.setOnClickListener(view1 -> {
+                    intent.putExtra(TYPE, FingerprintUtils.TYPE_cancel);
+                    finish(intent);
+                    init.stopListening();
+                });
+            }
+
+            @Override
+            public void onResume() {
+                super.onResume();
+                if (init == null) return;
+                init.startListening(); // 开始指纹认证监听
+            }
+
+            @Override
+            public void onPause() {
+                super.onPause();
+                if (init == null) return;
+                init.stopListening();// 停止指纹认证监听
+            }
+
+            @Override
+            public void onDestroy() {
+                super.onDestroy();
+                if (init == null) return;
+                init.stopListening();
+            }
+
+            @Override
+            protected boolean onBackPressed() {
+                return isClickExternalNoTHides;
+            }
+        }
+
+        /**
+         * 手电筒：五步搞定
+         * 1.实例化封装对象：GT.DarknessMagic.Flashlight fl = GT.DarknessMagic.Flashlight()
+         * 2.初始化+注册+取消：fl.init(this, null)  注册：fl.onResume()  取消fl.onPause()
+         * 3.智能打开关闭: flashlight.automaticSwitch()
+         * <p>
+         * 注意： 该工具类仅仅只能在整个app生命周期中，初始化一次，所以尽量在 主界面初始化。
+         */
+        public static class FlashlightUtils {
+            private CameraManager mCameraManager;
+            private String cameraId = "0";
+            private boolean isFlashLightOn = false;
+            private GT.OneListener<Boolean> onListener;
+
+            // 判断是否有闪光灯功能
+            public static boolean hasFlash(Context context) {
+                return context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_CAMERA_FLASH);
+            }
+
+            private final CameraManager.TorchCallback torchCallback = new CameraManager.TorchCallback() {//注册监听手电筒状态
+                @Override
+                public void onTorchModeChanged(@NonNull String cameraId, boolean enabled) {
+                    super.onTorchModeChanged(cameraId, enabled);
+                    if (onListener != null) onListener.onOneListener(enabled);
+                    isFlashLightOn = enabled;//手电筒状态赋值
+                }
+            };
+
+            /**
+             * 初始化 手电筒
+             *
+             * @param context
+             * @param cameraId (非必填)
+             * @return
+             */
+            public void init(Context context, GT.OneListener<Boolean> onListener, String... cameraId) {
+                if (context == null) return;
+
+                if (onListener != null) {
+                    this.onListener = onListener;
+                }
+
+                if (cameraId != null && cameraId.length > 0) {
+                    this.cameraId = cameraId[0];
+                }
+                if (mCameraManager == null) {
+                    mCameraManager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
+                }
+            }
+
+            /**
+             * 自动开关
+             *
+             * @param openOrClose 强制设置开关
+             * @return
+             */
+            public void automaticSwitch(boolean... openOrClose) {
+                if (mCameraManager == null) return;
+                if (openOrClose != null && openOrClose.length > 0) {
+                    isFlashLightOn = openOrClose[0];
+                }
+                try {
+                    isFlashLightOn = !isFlashLightOn;
+                    mCameraManager.setTorchMode(cameraId, isFlashLightOn);
+                } catch (CameraAccessException e) {
+                }
+            }
+
+            //打开
+            public void open() {
+                if (mCameraManager == null) return;
+                isFlashLightOn = true;
+                try {
+                    mCameraManager.setTorchMode(cameraId, true);
+                } catch (CameraAccessException e) {
+                }
+            }
+
+            //关闭
+            public void close() {
+                if (mCameraManager == null) return;
+                isFlashLightOn = true;
+                try {
+                    mCameraManager.setTorchMode(cameraId, false);
+                } catch (CameraAccessException e) {
+                }
+            }
+
+            //注册传感器监听器
+            public void onResume() {
+                if (mCameraManager == null) return;
+                mCameraManager.registerTorchCallback(torchCallback, null);
+            }
+
+            //取消传感器监听器
+            public void onPause() {
+                if (mCameraManager == null) return;
+                mCameraManager.unregisterTorchCallback(torchCallback);
+            }
+
+            //关闭
+            public void empty() {
+                onListener = null;
+                mCameraManager = null;
+            }
+
+        }
+
+        /**
+         * 声音分贝获取：三步搞定
+         * 需要的权限:<uses-permission android:name="android.permission.RECORD_AUDIO" />
+         * 1.初始化：private GT.DarknessMagic.AudioRecordDemo mediaRecorderDemo = new GT.DarknessMagic.AudioRecordDemo();
+         * 2.开始检测：mediaRecorderDemo.startRecording([回调接口]);
+         * 3.结束检测: mediaRecorderDemo.stopRecording();
+         */
+        public static class AudioRecordUtils {
+
+            private static final int SAMPLE_RATE_IN_HZ = 8000;
+            private static final int BUFFER_SIZE = AudioRecord.getMinBufferSize(SAMPLE_RATE_IN_HZ, AudioFormat.CHANNEL_IN_DEFAULT, AudioFormat.ENCODING_PCM_16BIT);
+            private AudioRecord mAudioRecord;
+            private boolean isGetVoiceRun;
+            private final Object mLock;
+            private long timeoutMillis = 100;//分贝获取时间间隔
+
+            public long getTimeoutMillis() {
+                return timeoutMillis;
+            }
+
+            public void setTimeoutMillis(long timeoutMillis) {
+                this.timeoutMillis = timeoutMillis;
+            }
+
+            public AudioRecordUtils() {
+                mLock = new Object();
+            }
+
+            public void stopRecording() {
+                isGetVoiceRun = false;
+            }
+
+            @SuppressLint("MissingPermission")
+            public void startRecording(FragmentActivity fragmentActivity, GT.OneListener<Double> onListener) {
+                if (isGetVoiceRun) return;
+                //权限动态申请
+                GT.AppAuthorityManagement.Permission.init(fragmentActivity, new String[]{Manifest.permission.RECORD_AUDIO})
+                        .permissions(new GT.AppAuthorityManagement.Permission.OnPermissionListener() {
+                            @Override
+                            public void onExplainRequestReason(GT.AppAuthorityManagement.Permission.PermissionDescription onPDListener) {
+                                onPDListener.setAcceptAdvice(true);//核心，设置拒绝授权
+                            }
+
+                            @Override
+                            public boolean onForwardToSettings() {
+                                return true;//特殊权限特殊处理，如：需要进入 系统设置 中或 应用信息中的代码可自定义填写
+                            }
+
+                            @Override
+                            public void request(boolean allGranted, String[] grantedList, String[] deniedList, String message) {
+                                if (allGranted) { //全部授权
+                                    start(onListener);
+                                }
+                            }
+                        });
+
+            }
+
+            @SuppressLint("MissingPermission")
+            private void start(GT.OneListener<Double> onListener) {
+                mAudioRecord = new AudioRecord(MediaRecorder.AudioSource.MIC, SAMPLE_RATE_IN_HZ, AudioFormat.CHANNEL_IN_DEFAULT, AudioFormat.ENCODING_PCM_16BIT, BUFFER_SIZE);
+                isGetVoiceRun = true;
+                if (mAudioRecord == null) return;
+                GT.Thread.getInstance(0).execute(() -> {
+                    if (mAudioRecord != null)
+                        mAudioRecord.startRecording();
+                    short[] buffer = new short[BUFFER_SIZE];
+                    while (isGetVoiceRun && mAudioRecord != null) {
+                        //r是实际读取的数据长度，一般而言r会小于buffersize
+                        int readInt = mAudioRecord.read(buffer, 0, BUFFER_SIZE);
+                        long data = 0;
+                        // 将 buffer 内容取出，进行平方和运算
+                        for (short value : buffer) {
+                            data += value * value;
+                        }
+                        // 平方和除以数据总长度，得到音量大小。
+                        double mean = data / (double) readInt;
+                        double volume = 10 * Math.log10(mean);
+                        onListener.onOneListener(volume);
+                        // 大概一秒十次
+                        synchronized (mLock) {
+                            try {
+                                mLock.wait(timeoutMillis);
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
+                        }
+                    }
+                    if (mAudioRecord != null) {
+                        mAudioRecord.stop();
+                        mAudioRecord.release();
+                        mAudioRecord = null;
+                    }
+                });
+            }
+
+        }
+
+        /**
+         * 磁场传感器：四步搞定
+         * 1.初始化：private MagneticFieldUtils mfu = new MagneticFieldUtils();
+         * 2.开始检测： mfu.init(this,[回调接口]);
+         * 3.注册与取消监听 mfu.onResume():注册  mfu.onPause():取消
+         * 4.结束检测: mfu.close();
+         */
+        public static class MagneticFieldUtils implements SensorEventListener {
+
+            private double alarmLim = 80;//判定值，判断是否检测到金属
+
+            private GT.OneListener<MagneticFieldBean> onListener;
+            private SensorManager sensorManager;
+            private MagneticFieldBean magneticFieldBean = new MagneticFieldBean();
+
+            public double getAlarmLim() {
+                return alarmLim;
+            }
+
+            public void setAlarmLim(double alarmLim) {
+                this.alarmLim = alarmLim;
+            }
+
+            public void close() {
+                magneticFieldBean = null;
+                onListener = null;
+                sensorManager = null;
+            }
+
+            public void init(Context context, GT.OneListener<MagneticFieldBean> oneListener, double... alarmLims) {
+                if (context == null) return;
+                this.onListener = oneListener;
+                if (alarmLims != null && alarmLims.length > 0) {
+                    alarmLim = alarmLims[0];
+                }
+                if (sensorManager == null) {
+                    sensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
+                }
+            }
+
+            //注册传感器监听器
+            public void onResume() {
+                if (sensorManager == null) return;
+                sensorManager.registerListener(this, sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD), SensorManager.SENSOR_DELAY_NORMAL);
+            }
+
+            //取消磁场传感器监听器
+            public void onPause() {
+                if (sensorManager == null) return;
+                sensorManager.unregisterListener(this); //取消注册的监听器
+            }
+
+            @Override
+            public void onSensorChanged(SensorEvent sensorEvent) {
+                double rawTotal;//未处理的数据
+                if (sensorEvent.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD) {
+                    //分别计算三轴磁感应强度
+                    float X_lateral = sensorEvent.values[0];
+                    float Y_lateral = sensorEvent.values[1];
+                    float Z_lateral = sensorEvent.values[2];
+                    magneticFieldBean.X_lateral = X_lateral;
+                    magneticFieldBean.Y_lateral = Y_lateral;
+                    magneticFieldBean.Z_lateral = Z_lateral;
+                    //计算出总磁感应强度
+                    rawTotal = Math.sqrt(X_lateral * X_lateral + Y_lateral * Y_lateral + Z_lateral * Z_lateral);
+                    //初始化BigDecimal类
+                    BigDecimal total = new BigDecimal(rawTotal);
+                    magneticFieldBean.alarmLimValue = total.setScale(2, RoundingMode.HALF_UP).doubleValue();
+                    if (magneticFieldBean.alarmLimValue < alarmLim) {
+                        magneticFieldBean.progress = (int) ((magneticFieldBean.alarmLimValue / alarmLim) * 100);
+                        magneticFieldBean.isDetected = false;
+                    } else {
+                        magneticFieldBean.isDetected = true;
+                        magneticFieldBean.progress = 100;
+                    }
+                    onListener.onOneListener(magneticFieldBean);
+                }
+            }
+
+            @Override
+            public void onAccuracyChanged(Sensor sensor, int i) {
+
+            }
+
+            public static class MagneticFieldBean {
+
+                private float X_lateral;
+                private float Y_lateral;
+                private float Z_lateral;
+                private double alarmLimValue;//当前感应值
+                private int progress;//当前进度
+                private boolean isDetected;//是否检测到金属
+
+                public float getX_lateral() {
+                    return X_lateral;
+                }
+
+                public void setX_lateral(float x_lateral) {
+                    X_lateral = x_lateral;
+                }
+
+                public float getY_lateral() {
+                    return Y_lateral;
+                }
+
+                public void setY_lateral(float y_lateral) {
+                    Y_lateral = y_lateral;
+                }
+
+                public float getZ_lateral() {
+                    return Z_lateral;
+                }
+
+                public void setZ_lateral(float z_lateral) {
+                    Z_lateral = z_lateral;
+                }
+
+                public double getAlarmLimValue() {
+                    return alarmLimValue;
+                }
+
+                public void setAlarmLimValue(double alarmLimValue) {
+                    this.alarmLimValue = alarmLimValue;
+                }
+
+                public int getProgress() {
+                    return progress;
+                }
+
+                public void setProgress(int progress) {
+                    this.progress = progress;
+                }
+
+                public boolean isDetected() {
+                    return isDetected;
+                }
+
+                public void setDetected(boolean detected) {
+                    isDetected = detected;
+                }
+
+                @Override
+                public String toString() {
+                    return "MagneticFieldBean{" +
+                            "X_lateral=" + X_lateral +
+                            ", Y_lateral=" + Y_lateral +
+                            ", Z_lateral=" + Z_lateral +
+                            ", alarmLimValue=" + alarmLimValue +
+                            ", progress=" + progress +
+                            ", isDetected=" + isDetected +
+                            '}';
+                }
+            }
+
+        }
+
+        /**
+         * 光源传感器：四步搞定 LightSourceUtils
+         * 1.初始化：private LightSourceUtils lsu = new LightSourceUtils();
+         * 2.开始检测： lsu.init(this,[回调接口]);
+         * 3.注册与取消监听 lsu.onResume():注册  lsu.onPause():取消
+         * 4.结束检测: lsu.close();
+         */
+        public static class LightSourceUtils implements SensorEventListener {
+
+            private SensorManager sensorManager;
+            private GT.OneListener<Float> onListener;
+
+            public void close() {
+                onListener = null;
+                sensorManager = null;
+            }
+
+            public void init(Context context, GT.OneListener<Float> oneListener) {
+                if (context == null) return;
+                this.onListener = oneListener;
+                if (sensorManager == null) {
+                    sensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
+                }
+
+            }
+
+            //注册传感器监听器
+            public void onResume() {
+                if (sensorManager == null) return;
+                sensorManager.registerListener(this, sensorManager.getDefaultSensor(Sensor.TYPE_LIGHT), SensorManager.SENSOR_DELAY_GAME); //为光线传感器注册监听器
+            }
+
+            //取消传感器监听器
+            public void onPause() {
+                if (sensorManager == null) return;
+                sensorManager.unregisterListener(this); //取消注册的监听器
+            }
+
+            @Override
+            public void onSensorChanged(SensorEvent sensorEvent) {
+                if (sensorEvent.sensor.getType() == Sensor.TYPE_LIGHT) {
+                    if (onListener != null)
+                        onListener.onOneListener(sensorEvent.values[0]);
+                }
+            }
+
+            @Override
+            public void onAccuracyChanged(Sensor sensor, int i) {
+
+            }
+        }
+
+        /**
+         * 水平仪传感器(指南针)：四步搞定 GradienterUtils
+         * 1.初始化：private GradienterUtils lsu = new GradienterUtils();
+         * 2.开始检测： lsu.init(this,[回调接口]);
+         * 3.注册与取消监听 lsu.onResume():注册  lsu.onPause():取消
+         * 4.结束检测: lsu.close();
+         */
+        public static class GradienterUtils implements SensorEventListener {
+
+            private SensorManager sensorManager;
+            private GT.OneListener<float[]> onListener;
+
+            public void close() {
+                onListener = null;
+                sensorManager = null;
+            }
+
+            public void init(Context context, GT.OneListener<float[]> oneListener) {
+                if (context == null) return;
+                this.onListener = oneListener;
+                if (sensorManager == null) {
+                    sensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
+                }
+            }
+
+
+            //注册传感器监听器
+            public void onResume() {
+                if (sensorManager == null) return;
+                sensorManager.registerListener(this, sensorManager.getDefaultSensor(Sensor.TYPE_ORIENTATION), SensorManager.SENSOR_DELAY_GAME);
+            }
+
+            //取消传感器监听器
+            public void onPause() {
+                if (sensorManager == null) return;
+                sensorManager.unregisterListener(this);
+            }
+
+            @Override
+            public void onSensorChanged(SensorEvent event) {
+                if (event.sensor.getType() == Sensor.TYPE_ORIENTATION) {
+                    if (onListener != null)
+                        onListener.onOneListener(event.values);
+                }
+            }
+
+            @Override
+            public void onAccuracyChanged(Sensor sensor, int accuracy) {
+
+            }
+        }
+
+        //壁纸封装类
+        public static class WallpaperManagerUtils {
+
+            private WallpaperManagerUtils() {
+            }
+
+            private static WallpaperManagerUtils wallpaperManagerUtils;
+            private static WallpaperManager wpManager;
+
+            public static WallpaperManager getWpManager() {
+                return wpManager;
+            }
+
+            public static void setWpManager(WallpaperManager wpManager) {
+                WallpaperManagerUtils.wpManager = wpManager;
+            }
+
+            public static WallpaperManagerUtils getInstance(Context context) {
+                if (wallpaperManagerUtils == null) {
+                    synchronized (WallpaperManagerUtils.class) {
+                        if (wallpaperManagerUtils == null) {
+                            wallpaperManagerUtils = new WallpaperManagerUtils();
+                            wpManager = WallpaperManager.getInstance(context);
+                        }
+                    }
+                }
+                return wallpaperManagerUtils;
+            }
+
+
+            public void loadImage(Object value) {
+                if (wpManager == null || value == null) return;
+                try {
+                    if (value instanceof Integer) {
+                        int resId = (int) value;
+                        wpManager.setResource(resId);
+                    } else if (value instanceof Bitmap) {
+                        Bitmap bitmap = (Bitmap) value;
+                        wpManager.setBitmap(bitmap);
+                    } else if (value instanceof InputStream) {
+                        InputStream inputStream = (InputStream) value;
+                        wpManager.setStream(inputStream);
+                    } else if (value instanceof String) {
+                        GT.Thread.getInstance(0).execute(() -> {
+                            try {
+                                String urlOrFile = (String) value;
+                                Bitmap bitmap;
+                                if (urlOrFile.contains("http")) {
+                                    bitmap = GT.ImageViewTools.getImageBitmap(urlOrFile);
+                                } else {
+                                    bitmap = GT.ImageViewTools.getBitmapFromLocal(new File(urlOrFile));
+                                }
+                                wpManager.setBitmap(bitmap);
+                            } catch (IOException e) {
+                            }
+                        });
+                    } else {
+                        GT.Thread.getInstance(0).execute(new Runnable() {
+                            @Override
+                            public void run() {
+                                Bitmap bitmap = GT.ImageViewTools.ObjectToBitmap(value);
+                                try {
+                                    if (bitmap != null) wpManager.setBitmap(bitmap);
+                                } catch (IOException e) {
+
+                                }
+                            }
+                        });
+                    }
+                } catch (IOException e) {
+
+                }
+            }
+
+
+            //清空锁屏壁纸
+            public void clearLockScreen() {
+                try {
+                    wpManager.clear(WallpaperManager.FLAG_LOCK);
+                } catch (IOException e) {
+
+                }
+            }
+
+
+            //清空所有壁纸
+            public void clearAll() {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    wpManager.clearWallpaper();
+                }
+            }
+
+            //获得当前系统壁纸，如果没有设置壁纸，则返回系统默认壁纸
+            public Drawable getDrawable() {
+                @SuppressLint("MissingPermission") Drawable drawable = wpManager.getDrawable();
+                return drawable;
+            }
+
+
+            //加入当前壁纸是动态壁纸，返回动态壁纸信息
+            public WallpaperInfo getWallpaperInfo() {
+                return wpManager.getWallpaperInfo();
+            }
+
+            //获得当前系统壁纸，如果没设置壁纸的话返回null
+            public Drawable peekDrawable() {
+                return wpManager.peekDrawable();
+            }
+
+        }
+
     }
 
     // 定义 GT 包 简易使用教程
@@ -42310,7 +46262,10 @@ public class GT {
 
 //=========================================== GT 库 后续开发 =========================================
 
-//    核心:后续GT库的开发 会向 兼容 Kotlin 语言的方向发展
-//    1.热修复支持资源修复
+
+    /**
+     * 核心:后续GT库的开发 会向 兼容 Kotlin 语言的方向发展
+     * 1.热修复支持资源修复
+     */
 
 }

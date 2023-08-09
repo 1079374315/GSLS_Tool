@@ -142,7 +142,7 @@ public class BindingBean {
                 ", javaLibraryName='" + javaLibraryName + '\'' +
                 ", bingingType='" + bingingType + '\'' +
                 ", xmlBeanList=" + xmlBeanList +
-                ", classCode=" + classCode != null ? "已存源码" : "缺失源码" +
+                ", classCode=" + classCode != null ? "okCode" : "noCode" +
                 '}';
     }
 }

@@ -6,8 +6,10 @@ import com.squareup.javapoet.JavaFile;
 import com.squareup.javapoet.TypeSpec;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.TypeElement;
@@ -17,7 +19,7 @@ public class DataBindingUtils {
     private static TypeSpec logTypeSpec;
     private static JavaFile.Builder builder;
     public static final AndroidBean androidBean = new AndroidBean();
-    private static final boolean isLog = false;//是否日志
+    private static final boolean isLog = true;//是否日志
     public static final String[] filtrationArray = {".git", ".gradle", ".idea", "gradle"};//过滤文件名单
 
     public static void startLog(Elements mElementsUtil, TypeElement element) {
@@ -275,6 +277,48 @@ public class DataBindingUtils {
             }
         }
         return packName;
+    }
+
+    public static String toStrings(Object obj) {
+        try {
+            StringBuilder stringBuilder = new StringBuilder();
+            Class<?> javaClass = obj.getClass();
+            String className = javaClass.getSimpleName();
+            stringBuilder.append(className + "{");
+            for (Field field : javaClass.getDeclaredFields()) {
+                field.setAccessible(true);
+                Class<?> type = field.getType();
+                String name = field.getName();
+                Object value = field.get(obj);
+                if (type == String.class) {
+                    stringBuilder.append(name + "='" + value + "', ");
+                } else if (type == Boolean.class) {
+                    stringBuilder.append(name + "=" + value + ", ");
+                } else if (type == Short.class) {
+                    stringBuilder.append(name + "=" + value + ", ");
+                } else if (type == Integer.class) {
+                    stringBuilder.append(name + "=" + value + ", ");
+                } else if (type == Long.class) {
+                    stringBuilder.append(name + "=" + value + ", ");
+                } else if (type == Float.class) {
+                    stringBuilder.append(name + "=" + value + ", ");
+                } else if (type == Double.class) {
+                    stringBuilder.append(name + "=" + value + ", ");
+                } else if (type == ArrayList.class) {
+                    stringBuilder.append(name + "=" + value + ", ");
+                } else if (type == Map.class) {
+                    stringBuilder.append(name + "=" + value + ", ");
+                } else {
+                    stringBuilder.append(name + "=" + value + ", ");
+                }
+            }
+            var toString = stringBuilder.toString();
+            toString = toString.substring(0, toString.length() - 2) + "}";
+            return toString;
+        } catch (IllegalAccessException e) {
+            throw new RuntimeException(e);
+        }
+
     }
 
 }

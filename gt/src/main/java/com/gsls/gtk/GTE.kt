@@ -5,7 +5,9 @@ import android.animation.ObjectAnimator
 import android.app.Activity
 import android.content.Context
 import android.content.res.XmlResourceParser
+import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
+import android.text.Editable
 import android.view.View
 import android.view.animation.Animation
 import android.view.animation.AnimationSet
@@ -32,6 +34,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlin.reflect.KProperty
 
 /**
  * GT库扩展方法
@@ -112,6 +115,26 @@ fun GT.GT_WebView.BaseWebView.drawable(@DrawableRes id: Int): Drawable =
 fun GT.GT_Notification.BaseNotification.drawable(@DrawableRes id: Int): Drawable =
     GT.Res.drawable(context, id)
 
+//bitmap
+fun bitmapGet(context: Context, @DrawableRes id: Int): Bitmap = GT.ImageViewTools.drawable2Bitmap(GT.Res.drawable(context, id))
+fun Context.bitmap(@DrawableRes id: Int): Bitmap = GT.ImageViewTools.drawable2Bitmap(GT.Res.drawable(this, id))
+fun Activity.bitmap(@DrawableRes id: Int): Bitmap = GT.ImageViewTools.drawable2Bitmap(GT.Res.drawable(this, id))
+fun Fragment.bitmap(@DrawableRes id: Int): Bitmap = GT.ImageViewTools.drawable2Bitmap(GT.Res.drawable(requireContext(), id))
+fun DialogFragment.bitmap(@DrawableRes id: Int): Bitmap = GT.ImageViewTools.drawable2Bitmap(GT.Res.drawable(requireContext(), id))
+fun GT.GT_FloatingWindow.BaseFloatingWindow.bitmap(@DrawableRes id: Int): Bitmap =
+    GT.ImageViewTools.drawable2Bitmap(GT.Res.drawable(context, id))
+
+fun GT.GT_PopupWindow.BasePopupWindow.bitmap(@DrawableRes id: Int): Bitmap =
+    GT.ImageViewTools.drawable2Bitmap(GT.Res.drawable(context, id))
+
+fun GT.GT_View.BaseView.bitmap(@DrawableRes id: Int): Bitmap = GT.ImageViewTools.drawable2Bitmap(GT.Res.drawable(context, id))
+fun GT.GT_WebView.BaseWebView.bitmap(@DrawableRes id: Int): Bitmap =
+    GT.ImageViewTools.drawable2Bitmap(GT.Res.drawable(context, id))
+
+fun GT.GT_Notification.BaseNotification.bitmap(@DrawableRes id: Int): Bitmap =
+    GT.ImageViewTools.drawable2Bitmap(GT.Res.drawable(context, id))
+
+
 //dimen
 fun dimenGet(context: Context, @DimenRes id: Int) = GT.Res.dimen(context, id)
 fun Context.dimen(@DimenRes id: Int) = GT.Res.dimen(this, id)
@@ -188,6 +211,8 @@ fun GT.GT_Notification.BaseNotification.inflate(@LayoutRes id: Int): View =
 fun <T> viewGet(context: Context, @IdRes id: Int): T = GT.Res.view(context, id)
 fun viewGet(context: Context, @IdRes id: Int): View = GT.Res.view(context, id)
 fun <T> Context.view(@IdRes id: Int): T = GT.Res.view(this, id)
+fun Context.view(@IdRes id: Int): View = GT.Res.view(this, id)
+fun <T> Activity.view(@IdRes id: Int): T = GT.Res.view(this, id)
 fun Activity.view(@IdRes id: Int): View = GT.Res.view(this, id)
 fun <T> Fragment.view(@IdRes id: Int): T = GT.Res.view(requireContext(), id)
 fun Fragment.view(@IdRes id: Int): View = GT.Res.view(requireContext(), id)
@@ -255,109 +280,72 @@ fun GT.GT_View.BaseView.assetLocales(): Array<String> = GT.Res.assetLocales(cont
 fun GT.GT_WebView.BaseWebView.assetLocales(): Array<String> = GT.Res.assetLocales(context)
 
 
-//********************************** EventBus 扩展 ***********************************
-fun Any.registers() = GT.EventBus.registers(this) //注册EventBus
-fun Any.registerAcrossProcesses() = GT.EventBus.registerAcrossProcessess(this) //注册 跨进程EventBus
+//assetLocales
+fun assetsGet(context: Context, assetsName: String, onListener: GT.OnListener<String>) =
+    GT.ApplicationUtils.getAssetsValue(context, assetsName, onListener)
 
-fun Any.unregisters() = GT.EventBus.unregisters(this)//取消 EventBus
-fun Any.unregisterAcrossProcesses() = GT.EventBus.unregisterAcrossProcessess(this)//取消 跨进程EventBus
+fun Context.assets(assetsName: String, onListener: GT.OnListener<String>) =
+    GT.ApplicationUtils.getAssetsValue(this, assetsName, onListener)
 
+fun Activity.assets(assetsName: String, onListener: GT.OnListener<String>) =
+    GT.ApplicationUtils.getAssetsValue(this, assetsName, onListener)
 
-/**
- * 发布事件
- * 注意:在自定义 evenKey 时请不要写入 "_GT_" 字符,该字符为关键字
- *
- * @param <T>       返回类型 (发布事件后可接收到订阅者返回值,但如果订阅者与发布者不在同一线程中或发布的事件中有两个订阅者,将无法在发布事件的线程接收到订阅者的返回值)
- * @param eventData 发布的事件 (参数仅支持一个,若需要传多参数可传递 Bundle,List,Map,实体类Bean等等)
- * @param eventKeys 指定发送的区域 (如果不填则默认向所有订阅者发布事件)
- * @return
- */
-fun <T> Any.posts(vararg eventKeys: Any? = arrayOf()): T {
-    return if (eventKeys.isEmpty()) {
-        GT.EventBus.posts(this)
-    } else {
-        GT.EventBus.posts(this, eventKeys)
-    }
-}
+fun Fragment.assets(assetsName: String, onListener: GT.OnListener<String>) =
+    GT.ApplicationUtils.getAssetsValue(requireContext(), assetsName, onListener)
 
-/**
- * 发布粘性事件
- * 注意:在自定义 evenKey 时请不要写入 "_GT_" 字符,该字符为关键字
- *
- * @param <T>       返回类型 (发布事件后可接收到订阅者返回值,但如果订阅者与发布者不在同一线程中或发布的事件中有两个订阅者,将无法在发布事件的线程接收到订阅者的返回值)
- * @param eventData 发布的事件 (参数仅支持一个,若需要传多参数可传递 Bundle,List,Map,实体类Bean等等)
- * @param eventKeys 指定发送的区域 (如果不填则默认向所有订阅者发布事件)
- * @return
- */
-fun <T> Any.postStickys(vararg eventKeys: Any? = arrayOf()): T {
-    return if (eventKeys.isEmpty()) {
-        GT.EventBus.postStickys(this)
-    } else {
-        GT.EventBus.postStickys(this, eventKeys)
-    }
-}
+fun DialogFragment.assets(assetsName: String, onListener: GT.OnListener<String>) =
+    GT.ApplicationUtils.getAssetsValue(requireContext(), assetsName, onListener)
 
-/**
- * 发布跨进程 事件
- * 注意:在自定义 evenKey 时请不要写入 "_GT_" 字符,该字符为关键字
- *
- * @无法返回数据
- * @param eventData 发布的事件 (参数仅支持一个的基本类型)
- * @param eventKeys 指定发送的区域 (如果不填则默认向所有订阅者发布事件)
- * @return
- */
-fun Any.postAcrossProcessess(vararg eventKeys: Any? = arrayOf()) {
-    if (eventKeys.isEmpty()) {
-        GT.EventBus.postAcrossProcessess(this)
-    } else {
-        GT.EventBus.postAcrossProcessess(this, eventKeys)
-    }
-}
+fun GT.GT_FloatingWindow.BaseFloatingWindow.assets(
+    assetsName: String,
+    onListener: GT.OnListener<String>
+) =
+    GT.ApplicationUtils.getAssetsValue(context, assetsName, onListener)
 
-/**
- * 取消事件分发
- *
- * @param eventNames 填写要取消的事件分发，若不填则默认将调用该方法 的方法名作为 要拦截的事件分发者
- */
-fun cancelEventDeliverys(vararg eventKeys: Any? = arrayOf()) =
-    GT.EventBus.cancelEventDeliverys(eventKeys)
+fun GT.GT_PopupWindow.BasePopupWindow.assets(
+    assetsName: String,
+    onListener: GT.OnListener<String>
+) =
+    GT.ApplicationUtils.getAssetsValue(context, assetsName, onListener)
 
-/**
- * 取消事件分发
- *
- * @param eventNames 填写要取消的事件分发，若不填则默认将调用该方法 的方法名作为 要拦截的事件分发者
- */
-fun removeStickyEvent(vararg eventKeys: Any? = arrayOf()) =
-    GT.EventBus.getDefault().removeStickyEvent(eventKeys)
+fun GT.GT_View.BaseView.assets(assetsName: String, onListener: GT.OnListener<String>) =
+    GT.ApplicationUtils.getAssetsValue(context, assetsName, onListener)
+
+fun GT.GT_WebView.BaseWebView.assets(assetsName: String, onListener: GT.OnListener<String>) =
+    GT.ApplicationUtils.getAssetsValue(context, assetsName, onListener)
+
 
 //********************************** GT_SharedPreferences 扩展 ***********************************
 private var sp: GT_SharedPreferences? = null
 
-fun Context.initSP(name: String = packageName, commit: Boolean = true): GT_SharedPreferences? {
+/**
+ * 用户级别的SP
+ */
+fun Context.initSP(userID: String = packageName, commit: Boolean = true): GT_SharedPreferences? {
     if (sp == null) {
-        sp = GT.GT_Cache.getSP(name)
+        sp = GT.GT_Cache.getSP(userID)
         if (sp == null) {
-            sp = GT_SharedPreferences(this, name, commit)
-            GT.GT_Cache.putSP(name, sp)
+            sp = GT_SharedPreferences(this, userID, commit)
+            GT.GT_Cache.putSP(userID, sp)
         }
     }
     return sp
 }
 
-fun Any.saveSP(key: String): GT_SharedPreferences? {
-    if (sp != null) sp!!.save(key.toString(), this)
+fun String.saveSP(obj: Any): GT_SharedPreferences? {
+    if (sp != null) sp!!.save(this, obj)
     return sp
 }
 
 fun String.deleteSP(): GT_SharedPreferences? {
-    if (sp != null) sp!!.delete(this.toString())
+    if (sp != null) sp!!.delete(this)
     return sp
 }
 
-fun <T> String.querySP(dataType: Class<T>? = null): Any? {
+fun <T> String.querySP(dataType: Class<T>? = null): T? {
     if (sp != null) {
         return if (dataType == null) {
-            sp!!.query(this)
+            sp!!.query(this) as T
         } else {
             sp!!.query(this, dataType) as T
         }
@@ -386,7 +374,7 @@ fun Any.toJson(): String = GT.JSON.toJson2(this)
 //********************************** Glide 扩展 ***********************************
 
 fun ImageView.loadImage(
-    urlImg: String?,                //加载的图片
+    urlImg: Any?,                //加载的图片
     placeholder: Any? = null,       //设置占位图
     error: Any? = null,             //设置错误图
     ambiguity: Float = 0f,          //设置高斯模糊度
@@ -395,17 +383,44 @@ fun ImageView.loadImage(
     bottomLeft: Int = 0,            //设置左下圆角
     bottomRight: Int = 0,           //设置右上圆角
     isGif: Boolean = false,         //是否动态图
+    gifSpeed: Int = 16,             //动态图速度(默认是16数值，增大则变快，缩小则变慢)
     isAnimations: Boolean = true,   //是否动画
     isCaches: Boolean = true        //是否缓存
+) {
+    Glide.with(this)//构建初始化
+        .placeholder(placeholder)//设置占位图
+        .error(error)//设置错误图
+        .blurTransformation(ambiguity)//设置 高斯模糊度
+        .roundedCorners(topLeft, topRight, bottomLeft, bottomRight)//设置圆角
+        .asGif(isGif, gifSpeed)//设置圆角
+        .load(urlImg, isCaches)//设置加载的网络图,是否缓存
+        .into(this, isAnimations)//设置图片控件 5
+}
 
-) = Glide.with(this)//构建初始化
-    .placeholder(placeholder)//设置占位图
-    .error(error)//设置错误图
-    .blurTransformation(ambiguity)//设置 高斯模糊度
-    .roundedCorners(topLeft, topRight, bottomLeft, bottomRight)//设置圆角
-    .asGif(isGif)//设置圆角
-    .load(urlImg, isCaches)//设置加载的网络图,是否缓存
-    .into(this, isAnimations)//设置图片控件
+//加载动态图 [gif]：可直接指定为 gif
+fun ImageView.loadGifImage(
+    url: Any,
+    placeholder: Any? = null,       //设置占位图
+    error: Any? = null,             //设置错误图
+    ambiguity: Float = 0f,          //设置高斯模糊度
+    topLeft: Int = 0,               //设置左上圆角
+    topRight: Int = 0,              //设置右上圆角
+    bottomLeft: Int = 0,            //设置左下圆角
+    bottomRight: Int = 0,           //设置右上圆角
+    gifSpeed: Int = 16,             //动态图速度(默认是16数值，增大则变快，缩小则变慢)
+    isAnimations: Boolean = true,   //是否动画
+    isCaches: Boolean = true        //是否缓存
+) {
+    if (url is String) {
+        val isGif = url.contains("gif")
+        var urlImg = url
+        if (isGif && urlImg.contains("[")) urlImg = urlImg.substring(0, urlImg.indexOf("["))
+        loadImage(urlImg, placeholder, error, ambiguity, topLeft, topRight, bottomLeft, bottomRight, isGif, gifSpeed, isAnimations, isCaches)
+    } else {
+        loadImage(url, placeholder, error, ambiguity, topLeft, topRight, bottomLeft, bottomRight, false, gifSpeed, isAnimations, isCaches)
+    }
+}
+
 
 //********************************** GT_Animation 扩展 ***********************************
 
@@ -1055,6 +1070,7 @@ private fun getMainScope(name: Any): CoroutineScope {
     if (mapMainScope[name] == null) mapMainScope[name] = MainScope()
     return mapMainScope[name]!!
 }
+
 //创建协程
 fun <T> Any.runJava(block: suspend CoroutineScope.() -> T) =
     this.creationJob(Dispatchers.Default, block)
@@ -1106,7 +1122,34 @@ fun cancelAlls() {
 
 //********************************** 系统方法 扩展 ***********************************
 
+//挂起
 fun sleep(millis: Long) = GT.Thread.sleep(millis)
+
+//清除所有空格
+fun String.notBlanks(): String = GT.ApplicationUtils.notBlanks(this)
+
+//设置为 EditText 可设置的参数
+fun String.editText(): Editable = Editable.Factory.getInstance().newEditable(this)
+
+//设置 EditText 值
+fun EditText.setValue(value: String) {
+    text = Editable.Factory.getInstance().newEditable(value)
+}
+
+//设置 EditText 值 并 将光标设置到最后
+fun EditText.setValueEnd(value: String) {
+    text = Editable.Factory.getInstance().newEditable(value)
+    setSelectionEnd()
+}
+
+//设置光标设置到最后
+fun EditText.setSelectionEnd() = this.setSelection(text.length)
+
+//延迟触发
+fun EditText.delayTrigger(sleep: Int = 300, onTriggerValue: GT.ViewUtils.DelayTrigger.OnTriggerValue) {
+    GT.ViewUtils.DelayTrigger().EditText(this, sleep, onTriggerValue)
+}
+
 
 //打印实体类 属性
 fun Any.toStrings(): String {
@@ -1137,4 +1180,15 @@ fun Any.toStrings(): String {
     return toString
 }
 
+//延时加载
+class Later<T>(private val block: () -> T) {
+    var value: Any? = null
+    operator fun getValue(any: Any?, prop: KProperty<*>): T {
+        if (value == null) {
+            value = block()
+        }
+        return value as T
+    }
+}
 
+fun <T> load(block: () -> T) = Later(block)

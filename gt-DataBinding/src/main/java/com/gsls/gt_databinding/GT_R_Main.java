@@ -253,10 +253,8 @@ public class GT_R_Main extends AbstractProcessor {
         StringBuilder resSB = new StringBuilder();
         for(String type :resMap.keySet()) {
             List<String> list = resMap.get(type);
-//			GT.logt("类型:" + type);
             resSB.append("\r\n\tclass " + type + " {\n");
             for(String code : list) {
-//				GT.logt("code:" + code);
                 resSB.append("\t\t" + code + "\r\n");
             }
             resSB.append("\t}");

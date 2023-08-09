@@ -15,4 +15,5 @@
         <item name="android:windowExitAnimation">@anim/bottom_out</item>
     </style>
 
+
 </resources>

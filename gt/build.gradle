@@ -31,13 +31,13 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
 
     tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile.class){
         kotlinOptions {
-            jvmTarget = "1.8"
+            jvmTarget = "17"
         }
     }
 
@@ -51,8 +51,9 @@ dependencies {
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.4.0'
 
     //GT全部功能 需要添加的包
-    implementation 'me.jahnen:libaums:0.8.0'//U盘操作
-    implementation 'com.google.code.gson:gson:2.10.1'// json解析
+    implementation 'com.google.code.gson:gson:2.10.1'//json解析
+    implementation 'com.google.zxing:core:3.3.3'//二维码
+
     //注册本地库 gt-DataBinding
     implementation project(':gt-DataBinding')
     kapt project(':gt-DataBinding')
