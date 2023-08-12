@@ -22674,7 +22674,7 @@ public class GT {
          * @param onListener
          * @param isSynchronization 是否同步解析 false:异步解析 true:同步解析
          */
-        public static void getQrCodeInformation(Bitmap bitmap, GT.OnListener<String> onListener, boolean... isSynchronization) {
+        public static void getQrCodeInformationSy(Bitmap bitmap, GT.OneListener<String> onListener, boolean... isSynchronization) {
             if (isSynchronization != null && isSynchronization.length > 0 && isSynchronization[0]) {
                 getQrCodeInformation(bitmap, onListener);
             } else {
