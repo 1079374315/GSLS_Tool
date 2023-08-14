@@ -22654,7 +22654,8 @@ public class GT {
         public static void replacementView(View oldView, View newView) {
             ViewParent parent = oldView.getParent();
             if (parent == null) return;
-            if (parent instanceof ViewGroup viewGroup) {
+            if (parent instanceof ViewGroup) {
+                ViewGroup viewGroup = (ViewGroup) parent;
                 for (int i = 0; i < viewGroup.getChildCount(); i++) {
                     View childAt = viewGroup.getChildAt(i);
                     if (childAt == oldView) {
