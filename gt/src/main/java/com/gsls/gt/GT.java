@@ -20187,7 +20187,7 @@ public class GT {
                         stringBuilder.append(name + "=" + value + ", ");
                     }
                 }
-                var toString = stringBuilder.toString();
+                String toString = stringBuilder.toString();
                 toString = toString.substring(0, toString.length() - 2) + "}";
                 return toString;
             } catch (IllegalAccessException e) {
