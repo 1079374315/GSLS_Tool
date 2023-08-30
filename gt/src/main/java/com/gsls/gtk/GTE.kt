@@ -9,6 +9,7 @@ import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
 import android.text.Editable
 import android.view.View
+import android.view.ViewGroup
 import android.view.animation.Animation
 import android.view.animation.AnimationSet
 import android.widget.EditText
@@ -27,6 +28,7 @@ import com.gsls.gt.GT
 import com.gsls.gt.GT.GT_SharedPreferences
 import com.gsls.gt.GT.Glide
 import com.gsls.gt.GT.LOG
+import com.gsls.gt.GT.LOG.getClassName
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -41,6 +43,32 @@ import kotlin.reflect.KProperty
  */
 
 //********************************** 日志 扩展 ***********************************
+
+//打印调用者信息
+fun String.logc() {
+    GT.logCallback(4, this, "GT_")
+}
+
+
+//返回具体日志层级信息
+private fun getPrefixT(number: Int): String {
+    var number2 = number
+    var prefix = ""
+    return if (number2 < 0) {
+        "log Hierarchy error "
+    } else {
+        try {
+            val caller = Thread.currentThread().stackTrace[number2]
+            prefix = "(" + caller.fileName + ":%d): "
+            prefix = String.format(prefix, caller.lineNumber).trim { it <= ' ' }
+        } catch (var2: java.lang.Exception) {
+            --number2
+            getPrefixT(number2)
+        }
+        prefix
+    }
+}
+
 //普通日志
 fun Any.log(tag: Any = "") = GT.log(this, tag.toString())
 fun Any.logt(tag: Any = "") = GT.logt(this, LOG.lineInfoIndex + 2, tag.toString())
@@ -421,635 +449,6 @@ fun ImageView.loadGifImage(
     }
 }
 
-
-//********************************** GT_Animation 扩展 ***********************************
-
-private val gtAnimation: GT.GT_Animation = GT.GT_Animation()
-
-/**
- * @param x           初始 X 位置
- * @param toX         最终 X 位置
- * @param y           初始 Y 位置
- * @param toY         最终 Y 位置
- * @param time        动画持续时间
- * @param isSaveClose 是否保持动画结束时的最终状态
- * @param runCount    播放动画的次数 -1 表示无限循环
- * @param toAndFro    是否来回播放
- * @param view        给 View 添加动画
- * @return
- * @移动动画（假）
- */
-fun View.startAnimationTranslate_F(
-    x: Float,               //初始 X 位置
-    toX: Float,             //最终 X 位置
-    y: Float,               //初始 Y 位置
-    toY: Float,             //最终 Y 位置
-    time: Long,             //动画持续时间
-    isSaveClose: Boolean,   //是否保持动画结束时的最终状态
-    runCount: Int,          //播放动画的次数 -1 表示无限循环
-    toAndFro: Boolean       //是否来回播放
-): GT.GT_Animation {
-    gtAnimation.translate_F(x, toX, y, toY, time, isSaveClose, runCount, toAndFro, this)
-    return gtAnimation
-}
-
-
-/**
- * @param x           初始 X 位置
- * @param toX         最终 X 位置
- * @param y           初始 Y 位置
- * @param toY         最终 Y 位置
- * @param time        动画持续时间
- * @param isSaveClose 是否保持动画结束时的最终状态
- * @param runCount    播放动画的次数 -1 表示为无限次数
- * @param toAndFro    是否来回播放
- * @return
- * @移动item动画（假）
- */
-fun startAnimationTranslat_Item_F(
-    x: Float,               //初始 X 位置
-    toX: Float,             //最终 X 位置
-    y: Float,               //初始 Y 位置
-    toY: Float,             //最终 Y 位置
-    time: Long,             //动画持续时间
-    isSaveClose: Boolean,   //是否保持动画结束时的最终状态
-    runCount: Int,          //播放动画的次数 -1 表示为无限次数
-    toAndFro: Boolean       //是否来回播放
-): Animation = gtAnimation.translat_Item_F(x, toX, y, toY, time, isSaveClose, runCount, toAndFro)
-
-
-/**
- * @param x        初始 X 位置
- * @param toX      最终 X 位置
- * @param time     执行动画时间
- * @param runCount 执行动画次数
- * @param toAndFro 是否来回播放
- * @param view     给View加入动画
- * @return
- * @左右动画（真）
- */
-fun View.startAnimationTranslateX_T(
-    x: Float,           //初始 X 位置
-    toX: Float,         //最终 X 位置
-    time: Long,         //执行动画时间
-    runCount: Int,      //执行动画次数
-    toAndFro: Boolean   //是否来回播放
-): GT.GT_Animation {
-    gtAnimation.translateX_T(x, toX, time, runCount, toAndFro, this)
-    return gtAnimation
-}
-
-
-/**
- * @param x        初始 X 位置
- * @param toX      最终 X 位置
- * @param time     执行动画时间
- * @param runCount 执行动画次数
- * @param toAndFro 是否来回播放
- * @param view     给View加入动画
- * @return
- * @左右item动画（真）
- */
-fun View.getAnimationTranslateX_Item_T(
-    x: Float,
-    toX: Float,
-    time: Long,
-    runCount: Int,
-    toAndFro: Boolean
-): ObjectAnimator = gtAnimation.translateX_Item_T(x, toX, time, runCount, toAndFro, this)
-
-
-/**
- * @param y        初始 Y 位置
- * @param toY      最终 Y 位置
- * @param time     执行动画时间
- * @param runCount 执行动画次数
- * @param toAndFro 是否来回播放
- * @param view     给View加入动画
- * @return
- * @上下动画（真）
- */
-fun View.startAnimationTranslateY_T(
-    y: Float,
-    toY: Float,
-    time: Long,
-    runCount: Int,
-    toAndFro: Boolean
-): GT.GT_Animation {
-    gtAnimation.translateY_T(y, toY, time, runCount, toAndFro, this)
-    return gtAnimation
-}
-
-/**
- * @param y        初始 Y 位置
- * @param toY      最终 Y 位置
- * @param time     执行动画时间
- * @param runCount 执行动画次数
- * @param toAndFro 是否来回播放
- * @param view     给View加入动画
- * @return
- * @上下item动画（真）
- */
-fun View.getAnimationTranslateY_Item_T(
-    y: Float,
-    toY: Float,
-    time: Long,
-    runCount: Int,
-    toAndFro: Boolean
-): ObjectAnimator = gtAnimation.translateY_Item_T(y, toY, time, runCount, toAndFro, this)
-
-/**
- * @param x        初始 X 坐标
- * @param toX      最终 X 坐标
- * @param y        初始 Y 坐标
- * @param toY      最终 Y 坐标
- * @param time     消耗时间
- * @param runCount 执行次数
- * @param toAndFro 是否来回播放
- * @param view     动画的View
- * @return
- * @平移动画（真）
- */
-fun View.startAnimationTranslate_T(
-    x: Float,
-    toX: Float,
-    y: Float,
-    toY: Float,
-    time: Long,
-    runCount: Int,
-    toAndFro: Boolean
-): GT.GT_Animation {
-    gtAnimation.translate_T(x, toX, y, toY, time, runCount, toAndFro, this)
-    return gtAnimation
-}
-
-/**
- * @param x        初始 X 坐标
- * @param toX      最终 X 坐标
- * @param y        初始 Y 坐标
- * @param toY      最终 Y 坐标
- * @param time     消耗时间
- * @param runCount 执行次数
- * @param toAndFro 是否来回播放
- * @param view     动画的View
- * @return
- * @平移item动画（真）
- */
-fun View.getAnimationTranslate_Item_T(
-    x: Float,
-    toX: Float,
-    y: Float,
-    toY: Float,
-    time: Long,
-    runCount: Int,
-    toAndFro: Boolean
-): AnimatorSet = gtAnimation.translate_Item_T(x, toX, y, toY, time, runCount, toAndFro, this)
-
-
-/**
- * @param x           原始 X 尺寸
- * @param toX         结束 X 尺寸
- * @param y           原始 Y 尺寸
- * @param toY         结束 Y 尺寸
- * @param time        动画持续时间
- * @param isSaveClose 是否保持动画结束时的最终状态
- * @param runCount    播放动画的次数 -1 表示无限次数
- * @param toAndFro    是否来回播放
- * @param view        给 View 添加动画
- * @return
- * @缩放动画（假）
- */
-fun View.startAnimationScale_F(
-    x: Float,
-    toX: Float,
-    y: Float,
-    toY: Float,
-    time: Long,
-    isSaveClose: Boolean,
-    runCount: Int,
-    toAndFro: Boolean
-): GT.GT_Animation {
-    gtAnimation.scale_F(x, toX, y, toY, time, isSaveClose, runCount, toAndFro, this)
-    return gtAnimation
-}
-
-/**
- * @param x           原始 X 尺寸
- * @param toX         结束 X 尺寸
- * @param y           原始 Y 尺寸
- * @param toY         结束 Y 尺寸
- * @param time        动画持续时间
- * @param isSaveClose 是否保持动画结束时的最终状态
- * @param runCount    播放动画的次数 -1 表示无限次数
- * @param toAndFro    是否来回播放
- * @return
- * @缩放item动画（假）
- */
-fun View.getAnimationScales_F(
-    x: Float,
-    toX: Float,
-    y: Float,
-    toY: Float,
-    time: Long,
-    isSaveClose: Boolean,
-    runCount: Int,
-    toAndFro: Boolean
-): Animation = gtAnimation.scales_F(x, toX, y, toY, time, isSaveClose, runCount, toAndFro)
-
-/**
- * @param x           原始 X 尺寸
- * @param toX         结束 X 尺寸
- * @param time        动画持续时间
- * @param isSaveClose 是否保持动画结束时的最终状态
- * @param runCount    播放动画的次数 -1 表示无限次数
- * @param toAndFro    是否来回播放
- * @param view        给 View 添加动画
- * @return
- * @缩放动画（真）
- */
-fun View.startAnimationScaleX_T(
-    x: Float,
-    toX: Float,
-    time: Long,
-    isSaveClose: Boolean,
-    runCount: Int,
-    toAndFro: Boolean
-): GT.GT_Animation {
-    gtAnimation.scaleX_T(x, toX, time, isSaveClose, runCount, toAndFro, this)
-    return gtAnimation
-}
-
-/**
- * @param x           原始 X 尺寸
- * @param toX         结束 X 尺寸
- * @param time        动画持续时间
- * @param isSaveClose 是否保持动画结束时的最终状态
- * @param runCount    播放动画的次数 -1 表示无限次数
- * @param toAndFro    是否来回播放
- * @param view        给 View 添加动画
- * @return
- * @缩放item动画（真）
- */
-fun View.startAnimationScaleX_item_T(
-    x: Float,
-    toX: Float,
-    time: Long,
-    isSaveClose: Boolean,
-    runCount: Int,
-    toAndFro: Boolean
-): ObjectAnimator = gtAnimation.scaleX_item_T(x, toX, time, isSaveClose, runCount, toAndFro, this)
-
-/**
- * @param y           原始 Y 尺寸
- * @param toY         结束 Y 尺寸
- * @param time        动画持续时间
- * @param isSaveClose 是否保持动画结束时的最终状态
- * @param runCount    播放动画的次数 -1 表示无限次数
- * @param toAndFro    是否来回播放
- * @param view        给 View 添加动画
- * @return
- * @缩放动画（真）
- */
-fun View.startAnimationScaleY_T(
-    y: Float,
-    toY: Float,
-    time: Long,
-    isSaveClose: Boolean,
-    runCount: Int,
-    toAndFro: Boolean
-): GT.GT_Animation {
-    gtAnimation.scaleY_T(y, toY, time, isSaveClose, runCount, toAndFro, this)
-    return gtAnimation
-}
-
-/**
- * @param y           原始 Y 尺寸
- * @param toY         结束 Y 尺寸
- * @param time        动画持续时间
- * @param isSaveClose 是否保持动画结束时的最终状态
- * @param runCount    播放动画的次数 -1 表示无限次数
- * @param toAndFro    是否来回播放
- * @param view        给 View 添加动画
- * @return
- * @缩放item动画（真）
- */
-fun View.getAnimatorScaleY_item_T(
-    y: Float,
-    toY: Float,
-    time: Long,
-    isSaveClose: Boolean,
-    runCount: Int,
-    toAndFro: Boolean
-): ObjectAnimator = gtAnimation.scaleY_item_T(y, toY, time, isSaveClose, runCount, toAndFro, this)
-
-/**
- * @param x        初始 X 坐标
- * @param toX      最终 X 坐标
- * @param y        初始 Y 坐标
- * @param toY      最终 Y 坐标
- * @param time     消耗时间
- * @param runCount 执行次数
- * @param toAndFro 是否来回播放
- * @param view     动画的View
- * @return
- * @缩放动画（真）
- */
-fun View.startAnimationScale_T(
-    x: Float,
-    toX: Float,
-    y: Float,
-    toY: Float,
-    time: Long,
-    runCount: Int,
-    toAndFro: Boolean
-): GT.GT_Animation {
-    gtAnimation.scale_T(x, toX, y, toY, time, runCount, toAndFro, this)
-    return gtAnimation
-}
-
-/**
- * @param x        初始 X 坐标
- * @param toX      最终 X 坐标
- * @param y        初始 Y 坐标
- * @param toY      最终 Y 坐标
- * @param time     消耗时间
- * @param runCount 执行次数
- * @param toAndFro 是否来回播放
- * @param view     动画的View
- * @return
- * @缩放item动画（真）
- */
-fun View.startAnimatorScale_item_T(
-    x: Float,
-    toX: Float,
-    y: Float,
-    toY: Float,
-    time: Long,
-    runCount: Int,
-    toAndFro: Boolean
-): AnimatorSet = gtAnimation.scale_item_T(x, toX, y, toY, time, runCount, toAndFro, this)
-
-
-/**
- * @param degrees     View初始角度
- * @param toDegrees   View旋转角度
- * @param time        动画执行时间
- * @param time        动画持续时间
- * @param isSaveClose 是否保持动画结束时的最终状态
- * @param runCount    播放动画的次数 -1 表示无限次数
- * @param toAndFro    是否来回播放
- * @param view        执行View动画
- * @return
- * @平面旋转动画（假）
- */
-fun View.startAnimationRotate_F(
-    degrees: Float,
-    toDegrees: Float,
-    time: Long,
-    isSaveClose: Boolean,
-    runCount: Int,
-    toAndFro: Boolean
-): GT.GT_Animation {
-    gtAnimation.rotate_F(degrees, toDegrees, time, isSaveClose, runCount, toAndFro, this)
-    return gtAnimation
-}
-
-/**
- * @param degrees     View初始角度
- * @param toDegrees   View旋转角度
- * @param time        动画执行时间
- * @param time        动画持续时间
- * @param isSaveClose 是否保持动画结束时的最终状态
- * @param runCount    播放动画的次数 -1 表示无限次数
- * @param toAndFro    是否来回播放
- * @return
- * @平面旋转item动画（假）
- */
-fun View.getAnimationRotates_F(
-    degrees: Float,
-    toDegrees: Float,
-    time: Long,
-    isSaveClose: Boolean,
-    runCount: Int,
-    toAndFro: Boolean
-): Animation = gtAnimation.rotates_F(degrees, toDegrees, time, isSaveClose, runCount, toAndFro)
-
-/**
- * @param x        初始化 X 坐标
- * @param toX      最终的 X 坐标
- * @param time     动画耗时
- * @param runCount 动画播放次数
- * @param toAndFro 是否来回播放
- * @param view     要使用动画的View
- * @return
- * @旋转动画X（真）
- */
-fun View.startAnimationRotatesX_T(
-    x: Float,
-    toX: Float,
-    time: Long,
-    runCount: Int,
-    toAndFro: Boolean,
-): GT.GT_Animation {
-    gtAnimation.rotatesX_T(x, toX, time, runCount, toAndFro, this)
-    return gtAnimation
-}
-
-/**
- * @param x        初始化 X 坐标
- * @param toX      最终的 X 坐标
- * @param time     动画耗时
- * @param runCount 动画播放次数
- * @param toAndFro 是否来回播放
- * @param view     要使用动画的View
- * @return
- * @旋转item动画X（真）
- */
-fun View.startAnimationRotatesX_Item_T(
-    x: Float,
-    toX: Float,
-    time: Long,
-    runCount: Int,
-    toAndFro: Boolean
-): ObjectAnimator = gtAnimation.rotatesX_Item_T(x, toX, time, runCount, toAndFro, this)
-
-/**
- * @param y        初始化 Y 坐标
- * @param toY      最终的 Y 坐标
- * @param time     动画耗时
- * @param runCount 动画播放次数
- * @param toAndFro 是否来回播放
- * @param view     要使用动画的View
- * @return
- * @旋转动画Y（真）
- */
-fun View.startAnimationRotatesY_T(
-    y: Float,
-    toY: Float,
-    time: Long,
-    runCount: Int,
-    toAndFro: Boolean
-): GT.GT_Animation {
-    gtAnimation.rotatesY_T(y, toY, time, runCount, toAndFro, this)
-    return gtAnimation
-}
-
-/**
- * @param y        初始化 Y 坐标
- * @param toY      最终的 Y 坐标
- * @param time     动画耗时
- * @param runCount 动画播放次数
- * @param toAndFro 是否来回播放
- * @param view     要使用动画的View
- * @return
- * @旋转item动画Y（真）
- */
-fun View.getAnimatorRotatesY_Item_T(
-    y: Float,
-    toY: Float,
-    time: Long,
-    runCount: Int,
-    toAndFro: Boolean
-): ObjectAnimator = gtAnimation.rotatesY_Item_T(y, toY, time, runCount, toAndFro, this)
-
-/**
- * @param z        初始化 Z 坐标
- * @param toZ      最终的 Z 坐标
- * @param time     动画耗时
- * @param runCount 动画播放次数
- * @param toAndFro 是否来回播放
- * @param view     要使用动画的View
- * @return
- * @旋转动画Z（真）
- */
-fun View.startAnimationRotatesZ_T(
-    z: Float,
-    toZ: Float,
-    time: Long,
-    runCount: Int,
-    toAndFro: Boolean,
-): GT.GT_Animation {
-    gtAnimation.rotatesZ_T(z, toZ, time, runCount, toAndFro, this)
-    return gtAnimation
-}
-
-/**
- * @param z        初始化 Z 坐标
- * @param toZ      最终的 Z 坐标
- * @param time     动画耗时
- * @param runCount 动画播放次数
- * @param toAndFro 是否来回播放
- * @param view     要使用动画的View
- * @return
- * @旋转item动画Z（真）
- */
-fun View.getAnimationRotatesZ_item_T(
-    z: Float,
-    toZ: Float,
-    time: Long,
-    runCount: Int,
-    toAndFro: Boolean
-): ObjectAnimator = gtAnimation.rotatesZ_item_T(z, toZ, time, runCount, toAndFro, this)
-
-/**
- * @param alpha       初始透明度
- * @param toAlpha     最终透明度
- * @param time        动画执行时间
- * @param isSaveClose 是否保持动画结束时的最终状态
- * @param runCount    播放动画的次数 -1 表示无限次数
- * @param toAndFro    是否来回播放
- * @param view        执行View动画
- * @return
- * @透明动画（假）
- */
-fun View.startAnimationAlpha_F(
-    alpha: Float,
-    toAlpha: Float,
-    time: Long,
-    isSaveClose: Boolean,
-    runCount: Int,
-    toAndFro: Boolean
-): GT.GT_Animation {
-    gtAnimation.alpha_F(alpha, toAlpha, time, isSaveClose, runCount, toAndFro, this)
-    return gtAnimation
-}
-
-/**
- * @param alpha       初始透明度
- * @param toAlpha     最终透明度
- * @param time        动画执行时间
- * @param isSaveClose 是否保持动画结束时的最终状态
- * @param runCount    播放动画的次数 -1 表示无限次数
- * @param toAndFro    是否来回播放
- * @return
- * @透明item动画（假）
- */
-fun getAnimationAlphas_F(
-    alpha: Float,
-    toAlpha: Float,
-    time: Long,
-    isSaveClose: Boolean,
-    runCount: Int,
-    toAndFro: Boolean
-): Animation = gtAnimation.alphas_F(alpha, toAlpha, time, isSaveClose, runCount, toAndFro)
-
-/**
- * @param alpha    初始透明度
- * @param toAlpha  最终透明度
- * @param time     动画执行时间
- * @param runCount 播放动画的次数 -1 表示无限次数
- * @param toAndFro 是否来回播放
- * @return
- * @透明动画（真）
- */
-fun View.startAnimationAlpha_T(
-    alpha: Float,
-    toAlpha: Float,
-    time: Long,
-    runCount: Int,
-    toAndFro: Boolean
-): GT.GT_Animation {
-    gtAnimation.alpha_T(alpha, toAlpha, time, runCount, toAndFro, this)
-    return gtAnimation
-}
-
-/**
- * @param alpha    初始透明度
- * @param toAlpha  最终透明度
- * @param time     动画执行时间
- * @param runCount 播放动画的次数 -1 表示无限次数
- * @param toAndFro 是否来回播放
- * @return
- * @透明item动画（真）
- */
-fun View.getAnimationAlpha_item_T(
-    alpha: Float,
-    toAlpha: Float,
-    time: Long,
-    runCount: Int,
-    toAndFro: Boolean
-): ObjectAnimator = gtAnimation.alpha_item_T(alpha, toAlpha, time, runCount, toAndFro, this)
-
-/**
- * @param annotationList
- * @param view
- * @return
- * @添加组合动画（假）
- */
-fun View.startAnimationSet_F(annotationList: List<Animation>): GT.GT_Animation? {
-    gtAnimation.animationSet_F(annotationList, this)
-    return gtAnimation
-}
-
-/**
- * @param annotationList
- * @return
- * @添加组合item动画（假）
- */
-fun View.getAnimationSets_F(annotationList: List<Animation>): AnimationSet =
-    gtAnimation.animationSets_F(annotationList)
-
-
 //********************************** ViewUtils 扩展 ***********************************
 
 fun EditText.delayTrigger(
@@ -1097,6 +496,14 @@ fun Any.cancel() {
     job.cancel()
     mapJob.remove(name)
 }
+
+fun Any.cancelCoroutineScope() {
+    val name = getClassName(4)
+    val job = mapJob[name] ?: return
+    job.cancel()
+    mapJob.remove(name)
+}
+
 
 fun Any.cancelAll() {
     val name = LOG.getClassName(4) ?: this
@@ -1177,8 +584,29 @@ fun Any.toStrings(): String {
     }
     var toString = stringBuilder.toString()
     toString = toString.substring(0, toString.length - 2).plus("}")
+    toString = toString.plus("  [$this]")
     return toString
 }
+
+//显示所有View父类节点
+fun View.showAllViewParent() {
+    "view:$this".logt()
+    parent?.let {
+        (it as View).showAllViewParent()
+    }
+}
+
+//显示所有View子类节点
+fun View.showAllViewChild() {
+    "view:$this".logt()
+    if(this is ViewGroup && childCount > 0){
+        for(i in 0 until childCount){
+            val childAt = getChildAt(i)
+            childAt.showAllViewChild()
+        }
+    }
+}
+
 
 //延时加载
 class Later<T>(private val block: () -> T) {

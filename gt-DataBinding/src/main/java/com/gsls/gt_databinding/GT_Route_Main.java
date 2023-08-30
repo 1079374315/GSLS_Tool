@@ -8,6 +8,7 @@ import com.gsls.gt_databinding.utils.FileUtils;
 
 import java.io.IOException;
 import java.io.Writer;
+import java.sql.Types;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -18,6 +19,7 @@ import javax.annotation.processing.Processor;
 import javax.annotation.processing.RoundEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
+import javax.lang.model.type.TypeMirror;
 import javax.tools.JavaFileObject;
 
 
@@ -69,6 +71,10 @@ public class GT_Route_Main extends AbstractProcessor {
          **/
 
         for (Element element : elementsAnnotatedWith) {
+//            element.
+            TypeMirror typeMirror = element.asType();
+//            typeMirror.
+//            typeMirror.
             count++;
             DataBindingUtils.log("element:" + element);
             DataBindingUtils.log("elementGet1:" + element.getEnclosedElements());
@@ -168,7 +174,7 @@ public class GT_Route_Main extends AbstractProcessor {
                     " * GT-DataBinding class, inherited\n" +
                     " */");
 
-            String className = bindingBean.getClassName() + "$$" + bindingBean.getJavaLibraryName();
+            String className = "ARouter$$" + bindingBean.getJavaLibraryName() + "$$" + bindingBean.getClassName();
 
             //根据不同的绑定类型 进行智能继承
             builder.append("\npublic class " + className + " {\n");
