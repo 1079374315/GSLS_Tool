@@ -21961,7 +21961,7 @@ public class GT {
                 @Override
                 public void onDownloadSuccess(File file) {
                     super.onDownloadSuccess(file);
-                    ShareUtils.shareFile(context, file, GT.ShareUtils.TYPE_IMAGE, sendPack, isAcceptor, AUTHORITY, new OneListener<>() {
+                    ShareUtils.shareFile(context, file, GT.ShareUtils.TYPE_IMAGE, sendPack, isAcceptor, AUTHORITY, new OneListener<String>() {
                         @Override
                         public void onOneListener(String obj) {
                             super.onOneListener(obj);
@@ -36574,7 +36574,7 @@ public class GT {
          */
         public static void startNotification(FragmentActivity activity, NotificationCompat.Builder builder, int... notifyids) {
             if (activity != null) {
-                GT.AppAuthorityManagement.notification(activity, new OneListener<>() {
+                GT.AppAuthorityManagement.notification(activity, new OneListener<Boolean>() {
                     @Override
                     public void onOneListener(Boolean obj) {
                         super.onOneListener(obj);
