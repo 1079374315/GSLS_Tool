@@ -1,7 +1,5 @@
 package com.gsls.gtk
 
-import android.animation.AnimatorSet
-import android.animation.ObjectAnimator
 import android.app.Activity
 import android.content.Context
 import android.content.res.XmlResourceParser
@@ -10,8 +8,6 @@ import android.graphics.drawable.Drawable
 import android.text.Editable
 import android.view.View
 import android.view.ViewGroup
-import android.view.animation.Animation
-import android.view.animation.AnimationSet
 import android.widget.EditText
 import android.widget.ImageView
 import androidx.annotation.AnimatorRes

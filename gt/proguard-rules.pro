@@ -161,15 +161,23 @@
 -keep class com.gsls.toolkit.** { *; }
 
 
-
 #----------------------------- 第三方 -----------------------------#
 
 #不混淆GT类
--keep public class com.gsls.gt.GT { *; }
+#-keep public class com.gsls.gt.GT { *; }
+-keep class com.gsls.** { *; }
 #不混淆 继承GT类 或 继承GT内部类 的类
 -keep public class * extends com.gsls.gt.GT { *; }
 -keep public class * extends com.gsls.gt.GT$* { *; }
+-keep public class * extends com.gsls.gtk.GTK { *; }
+-keep public class * extends com.gsls.gtk.GTK$* { *; }
 
 # Json 解析
 -dontwarn com.google.**
 -keep class com.google.gson.** {*;}
+
+
+####################zxing#####################
+-keep class com.google.zxing.** {*;}
+-dontwarn com.google.zxing.**
+

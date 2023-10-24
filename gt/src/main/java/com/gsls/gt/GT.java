@@ -62,6 +62,7 @@ import android.graphics.BitmapFactory;
 import android.graphics.BitmapShader;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.LinearGradient;
 import android.graphics.Matrix;
 import android.graphics.Movie;
 import android.graphics.Paint;
@@ -73,6 +74,7 @@ import android.graphics.PorterDuffXfermode;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Shader;
+import android.graphics.SweepGradient;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
@@ -334,6 +336,7 @@ import java.util.ConcurrentModificationException;
 import java.util.Date;
 import java.util.Enumeration;
 import java.util.GregorianCalendar;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.Iterator;
@@ -378,8 +381,8 @@ import dalvik.system.PathClassLoader;
  * GSLS_TOOL
  * <p>
  * <p>
- * 更新时间:2023.8.9
- * 更新内容 v1.4.4.6 版本：
+ * 更新时间:2023.10.24
+ * 更新内容 v1.4.5.0 版本：
  * CSDN 博客/官网教程:https://blog.csdn.net/qq_39799899
  * GitHub https://github.com/1079374315/GT
  * 更新内容如下：
@@ -404,6 +407,10 @@ import dalvik.system.PathClassLoader;
  * 14.新增壁纸管理器 WallpaperManagerUtils，两步搞定
  * 15.新增跳转封装类 SkipUtils，跳转各种系统页面
  * 16.GT.EventBus 新增局部 发布事件 和 订阅事件，灵活多变，支持事件拦截，结果返回等。(具体请参考博客教程)
+ * 17.新增 颜色选择封装 对话话框
+ * 18.优化 WebUtils 加载web稳定性，新增 解析 html源码 解析资源 api方法
+ * 19.增强 Hibernate 数据库稳定性
+ * 20.优化 AppAuthorityManagement 权限申请 稳定性
  *
  * <p>
  * <p>
@@ -674,33 +681,34 @@ public class GT {
 
     /**
      * 回调日志
+     *
      * @param tags
      */
-    public static String logCallback(int number, String msg, String... tags){
-        if(number <= 0){
+    public static String logCallback(int number, String msg, String... tags) {
+        if (number <= 0) {
             number = 3;
         }
         String tag = "GT_";
-        if(tags != null && tags.length > 0){
+        if (tags != null && tags.length > 0) {
             tag = tags[0];
         }
         java.lang.Thread thread = java.lang.Thread.currentThread();
         StackTraceElement[] stackTrace = thread.getStackTrace();
-        if(stackTrace.length < number) return null;
+        if (stackTrace.length < number) return null;
         StringBuilder stringBuilder = new StringBuilder();
-        for(int i = number; i < stackTrace.length; i++){
+        for (int i = number; i < stackTrace.length; i++) {
             StackTraceElement stackTraceElement1 = stackTrace[i];
             StackTraceElement stackTraceElement2 = null;
-            if(i + 1 < stackTrace.length){
-                stackTraceElement2 = stackTrace[i+1];
+            if (i + 1 < stackTrace.length) {
+                stackTraceElement2 = stackTrace[i + 1];
             }
 
-            if(stackTraceElement2 != null){
-                if(i == number){
+            if (stackTraceElement2 != null) {
+                if (i == number) {
                     stringBuilder.append("(").append(stackTraceElement1.getFileName()).append(":").append(stackTraceElement1.getLineNumber()).append(")").append(stackTraceElement1.getMethodName()).append(":").append(msg).append("->");
                 }
                 stringBuilder.append("(").append(stackTraceElement1.getFileName()).append(":").append(stackTraceElement2.getLineNumber()).append(")").append(stackTraceElement1.getMethodName()).append("->");
-            }else if(stackTraceElement1 != null){
+            } else if (stackTraceElement1 != null) {
                 stringBuilder.append("(").append(stackTraceElement1.getFileName()).append(":").append(stackTraceElement1.getLineNumber()).append(")").append(stackTraceElement1.getMethodName()).append("->");
             }
         }
@@ -4717,8 +4725,7 @@ public class GT {
      * hibernate.sqLiteDatabase2.execSQL("ALTER TABLE 表名 RENAME COLUMN 旧表名 TO 新表名");//测试成功
      */
     public static class Hibernate implements SaveObject.SaveBean {
-
-        private Context context;
+        private WeakReference<Context> weakReference;
         private final int MAX = 100000;//最大存储10万数值分界线
         private Hibernate hibernate;
         private ReentrantReadWriteLock readWriteLock;//读写锁
@@ -4728,7 +4735,7 @@ public class GT {
         public Hibernate() {
             Context context = getActivity();
             if (context != null) {
-                this.context = context;
+                weakReference = new WeakReference<>(context);
             } else {
                 errs("当前并没有绑定 Activity 无法使用无参构造方法，请先使用 GT.GT.build(this); 进行 Activity 绑定。");
             }
@@ -4740,7 +4747,7 @@ public class GT {
         }
 
         public Hibernate(Context context) {
-            this.context = context;
+            weakReference = new WeakReference<>(context);
             if (readWriteLock == null) {
                 readWriteLock = new ReentrantReadWriteLock();//读写锁
                 lockRead = readWriteLock.readLock();//读锁
@@ -5443,9 +5450,9 @@ public class GT {
          * @return
          */
         public synchronized List<String> getSqlAllName() {
-            if (context == null) return null;
+            if (weakReference.get() == null) return null;
 
-            List<String> filesAllNames = FileUtils.getFilesAllName(context.getFilesDir().getParent() + "/databases/");
+            List<String> filesAllNames = FileUtils.getFilesAllName(weakReference.get().getFilesDir().getParent() + "/databases/");
             if (filesAllNames == null) {
                 return null;
             } else {
@@ -8507,7 +8514,7 @@ public class GT {
 
                 //如果没有自己设置条件，那就直接使用该对象的ID值进行默认操作
                 if (conditions == null || values == null) {
-                    wheresValue(classOrBean, aClass);
+                    wheresKeyValue(classOrBean, aClass);//第一次调用
                 }
 
                 //检查数据库中是否存在该表
@@ -9201,7 +9208,7 @@ public class GT {
             updateTableValueList.clear();
             //判空
             if (scanTable == null) {
-                scanTable = ApplicationUtils.getPackageName(context);
+                scanTable = ApplicationUtils.getPackageName(weakReference.get());
             }
 
             //实例化 数据库表集合
@@ -9242,7 +9249,7 @@ public class GT {
             if (isReflect) {
                 //如果需要反射就进行反射得到 class
                 if (!"".equals(EnityPackagePath)) {
-                    loadHibernateAnnotation(EnityPackagePath, context);//加载数据库注解
+                    loadHibernateAnnotation(EnityPackagePath, weakReference.get());//加载数据库注解
                 } else {
                     errs("当前扫描数据库实体类的路径有错误！请检查该路径。EnityPackagePath = " + EnityPackagePath);
                     isCreateTable = false;
@@ -9602,12 +9609,12 @@ public class GT {
             if (passWord != null) {
                 this.passWord = passWord;
             }
-
             if (isCreateTable) {//是否执行创建数据库代码
                 SCAN_TABLE = scanTable;//映射表的方式赋值
                 isDeleteNullTable = false;
-                DatabaseHelper databaseHelper = new DatabaseHelper(context, DATABASE_NAME, null, DATABASE_VERSION);
+                DatabaseHelper databaseHelper = new DatabaseHelper(weakReference.get(), DATABASE_NAME, null, DATABASE_VERSION);
                 sqLiteDatabase2 = databaseHelper.getWritableDatabase();//ok
+                if (sqLiteDatabase2 == null) return this;
                 if (isDeleteNullTable) {
                     deleteUnnecessaryTable();//删除掉多余的表
                 } else {
@@ -10258,7 +10265,6 @@ public class GT {
 
                 } else if (GT_Delete.class.equals(call.whereBean.type)) {//删除数据
                     boolean status = true;
-
                     if (call.whereBean.sqlWhere.length == 0 && call.whereBean.sqlValue.length == 1) {//根据ID删除
                         status = call.hibernate.delete(call.tClass, Integer.parseInt(call.whereBean.sqlValue[0])).isStatus();
                     } else if (call.whereBean.sqlWhere.length != 0 || call.whereBean.sqlValue.length != 0) {//根据具体条件删除
@@ -10266,8 +10272,7 @@ public class GT {
                     } else if (call.t != null) {//根据实体类的 ID 删除
                         status = call.hibernate.delete(call.t).isStatus();
                     } else if (call.whereBean.sqlWhere.length == 0 && call.whereBean.sqlValue.length == 0) {
-                        //删除所有
-                        status = call.hibernate.deleteAll(call.tClass).isStatus();
+                        status = call.hibernate.deleteAll(call.tClass).isStatus();//删除所有
                     }
 
                     boolean finalStatus = status;
@@ -10689,6 +10694,14 @@ public class GT {
 
     //设备信息与SD卡信息
     public static class DeviceInfoSDCardUtils {
+
+        /**
+         * 获取设备宽高（px）
+         */
+        public static String getDeviceWidthHeight(Context context) {
+            return context.getResources().getDisplayMetrics().widthPixels + "px X " + context.getResources().getDisplayMetrics().heightPixels + "px";
+        }
+
         /**
          * 获取设备宽度（px）
          */
@@ -12530,7 +12543,6 @@ public class GT {
                     return hibernate_cache.get(key);
                 }
             } catch (Exception e) {
-
             }
             return null;
         }
@@ -16926,7 +16938,7 @@ public class GT {
                                     gtIv.setScrollY(iv.getScrollY());
 
                                     //拷贝view事件
-                                    GT.AnnotationAssist.copyViewEvent(iv, gtIv, View.OnClickListener.class, true);
+                                    AnnotationAssist.copyViewEvent(iv, gtIv, View.OnClickListener.class, true);
                                     GT.AnnotationAssist.copyViewEvent(iv, gtIv, View.OnLongClickListener.class, true);
                                     GT.AnnotationAssist.copyViewEvent(iv, gtIv, View.OnTouchListener.class, true);
                                     GT.AnnotationAssist.copyViewEvent(iv, gtIv, View.OnFocusChangeListener.class, true);
@@ -17504,11 +17516,11 @@ public class GT {
                     if (url.startsWith("http://") || url.startsWith("https://")) {
                         view.loadUrl(url);//防止加载网页时调起系统浏览器
                         return true;
-                    } else if(view.getContext() != null){
+                    } else if (view.getContext() != null) {
                         if (url.startsWith("weixin://") ||
                                 url.startsWith("alipays://") ||
                                 url.startsWith("tel://") ||
-                                url.startsWith("baiduboxapp://") ) {
+                                url.startsWith("baiduboxapp://")) {
                             return true;
                         }
                     }
@@ -17884,6 +17896,75 @@ public class GT {
 
 
         }
+
+
+        private static final int defaultMaxCount = 50;//默认解析数量
+        private static int maxCount = defaultMaxCount;
+
+        /**
+         * 解析 html 代码
+         * @param htmlCode
+         * @param maxCount2 自定义 解析数量
+         * @return
+         */
+        public static Map<String, List<String>> analysisHtmlCode(String htmlCode, int maxCount2) {
+            if (htmlCode == null || !htmlCode.contains("http") || !htmlCode.contains("."))
+                return null;
+            Map<String, List<String>> map = new HashMap<>();
+            maxCount = maxCount2;
+            addHttpData(htmlCode, map);
+            return analysisHtmlCode(htmlCode);
+        }
+
+        /**
+         * 解析 html 代码
+         *
+         * @param htmlCode
+         * @return
+         */
+        public static Map<String, List<String>> analysisHtmlCode(String htmlCode) {
+            if (htmlCode == null || !htmlCode.contains("http") || !htmlCode.contains("."))
+                return null;
+            Map<String, List<String>> map = new HashMap<>();
+            maxCount = defaultMaxCount;
+            addHttpData(htmlCode, map);
+            return map;
+        }
+
+
+        /**
+         * 回调解析
+         *
+         * @param htmlCode
+         * @param map
+         */
+        private static void addHttpData(String htmlCode, Map<String, List<String>> map) {
+            int indexOf1 = htmlCode.indexOf("http");
+            int indexOf2 = htmlCode.indexOf("\"", indexOf1);
+            if (indexOf1 <= 0 || indexOf2 <= 0)
+                return;
+            String webData = htmlCode.substring(indexOf1, indexOf2);
+            if (webData.contains(".")) {
+                int lastIndexOf = webData.lastIndexOf(".");
+                String type = webData.substring(lastIndexOf + 1);
+                if (!type.contains("/") && !type.contains("?") && !type.contains(":") && !type.contains(".")) {
+                    List<String> list;
+                    if (map.containsKey(type))
+                        list = map.get(type);
+                    else
+                        list = new ArrayList<>();
+                    if (list != null) {
+                        list.add(webData);
+                        map.put(type, list);
+                    }
+                }
+            }
+            htmlCode = htmlCode.substring(indexOf2);
+            if (htmlCode == null || !htmlCode.contains("http") || !htmlCode.contains(".") || maxCount <= 0) return;
+            maxCount--;
+            addHttpData(htmlCode, map);
+        }
+
 
     }
 
@@ -18380,7 +18461,6 @@ public class GT {
             }
             return endTime;
         }
-
 
         /**
          * 使用案例
@@ -20206,6 +20286,75 @@ public class GT {
 
         }
 
+        public class DateHelper {
+
+            public static final long ONE_MINUTE = 60000L;
+            public static final long ONE_HOUR = 3600000L;
+            public static final long ONE_DAY = 86400000L;
+            public static final long ONE_WEEK = 604800000L;
+            private static final String ONE_SECOND_AGO = "秒前";
+            private static final String ONE_MINUTE_AGO = "分钟前";
+            private static final String ONE_HOUR_AGO = "小时前";
+            private static final String ONE_DAY_AGO = "天前";
+            private static final String ONE_MONTH_AGO = "月前";
+            private static final String ONE_YEAR_AGO = "年前";
+
+            private static long toSeconds(long date) {
+                return date / 1000L;
+            }
+
+            private static long toMinutes(long date) {
+                return toSeconds(date) / 60L;
+            }
+
+            private static long toHours(long date) {
+                return toMinutes(date) / 60L;
+            }
+
+            private static long toDays(long date) {
+                return toHours(date) / 24L;
+            }
+
+            private static long toMonths(long date) {
+                return toDays(date) / 30L;
+            }
+
+            private static long toYears(long date) {
+                return toMonths(date) / 365L;
+            }
+
+            public static String getPastTime(Long sentTime) {
+                long delta = new Date().getTime() - sentTime;
+                if (delta < 1L * ONE_MINUTE) {
+                    long seconds = toSeconds(delta);
+                    return (seconds <= 0 ? 1 : seconds) + ONE_SECOND_AGO;
+                }
+                if (delta < 45L * ONE_MINUTE) {
+                    long minutes = toMinutes(delta);
+                    return (minutes <= 0 ? 1 : minutes) + ONE_MINUTE_AGO;
+                }
+                if (delta < 24L * ONE_HOUR) {
+                    long hours = toHours(delta);
+                    return (hours <= 0 ? 1 : hours) + ONE_HOUR_AGO;
+                }
+                if (delta < 48L * ONE_HOUR) {
+                    return "昨天";
+                }
+                if (delta < 30L * ONE_DAY) {
+                    long days = toDays(delta);
+                    return (days <= 0 ? 1 : days) + ONE_DAY_AGO;
+                }
+                if (delta < 12L * 4L * ONE_WEEK) {
+                    long months = toMonths(delta);
+                    return (months <= 0 ? 1 : months) + ONE_MONTH_AGO;
+                } else {
+                    long years = toYears(delta);
+                    return (years <= 0 ? 1 : years) + ONE_YEAR_AGO;
+                }
+            }
+
+        }
+
 
     }
 
@@ -21698,6 +21847,7 @@ public class GT {
 
         /**
          * 获取 View 宽高
+         *
          * @param view
          * @param onListener
          */
@@ -21738,24 +21888,25 @@ public class GT {
                                             });
 
 
-                                        }else{
+                                        } else {
                                             GT.Thread.runAndroid(() -> onListener.onListener(width[0], height[0]));
                                         }
                                     }
                                 });
 
-                            }else{
+                            } else {
                                 GT.Thread.runAndroid(() -> onListener.onListener(width[0], height[0]));
                             }
                         }
                     });
-                }else{
+                } else {
                     GT.Thread.runAndroid(() -> onListener.onListener(width[0], height[0]));
                 }
             } catch (Exception e) {
 
             }
         }
+
 
     }
 
@@ -21795,13 +21946,14 @@ public class GT {
 
         /**
          * 分享 GIF 动态图
-         * @param context       上下文
-         * @param url           网图 gif 网址
-         * @param saveFileName  gif 保存文件 纯名称，不包含扩展名 (如："gifName")
-         * @param sendPack      发送指定的平台 可填 null
-         * @param isAcceptor    是否留在接收平台
-         * @param AUTHORITY     发送必要权限 (不了解的可 在GT源码搜索 "关于文中 AUTHORITY 参数描述")
-         * @param oneListener   分享异步反馈，成功或失败和失败原因
+         *
+         * @param context      上下文
+         * @param url          网图 gif 网址
+         * @param saveFileName gif 保存文件 纯名称，不包含扩展名 (如："gifName")
+         * @param sendPack     发送指定的平台 可填 null
+         * @param isAcceptor   是否留在接收平台
+         * @param AUTHORITY    发送必要权限 (不了解的可 在GT源码搜索 "关于文中 AUTHORITY 参数描述")
+         * @param oneListener  分享异步反馈，成功或失败和失败原因
          */
         public static void shareImageGif(Context context, String url, String saveFileName, String sendPack, boolean isAcceptor, String AUTHORITY, GT.OneListener<String> oneListener) {
             String savePath = GT.FileUtils.getGTPath(context) + saveFileName + ".gif";
@@ -21809,7 +21961,7 @@ public class GT {
                 @Override
                 public void onDownloadSuccess(File file) {
                     super.onDownloadSuccess(file);
-                    ShareUtils.shareFile(context,file,GT.ShareUtils.TYPE_IMAGE,sendPack,isAcceptor,AUTHORITY,new OneListener<>(){
+                    ShareUtils.shareFile(context, file, GT.ShareUtils.TYPE_IMAGE, sendPack, isAcceptor, AUTHORITY, new OneListener<>() {
                         @Override
                         public void onOneListener(String obj) {
                             super.onOneListener(obj);
@@ -25860,7 +26012,7 @@ public class GT {
             private static final String TAG_PERMISSION = "TAG_PERMISSION";
             private static final String TAG_EACH_PERMISSION = "TAG_EACH_PERMISSION";
             private static Permission permission = null;
-            private static FragmentManager fragmentManager;
+            private static SoftReference<FragmentManager> softReference;
             private static PermissionFragment fragment;
             private PermissionDescription permissionDescription;
             private String[] permissionArray;
@@ -25878,8 +26030,8 @@ public class GT {
                     return Permission.permission;
                 }
                 Permission.permission.permissionArray = permissionArray;
-                fragmentManager = context.getSupportFragmentManager();
-                fragment = (PermissionFragment) context.getSupportFragmentManager().findFragmentByTag(TAG_EACH_PERMISSION);
+                softReference = new SoftReference<>(context.getSupportFragmentManager());
+                fragment = (PermissionFragment) softReference.get().findFragmentByTag(TAG_EACH_PERMISSION);
                 return Permission.permission;
             }
 
@@ -25902,10 +26054,10 @@ public class GT {
                                     fragment = PermissionFragment.newInstance(permissionArray, onPermissionListener, permission, permissionDescription);
                                 }
 
-                                if (fragmentManager != null) {
-                                    fragmentManager.beginTransaction().add(fragment, TAG_PERMISSION).commitAllowingStateLoss();
+                                if (softReference.get() != null) {
+                                    softReference.get().beginTransaction().add(fragment, TAG_PERMISSION).commitAllowingStateLoss();
                                     try {
-                                        fragmentManager.executePendingTransactions();
+                                        softReference.get().executePendingTransactions();
                                     } catch (IllegalStateException e) {
                                         if (LOG.GT_LOG_TF)
                                             GT.log("进入异常:" + e);
@@ -26290,7 +26442,7 @@ public class GT {
             translateAnimation.setDuration(time);                   //设置动画持续周期
             translateAnimation.setFillAfter(isSaveClose);           //动画完成后，View是否会停留在动画结束的状态，优先级大于fillBefore，默认为false
             translateAnimation.setFillBefore(!isSaveClose);         //动画完成后，View是否会停留在动画开始的状态，默认为true
-            if(sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0){
+            if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
                 translateAnimation.setStartOffset(sleepTime[0]);           //设置动画延迟启动时间，单位是ms
             }
             if (toAndFro) translateAnimation.setRepeatMode(Animation.RESTART);       //是否来回的播放
@@ -26321,7 +26473,7 @@ public class GT {
             translateAnimation.setDuration(time);                   //设置动画持续周期
             translateAnimation.setFillAfter(isSaveClose);           //动画完成后，View是否会停留在动画结束的状态，优先级大于fillBefore，默认为false
             translateAnimation.setFillBefore(!isSaveClose);         //动画完成后，View是否会停留在动画开始的状态，默认为true
-            if(sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0){
+            if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
                 translateAnimation.setStartOffset(sleepTime[0]);           //设置动画延迟启动时间，单位是ms
             }
             if (toAndFro) translateAnimation.setRepeatMode(Animation.RESTART);       //是否来回的播放
@@ -26334,12 +26486,12 @@ public class GT {
         }
 
         /**
-         * @param x        初始 X 位置
-         * @param toX      最终 X 位置
-         * @param time     执行动画时间
-         * @param runCount 执行动画次数
-         * @param toAndFro 是否来回播放
-         * @param view     给View加入动画
+         * @param x         初始 X 位置
+         * @param toX       最终 X 位置
+         * @param time      执行动画时间
+         * @param runCount  执行动画次数
+         * @param toAndFro  是否来回播放
+         * @param view      给View加入动画
          * @param sleepTime 延迟执行动画时间
          * @return
          * @左右动画（真）
@@ -26353,7 +26505,7 @@ public class GT {
                 translateX.setRepeatCount(runCount - 1);//循环多少次
             }
             if (toAndFro) translateX.setRepeatMode(ValueAnimator.REVERSE);//是否来回播放
-            if(sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0){
+            if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
                 translateX.setStartDelay(sleepTime[0]);           //设置动画延迟启动时间，单位是ms
             }
             translateX.start();//执行动画
@@ -26361,11 +26513,11 @@ public class GT {
         }
 
         /**
-         * @param x        初始 X 位置
-         * @param toX      最终 X 位置
-         * @param time     执行动画时间
-         * @param runCount 执行动画次数
-         * @param toAndFro 是否来回播放
+         * @param x         初始 X 位置
+         * @param toX       最终 X 位置
+         * @param time      执行动画时间
+         * @param runCount  执行动画次数
+         * @param toAndFro  是否来回播放
          * @param sleepTime 延迟执行动画时间
          * @return
          * @左右item动画（真）
@@ -26379,19 +26531,19 @@ public class GT {
                 translateX.setRepeatCount(runCount - 1);//循环多少次
             }
             if (toAndFro) translateX.setRepeatMode(ValueAnimator.REVERSE);//是否来回播放
-            if(sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0){
+            if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
                 translateX.setStartDelay(sleepTime[0]);           //设置动画延迟启动时间，单位是ms
             }
             return translateX;
         }
 
         /**
-         * @param y        初始 Y 位置
-         * @param toY      最终 Y 位置
-         * @param time     执行动画时间
-         * @param runCount 执行动画次数
-         * @param toAndFro 是否来回播放
-         * @param view     给View加入动画
+         * @param y         初始 Y 位置
+         * @param toY       最终 Y 位置
+         * @param time      执行动画时间
+         * @param runCount  执行动画次数
+         * @param toAndFro  是否来回播放
+         * @param view      给View加入动画
          * @param sleepTime 延迟执行动画时间
          * @return
          * @上下动画（真）
@@ -26405,7 +26557,7 @@ public class GT {
                 translateY.setRepeatCount(runCount);//循环多少次
             }
             if (toAndFro) translateY.setRepeatMode(ValueAnimator.REVERSE);//是否来回播放
-            if(sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0){
+            if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
                 translateY.setStartDelay(sleepTime[0]);           //设置动画延迟启动时间，单位是ms
             }
             translateY.start();//执行动画
@@ -26413,12 +26565,12 @@ public class GT {
         }
 
         /**
-         * @param y        初始 Y 位置
-         * @param toY      最终 Y 位置
-         * @param time     执行动画时间
-         * @param runCount 执行动画次数
-         * @param toAndFro 是否来回播放
-         * @param view     给View加入动画
+         * @param y         初始 Y 位置
+         * @param toY       最终 Y 位置
+         * @param time      执行动画时间
+         * @param runCount  执行动画次数
+         * @param toAndFro  是否来回播放
+         * @param view      给View加入动画
          * @param sleepTime 延迟执行动画时间
          * @return
          * @上下item动画（真）
@@ -26432,21 +26584,21 @@ public class GT {
                 translateY.setRepeatCount(runCount);//循环多少次
             }
             if (toAndFro) translateY.setRepeatMode(ValueAnimator.REVERSE);//是否来回播放
-            if(sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0){
+            if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
                 translateY.setStartDelay(sleepTime[0]); //设置动画延迟启动时间，单位是ms
             }
             return translateY;
         }
 
         /**
-         * @param x        初始 X 坐标
-         * @param toX      最终 X 坐标
-         * @param y        初始 Y 坐标
-         * @param toY      最终 Y 坐标
-         * @param time     消耗时间
-         * @param runCount 执行次数
-         * @param toAndFro 是否来回播放
-         * @param view     动画的View
+         * @param x         初始 X 坐标
+         * @param toX       最终 X 坐标
+         * @param y         初始 Y 坐标
+         * @param toY       最终 Y 坐标
+         * @param time      消耗时间
+         * @param runCount  执行次数
+         * @param toAndFro  是否来回播放
+         * @param view      动画的View
          * @param sleepTime 延迟执行动画时间
          * @return
          * @平移动画（真）
@@ -26476,7 +26628,7 @@ public class GT {
                 translationY.setRepeatMode(ObjectAnimator.REVERSE);
             }
 
-            if(sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0){
+            if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
                 translationX.setStartDelay(sleepTime[0]);//设置动画延迟启动时间，单位是ms
                 translationY.setStartDelay(sleepTime[0]);//设置动画延迟启动时间，单位是ms
             }
@@ -26488,14 +26640,14 @@ public class GT {
         }
 
         /**
-         * @param x        初始 X 坐标
-         * @param toX      最终 X 坐标
-         * @param y        初始 Y 坐标
-         * @param toY      最终 Y 坐标
-         * @param time     消耗时间
-         * @param runCount 执行次数
-         * @param toAndFro 是否来回播放
-         * @param view     动画的View
+         * @param x         初始 X 坐标
+         * @param toX       最终 X 坐标
+         * @param y         初始 Y 坐标
+         * @param toY       最终 Y 坐标
+         * @param time      消耗时间
+         * @param runCount  执行次数
+         * @param toAndFro  是否来回播放
+         * @param view      动画的View
          * @param sleepTime 延迟执行动画时间
          * @return
          * @平移item动画（真）
@@ -26525,7 +26677,7 @@ public class GT {
                 translationY.setRepeatMode(ObjectAnimator.REVERSE);
             }
 
-            if(sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0){
+            if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
                 translationX.setStartDelay(sleepTime[0]);//设置动画延迟启动时间，单位是ms
                 translationY.setStartDelay(sleepTime[0]);//设置动画延迟启动时间，单位是ms
             }
@@ -26546,7 +26698,7 @@ public class GT {
          * @param runCount    播放动画的次数 -1 表示无限次数
          * @param toAndFro    是否来回播放
          * @param view        给 View 添加动画
-         * @param sleepTime 延迟执行动画时间
+         * @param sleepTime   延迟执行动画时间
          * @return
          * @缩放动画（假）
          */
@@ -26561,7 +26713,7 @@ public class GT {
                 scaleAnimation.setRepeatCount(runCount);            //播放的次数
             }
             if (toAndFro) scaleAnimation.setRepeatMode(Animation.RESTART);       //是否来回的播放
-            if(sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0){
+            if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
                 scaleAnimation.setStartOffset(sleepTime[0]);//设置动画延迟启动时间，单位是ms
             }
             view.startAnimation(scaleAnimation);                //开始播放
@@ -26577,7 +26729,7 @@ public class GT {
          * @param isSaveClose 是否保持动画结束时的最终状态
          * @param runCount    播放动画的次数 -1 表示无限次数
          * @param toAndFro    是否来回播放
-         * @param sleepTime 延迟执行动画时间
+         * @param sleepTime   延迟执行动画时间
          * @return
          * @缩放item动画（假）
          */
@@ -26592,7 +26744,7 @@ public class GT {
                 scaleAnimation.setRepeatCount(runCount);            //播放的次数
             }
             if (toAndFro) scaleAnimation.setRepeatMode(Animation.RESTART);       //是否来回的播放
-            if(sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0){
+            if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
                 scaleAnimation.setStartOffset(sleepTime[0]);           //设置动画延迟启动时间，单位是ms
             }
             return scaleAnimation;
@@ -26606,7 +26758,7 @@ public class GT {
          * @param runCount    播放动画的次数 -1 表示无限次数
          * @param toAndFro    是否来回播放
          * @param view        给 View 添加动画
-         * @param sleepTime 延迟执行动画时间
+         * @param sleepTime   延迟执行动画时间
          * @return
          * @缩放动画（真）
          */
@@ -26619,7 +26771,7 @@ public class GT {
                 scaleX.setRepeatCount(runCount);//循环多少次
             }
             if (toAndFro) scaleX.setRepeatMode(ValueAnimator.REVERSE);//是否来回播放
-            if(sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0){
+            if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
                 scaleX.setStartDelay(sleepTime[0]);           //设置动画延迟启动时间，单位是ms
             }
             scaleX.start();//执行动画
@@ -26634,7 +26786,7 @@ public class GT {
          * @param runCount    播放动画的次数 -1 表示无限次数
          * @param toAndFro    是否来回播放
          * @param view        给 View 添加动画
-         * @param sleepTime 延迟执行动画时间
+         * @param sleepTime   延迟执行动画时间
          * @return
          * @缩放item动画（真）
          */
@@ -26647,7 +26799,7 @@ public class GT {
                 scaleX.setRepeatCount(runCount);//循环多少次
             }
             if (toAndFro) scaleX.setRepeatMode(ValueAnimator.REVERSE);//是否来回播放
-            if(sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0){
+            if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
                 scaleX.setStartDelay(sleepTime[0]);//设置动画延迟启动时间，单位是ms
             }
             return scaleX;
@@ -26661,7 +26813,7 @@ public class GT {
          * @param runCount    播放动画的次数 -1 表示无限次数
          * @param toAndFro    是否来回播放
          * @param view        给 View 添加动画
-         * @param sleepTime 延迟执行动画时间
+         * @param sleepTime   延迟执行动画时间
          * @return
          * @缩放动画（真）
          */
@@ -26674,7 +26826,7 @@ public class GT {
                 scaleY.setRepeatCount(runCount);//循环多少次
             }
             if (toAndFro) scaleY.setRepeatMode(ValueAnimator.REVERSE);//是否来回播放
-            if(sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0){
+            if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
                 scaleY.setStartDelay(sleepTime[0]);//设置动画延迟启动时间，单位是ms
             }
             scaleY.start();//执行动画
@@ -26689,7 +26841,7 @@ public class GT {
          * @param runCount    播放动画的次数 -1 表示无限次数
          * @param toAndFro    是否来回播放
          * @param view        给 View 添加动画
-         * @param sleepTime 延迟执行动画时间
+         * @param sleepTime   延迟执行动画时间
          * @return
          * @缩放item动画（真）
          */
@@ -26702,21 +26854,21 @@ public class GT {
                 scaleY.setRepeatCount(runCount);//循环多少次
             }
             if (toAndFro) scaleY.setRepeatMode(ValueAnimator.REVERSE);//是否来回播放
-            if(sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0){
+            if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
                 scaleY.setStartDelay(sleepTime[0]);//设置动画延迟启动时间，单位是ms
             }
             return scaleY;
         }
 
         /**
-         * @param x        初始 X 坐标
-         * @param toX      最终 X 坐标
-         * @param y        初始 Y 坐标
-         * @param toY      最终 Y 坐标
-         * @param time     消耗时间
-         * @param runCount 执行次数
-         * @param toAndFro 是否来回播放
-         * @param view     动画的View
+         * @param x         初始 X 坐标
+         * @param toX       最终 X 坐标
+         * @param y         初始 Y 坐标
+         * @param toY       最终 Y 坐标
+         * @param time      消耗时间
+         * @param runCount  执行次数
+         * @param toAndFro  是否来回播放
+         * @param view      动画的View
          * @param sleepTime 延迟执行动画时间
          * @return
          * @缩放动画（真）
@@ -26746,7 +26898,7 @@ public class GT {
                 scaleY.setRepeatMode(ObjectAnimator.REVERSE);
             }
 
-            if(sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0){
+            if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
                 scaleX.setStartDelay(sleepTime[0]);//设置动画延迟启动时间，单位是ms
                 scaleY.setStartDelay(sleepTime[0]);//设置动画延迟启动时间，单位是ms
             }
@@ -26758,14 +26910,14 @@ public class GT {
         }
 
         /**
-         * @param x        初始 X 坐标
-         * @param toX      最终 X 坐标
-         * @param y        初始 Y 坐标
-         * @param toY      最终 Y 坐标
-         * @param time     消耗时间
-         * @param runCount 执行次数
-         * @param toAndFro 是否来回播放
-         * @param view     动画的View
+         * @param x         初始 X 坐标
+         * @param toX       最终 X 坐标
+         * @param y         初始 Y 坐标
+         * @param toY       最终 Y 坐标
+         * @param time      消耗时间
+         * @param runCount  执行次数
+         * @param toAndFro  是否来回播放
+         * @param view      动画的View
          * @param sleepTime 延迟执行动画时间
          * @return
          * @缩放item动画（真）
@@ -26795,7 +26947,7 @@ public class GT {
                 scaleY.setRepeatMode(ObjectAnimator.REVERSE);
             }
 
-            if(sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0){
+            if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
                 scaleX.setStartDelay(sleepTime[0]);//设置动画延迟启动时间，单位是ms
                 scaleY.setStartDelay(sleepTime[0]);//设置动画延迟启动时间，单位是ms
             }
@@ -26815,7 +26967,7 @@ public class GT {
          * @param runCount    播放动画的次数 -1 表示无限次数
          * @param toAndFro    是否来回播放
          * @param view        执行View动画
-         * @param sleepTime 延迟执行动画时间
+         * @param sleepTime   延迟执行动画时间
          * @return
          * @平面旋转动画（假）
          */
@@ -26830,7 +26982,7 @@ public class GT {
                 rotateAnimation.setRepeatCount(runCount);            //播放的次数
             }
             if (toAndFro) rotateAnimation.setRepeatMode(Animation.RESTART);       //是否来回的播放
-            if(sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0){
+            if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
                 rotateAnimation.setStartOffset(sleepTime[0]);           //设置动画延迟启动时间，单位是ms
             }
             view.startAnimation(rotateAnimation);                //开始播放
@@ -26845,7 +26997,7 @@ public class GT {
          * @param isSaveClose 是否保持动画结束时的最终状态
          * @param runCount    播放动画的次数 -1 表示无限次数
          * @param toAndFro    是否来回播放
-         * @param sleepTime 延迟执行动画时间
+         * @param sleepTime   延迟执行动画时间
          * @return
          * @平面旋转item动画（假）
          */
@@ -26860,19 +27012,19 @@ public class GT {
                 rotateAnimation.setRepeatCount(runCount);            //播放的次数
             }
             if (toAndFro) rotateAnimation.setRepeatMode(Animation.RESTART);       //是否来回的播放
-            if(sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0){
+            if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
                 rotateAnimation.setStartOffset(sleepTime[0]);           //设置动画延迟启动时间，单位是ms
             }
             return rotateAnimation;
         }
 
         /**
-         * @param x        初始化 X 坐标
-         * @param toX      最终的 X 坐标
-         * @param time     动画耗时
-         * @param runCount 动画播放次数
-         * @param toAndFro 是否来回播放
-         * @param view     要使用动画的View
+         * @param x         初始化 X 坐标
+         * @param toX       最终的 X 坐标
+         * @param time      动画耗时
+         * @param runCount  动画播放次数
+         * @param toAndFro  是否来回播放
+         * @param view      要使用动画的View
          * @param sleepTime 延迟执行动画时间
          * @return
          * @旋转动画X（真）
@@ -26893,7 +27045,7 @@ public class GT {
                 rotationX.setRepeatMode(ObjectAnimator.REVERSE);
             }
 
-            if(sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0){
+            if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
                 rotationX.setStartDelay(sleepTime[0]);//设置动画延迟启动时间，单位是ms
             }
 
@@ -26902,12 +27054,12 @@ public class GT {
         }
 
         /**
-         * @param x        初始化 X 坐标
-         * @param toX      最终的 X 坐标
-         * @param time     动画耗时
-         * @param runCount 动画播放次数
-         * @param toAndFro 是否来回播放
-         * @param view     要使用动画的View
+         * @param x         初始化 X 坐标
+         * @param toX       最终的 X 坐标
+         * @param time      动画耗时
+         * @param runCount  动画播放次数
+         * @param toAndFro  是否来回播放
+         * @param view      要使用动画的View
          * @param sleepTime 延迟执行动画时间
          * @return
          * @旋转item动画X（真）
@@ -26928,7 +27080,7 @@ public class GT {
                 rotationX.setRepeatMode(ObjectAnimator.REVERSE);
             }
 
-            if(sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0){
+            if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
                 rotationX.setStartDelay(sleepTime[0]);//设置动画延迟启动时间，单位是ms
             }
 
@@ -26937,12 +27089,12 @@ public class GT {
         }
 
         /**
-         * @param y        初始化 Y 坐标
-         * @param toY      最终的 Y 坐标
-         * @param time     动画耗时
-         * @param runCount 动画播放次数
-         * @param toAndFro 是否来回播放
-         * @param view     要使用动画的View
+         * @param y         初始化 Y 坐标
+         * @param toY       最终的 Y 坐标
+         * @param time      动画耗时
+         * @param runCount  动画播放次数
+         * @param toAndFro  是否来回播放
+         * @param view      要使用动画的View
          * @param sleepTime 延迟执行动画时间
          * @return
          * @旋转动画Y（真）
@@ -26963,7 +27115,7 @@ public class GT {
                 rotationY.setRepeatMode(ObjectAnimator.REVERSE);
             }
 
-            if(sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0){
+            if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
                 rotationY.setStartDelay(sleepTime[0]);//设置动画延迟启动时间，单位是ms
             }
 
@@ -26972,12 +27124,12 @@ public class GT {
         }
 
         /**
-         * @param y        初始化 Y 坐标
-         * @param toY      最终的 Y 坐标
-         * @param time     动画耗时
-         * @param runCount 动画播放次数
-         * @param toAndFro 是否来回播放
-         * @param view     要使用动画的View
+         * @param y         初始化 Y 坐标
+         * @param toY       最终的 Y 坐标
+         * @param time      动画耗时
+         * @param runCount  动画播放次数
+         * @param toAndFro  是否来回播放
+         * @param view      要使用动画的View
          * @param sleepTime 延迟执行动画时间
          * @return
          * @旋转item动画Y（真）
@@ -26998,7 +27150,7 @@ public class GT {
                 rotationY.setRepeatMode(ObjectAnimator.REVERSE);
             }
 
-            if(sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0){
+            if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
                 rotationY.setStartDelay(sleepTime[0]);//设置动画延迟启动时间，单位是ms
             }
 
@@ -27006,12 +27158,12 @@ public class GT {
         }
 
         /**
-         * @param z        初始化 Z 坐标
-         * @param toZ      最终的 Z 坐标
-         * @param time     动画耗时
-         * @param runCount 动画播放次数
-         * @param toAndFro 是否来回播放
-         * @param view     要使用动画的View
+         * @param z         初始化 Z 坐标
+         * @param toZ       最终的 Z 坐标
+         * @param time      动画耗时
+         * @param runCount  动画播放次数
+         * @param toAndFro  是否来回播放
+         * @param view      要使用动画的View
          * @param sleepTime 延迟执行动画时间
          * @return
          * @旋转动画Z（真）
@@ -27032,7 +27184,7 @@ public class GT {
                 rotationZ.setRepeatMode(ObjectAnimator.REVERSE);
             }
 
-            if(sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0){
+            if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
                 rotationZ.setStartDelay(sleepTime[0]);//设置动画延迟启动时间，单位是ms
             }
 
@@ -27041,12 +27193,12 @@ public class GT {
         }
 
         /**
-         * @param z        初始化 Z 坐标
-         * @param toZ      最终的 Z 坐标
-         * @param time     动画耗时
-         * @param runCount 动画播放次数
-         * @param toAndFro 是否来回播放
-         * @param view     要使用动画的View
+         * @param z         初始化 Z 坐标
+         * @param toZ       最终的 Z 坐标
+         * @param time      动画耗时
+         * @param runCount  动画播放次数
+         * @param toAndFro  是否来回播放
+         * @param view      要使用动画的View
          * @param sleepTime 延迟执行动画时间
          * @return
          * @旋转item动画Z（真）
@@ -27067,7 +27219,7 @@ public class GT {
                 rotationZ.setRepeatMode(ObjectAnimator.REVERSE);
             }
 
-            if(sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0){
+            if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
                 rotationZ.setStartDelay(sleepTime[0]);//设置动画延迟启动时间，单位是ms
             }
 
@@ -27082,7 +27234,7 @@ public class GT {
          * @param runCount    播放动画的次数 -1 表示无限次数
          * @param toAndFro    是否来回播放
          * @param view        执行View动画
-         * @param sleepTime 延迟执行动画时间
+         * @param sleepTime   延迟执行动画时间
          * @return
          * @透明动画（假）
          */
@@ -27098,7 +27250,7 @@ public class GT {
             }
             if (toAndFro) alphaAnimation.setRepeatMode(Animation.RESTART);       //是否来回的播放
 
-            if(sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0){
+            if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
                 alphaAnimation.setStartOffset(sleepTime[0]);           //设置动画延迟启动时间，单位是ms
             }
 
@@ -27113,7 +27265,7 @@ public class GT {
          * @param isSaveClose 是否保持动画结束时的最终状态
          * @param runCount    播放动画的次数 -1 表示无限次数
          * @param toAndFro    是否来回播放
-         * @param sleepTime 延迟执行动画时间
+         * @param sleepTime   延迟执行动画时间
          * @return
          * @透明item动画（假）
          */
@@ -27128,18 +27280,18 @@ public class GT {
                 alphaAnimation.setRepeatCount(runCount);            //播放的次数
             }
             if (toAndFro) alphaAnimation.setRepeatMode(Animation.RESTART);       //是否来回的播放
-            if(sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0){
+            if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
                 alphaAnimation.setStartOffset(sleepTime[0]);           //设置动画延迟启动时间，单位是ms
             }
             return alphaAnimation;
         }
 
         /**
-         * @param alpha    初始透明度
-         * @param toAlpha  最终透明度
-         * @param time     动画执行时间
-         * @param runCount 播放动画的次数 -1 表示无限次数
-         * @param toAndFro 是否来回播放
+         * @param alpha     初始透明度
+         * @param toAlpha   最终透明度
+         * @param time      动画执行时间
+         * @param runCount  播放动画的次数 -1 表示无限次数
+         * @param toAndFro  是否来回播放
          * @param sleepTime 延迟执行动画时间
          * @return
          * @透明动画（真）
@@ -27160,7 +27312,7 @@ public class GT {
                 rotationX.setRepeatMode(ObjectAnimator.REVERSE);
             }
 
-            if(sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0){
+            if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
                 rotationX.setStartDelay(sleepTime[0]);//设置动画延迟启动时间，单位是ms
             }
 
@@ -27169,11 +27321,11 @@ public class GT {
         }
 
         /**
-         * @param alpha    初始透明度
-         * @param toAlpha  最终透明度
-         * @param time     动画执行时间
-         * @param runCount 播放动画的次数 -1 表示无限次数
-         * @param toAndFro 是否来回播放
+         * @param alpha     初始透明度
+         * @param toAlpha   最终透明度
+         * @param time      动画执行时间
+         * @param runCount  播放动画的次数 -1 表示无限次数
+         * @param toAndFro  是否来回播放
          * @param sleepTime 延迟执行动画时间
          * @return
          * @透明item动画（真）
@@ -27194,7 +27346,7 @@ public class GT {
                 rotationX.setRepeatMode(ObjectAnimator.REVERSE);
             }
 
-            if(sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0){
+            if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
                 rotationX.setStartDelay(sleepTime[0]);//设置动画延迟启动时间，单位是ms
             }
 
@@ -30422,6 +30574,56 @@ public class GT {
                     GT_Cache.putCacheData(activity.getPackageName() + getClass().getName(), bean);
                 }
             }
+
+
+            private static String className = "";
+            private static String functionName = "";
+            //选择单图片
+            private ActivityResultLauncher<Intent> register = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), new ActivityResultCallback<ActivityResult>() {
+                @Override
+                public void onActivityResult(ActivityResult result) {
+                    if (result == null) return;
+                    Intent intent = result.getData();
+                    if (intent == null) return;
+                    if (result.getResultCode() != Activity.RESULT_OK) return;
+
+                    //判断是否只发给特定 class
+                    Class<?> aClass = null;
+                    if (className == null) {
+                        aClass = AnnotationAssist.stringToClass(className);
+                    }
+
+                    if (functionName == null && aClass == null) {
+                        GT.EventBus.posts(result, "onActivityResult");
+                    } else if (functionName != null && aClass == null) {
+                        GT.EventBus.posts(result, functionName);
+                    } else if (functionName == null && aClass != null) {
+                        GT.EventBus.posts(result, "onActivityResult", aClass);
+                    } else if (functionName != null && aClass != null) {
+                        GT.EventBus.posts(result, functionName, aClass);
+                    }
+                }
+            });
+
+            /**
+             * 选择单个图片
+             *
+             * @param className    当前类的 className
+             * @param functionName 返回到当前类的 方法名
+             */
+            public void selectImage(Class classz, String functionName) {
+                Intent intent = new Intent(Intent.ACTION_PICK);
+                if (classz != null) {
+                    this.className = classz.getName();
+                }
+                if (functionName != null) {
+                    this.functionName = functionName;
+                }
+                intent.setType("image/*");     //选择全部照片
+                register.launch(intent);
+            }
+
+
         }
 
         /**
@@ -31639,6 +31841,54 @@ public class GT {
                 Runtime.getRuntime().gc();
             }
 
+            private static String className = "";
+            private static String functionName = "";
+            //选择单图片
+            private ActivityResultLauncher<Intent> register = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), new ActivityResultCallback<ActivityResult>() {
+                @Override
+                public void onActivityResult(ActivityResult result) {
+                    if (result == null) return;
+                    Intent intent = result.getData();
+                    if (intent == null) return;
+                    if (result.getResultCode() != Activity.RESULT_OK) return;
+
+                    //判断是否只发给特定 class
+                    Class<?> aClass = null;
+                    if (className == null) {
+                        aClass = AnnotationAssist.stringToClass(className);
+                    }
+
+                    if (functionName == null && aClass == null) {
+                        GT.EventBus.posts(result, "onActivityResult");
+                    } else if (functionName != null && aClass == null) {
+                        GT.EventBus.posts(result, functionName);
+                    } else if (functionName == null && aClass != null) {
+                        GT.EventBus.posts(result, "onActivityResult", aClass);
+                    } else if (functionName != null && aClass != null) {
+                        GT.EventBus.posts(result, functionName, aClass);
+                    }
+                }
+            });
+
+            /**
+             * 选择单个图片
+             *
+             * @param className    当前类的 className
+             * @param functionName 返回到当前类的 方法名
+             */
+            public void selectImage(Class classz, String functionName) {
+                Intent intent = new Intent(Intent.ACTION_PICK);
+                if (classz != null) {
+                    this.className = classz.getName();
+                }
+                if (functionName != null) {
+                    this.functionName = functionName;
+                }
+                intent.setType("image/*");     //选择全部照片
+                register.launch(intent);
+            }
+
+
         }
 
         /**
@@ -32342,20 +32592,34 @@ public class GT {
 
             protected Timer timer;                               //定时器来检测是否绑定APP
             private boolean isDrag = false;                      //是否可拖动
+            private boolean isEventPenetration = false;          //是否事件穿透
             private static boolean isShow = true;                //是否显示
             private String cacheKey;//缓存标识
             private static int type_screenType = -1079;          //创建屏幕的类型,默认是使用用户设置的Xml宽高
-            private final static int type_self_adaption = -1;    //自适应
-            private final static int type_portraitScreen = 0;    //竖屏
-            private final static int type_landscape = 1;         //横屏
-            private final static int type_screen = 2;            //自适应半屏
-            private final static int type_fullScreen = 3;        //自适应全屏
+            public final static int type_self_adaption = -1;    //自适应
+            public final static int type_portraitScreen = 0;    //竖屏
+            public final static int type_landscape = 1;         //横屏
+            public final static int type_screen = 2;            //自适应半屏
+            public final static int type_fullScreen = 3;        //自适应全屏
 
             private static double screenSizeCoefficient = 1.8;     //屏幕大小系数,系数越大，创建屏幕越小 注意：该系数不能 <= 0
 
             //是否缓存开启数据
             protected boolean isCacheData() {
                 return false;
+            }
+
+            public boolean isEventPenetration() {
+                return isEventPenetration;
+            }
+
+            /**
+             * 设置事件是否穿透(默认 不穿透)
+             *
+             * @param eventPenetration true:穿透  false(默认):不穿透
+             */
+            public void setEventPenetration(boolean eventPenetration) {
+                isEventPenetration = eventPenetration;
             }
 
             public View findViewById(int id) {
@@ -32502,16 +32766,17 @@ public class GT {
              * 更新View
              */
             protected void updateView() {
-                if(windowManager == null || view == null || layoutParams == null) return;
+                if (windowManager == null || view == null || layoutParams == null) return;
                 windowManager.updateViewLayout(view, layoutParams);
             }
+
             /**
              * 更新View
              */
             protected void updateView(int width, int height) {
-                if(windowManager == null || view == null || layoutParams == null) return;
+                if (windowManager == null || view == null || layoutParams == null) return;
                 layoutParams.width = width;
-                layoutParams.height =  height;
+                layoutParams.height = height;
                 windowManager.updateViewLayout(view, layoutParams);
             }
 
@@ -32576,6 +32841,8 @@ public class GT {
                 context = this;
                 windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
                 layoutParams = new WindowManager.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+
+                //默认事件不穿透
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     layoutParams.type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
                 } else {
@@ -32623,8 +32890,18 @@ public class GT {
                 //初始化View
                 initView(view);
                 getCache(GT_Cache.getCacheData(cacheKey, String.class));//获取缓存数据
-                windowManager.addView(view, layoutParams);
 
+                //可动态设置 事件是否穿透
+                if (isEventPenetration) {
+                    layoutParams.type = Build.VERSION.SDK_INT < Build.VERSION_CODES.O ? WindowManager.LayoutParams.TYPE_SYSTEM_ALERT : WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
+                    layoutParams.flags =
+                            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE |
+                                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL |
+                                    WindowManager.LayoutParams.FIRST_SYSTEM_WINDOW;
+                }
+
+                windowManager.addView(view, layoutParams);
             }
 
             /**
@@ -32922,7 +33199,6 @@ public class GT {
                     return true;
                 }
             }
-
         }
 
         /**
@@ -34121,7 +34397,7 @@ public class GT {
                 });
 
                 //添加监听
-                if(isAddListener){
+                if (isAddListener) {
                     WebViewUtils.addListener(this, onLoadWebViewListener);
                 }
 
@@ -34591,7 +34867,7 @@ public class GT {
                     loadDataWithBaseURL(null, "", "text/html", "utf-8", null);
                     clearHistory();//清空缓存
                     ViewGroup parent = (ViewGroup) getParent();
-                    if(parent != null){
+                    if (parent != null) {
                         parent.removeView(this);//重父类将WebView移除
                         parent.removeAllViews();
                         parent = null;
@@ -36214,6 +36490,9 @@ public class GT {
             builder.setAutoCancel(clickCancel);//设置通知打开后自动消失
 
             PendingIntent pendingIntent = null;
+            if (intent == null) {
+                intent = new Intent();
+            }
             // 适配12.0及以上
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 pendingIntent = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_IMMUTABLE);
@@ -36708,30 +36987,34 @@ public class GT {
          */
         private static void analysisLayout(Context context, View view) {
             if (view == null) return;
-            ViewBean viewBean = new ViewBean();
-            if (view instanceof ViewGroup) {
-                ViewGroup viewGroup = (ViewGroup) view;
-                viewBean.setView(viewGroup);
-                viewBean.settClass(viewGroup.getClass());
-                if (viewGroup.getId() != -1) {
-                    viewBean.setViewId(viewGroup.getId());
-                    String idName = context.getResources().getResourceEntryName(viewGroup.getId());
-                    viewBean.setViewName(idName);
-                }
+            try{
+                ViewBean viewBean = new ViewBean();
+                if (view instanceof ViewGroup) {
+                    ViewGroup viewGroup = (ViewGroup) view;
+                    viewBean.setView(viewGroup);
+                    viewBean.settClass(viewGroup.getClass());
+                    if (viewGroup.getId() != -1) {
+                        viewBean.setViewId(viewGroup.getId());
+                        String idName = context.getResources().getResourceEntryName(viewGroup.getId());
+                        viewBean.setViewName(idName);
+                    }
 //                logt("views:" + view + ":" + view.getId());
-                viewBeanList.put(viewBean.getViewName(), viewBean);
-                for (int index = 0; index < viewGroup.getChildCount(); index++) {
-                    analysisLayout(context, viewGroup.getChildAt(index));//回调解析
+                    viewBeanList.put(viewBean.getViewName(), viewBean);
+                    for (int index = 0; index < viewGroup.getChildCount(); index++) {
+                        analysisLayout(context, viewGroup.getChildAt(index));//回调解析
+                    }
+                } else {
+                    viewBean.setView(view);
+                    viewBean.settClass(view.getClass());
+                    if (view.getId() != -1) {
+                        viewBean.setViewId(view.getId());
+                        String idName = context.getResources().getResourceEntryName(view.getId());
+                        viewBean.setViewName(idName);
+                    }
+                    viewBeanList.put(viewBean.getViewName(), viewBean);
                 }
-            } else {
-                viewBean.setView(view);
-                viewBean.settClass(view.getClass());
-                if (view.getId() != -1) {
-                    viewBean.setViewId(view.getId());
-                    String idName = context.getResources().getResourceEntryName(view.getId());
-                    viewBean.setViewName(idName);
-                }
-                viewBeanList.put(viewBean.getViewName(), viewBean);
+            }catch (Exception e){
+
             }
         }
 
@@ -38624,6 +38907,373 @@ public class GT {
 
         }
 
+        /**
+         * 颜色选择
+         */
+        public static class ColorPickerDialog extends Dialog {
+
+            Context context;
+            private String title;//标题
+            private int mInitialColor;//初始颜色
+
+            private static int mCacheColor = -1;//缓存颜色
+            private OnColorChangedListener mListener;
+
+            /**
+             * 初始颜色 缓存颜色
+             *
+             * @param context
+             * @param title    对话框标题
+             * @param listener 回调
+             */
+            public ColorPickerDialog(Context context, String title, OnColorChangedListener listener) {
+                this(context, mCacheColor, title, listener);
+            }
+
+            /**
+             * @param context
+             * @param initialColor 初始颜色
+             * @param title        标题
+             * @param listener     回调
+             */
+            public ColorPickerDialog(Context context, int initialColor, String title, OnColorChangedListener listener) {
+                super(context);
+                this.context = context;
+                mListener = listener;
+                mInitialColor = initialColor;
+                mCacheColor = initialColor;
+                this.title = title;
+            }
+
+            @Override
+            protected void onCreate(Bundle savedInstanceState) {
+                super.onCreate(savedInstanceState);
+                WindowManager manager = getWindow().getWindowManager();
+                int height = (int) (manager.getDefaultDisplay().getHeight() * 0.5f);
+                int width = (int) (manager.getDefaultDisplay().getWidth() * 0.7f);
+                ColorPickerView myView = new ColorPickerView(context, height, width);
+                setContentView(myView);
+                setTitle(title);
+            }
+
+            private class ColorPickerView extends View {
+                private Paint mPaint;//渐变色环画笔
+                private Paint mCenterPaint;//中间圆画笔
+                private Paint mLinePaint;//分隔线画笔
+                private Paint mRectPaint;//渐变方块画笔
+
+                private Shader rectShader;//渐变方块渐变图像
+                private float rectLeft;//渐变方块左x坐标
+                private float rectTop;//渐变方块右x坐标
+                private float rectRight;//渐变方块上y坐标
+                private float rectBottom;//渐变方块下y坐标
+
+                private final int[] mCircleColors;//渐变色环颜色
+                private final int[] mRectColors;//渐变方块颜色
+
+                private int mHeight;//View高
+                private int mWidth;//View宽
+                private float r;//色环半径(paint中部)
+                private float centerRadius;//中心圆半径
+
+                private boolean downInCircle = true;//按在渐变环上
+                private boolean downInRect;//按在渐变方块上
+                private boolean highlightCenter;//高亮
+                private boolean highlightCenterLittle;//微亮
+
+                public ColorPickerView(Context context, int height, int width) {
+                    super(context);
+                    this.mHeight = height - 36;
+                    this.mWidth = width;
+                    setMinimumHeight(height - 36);
+                    setMinimumWidth(width);
+
+                    //渐变色环参数
+                    mCircleColors = new int[]{0xFFFF0000, 0xFFFF00FF, 0xFF0000FF,
+                            0xFF00FFFF, 0xFF00FF00, 0xFFFFFF00, 0xFFFF0000};
+                    Shader s = new SweepGradient(0, 0, mCircleColors, null);
+                    mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                    mPaint.setShader(s);
+                    mPaint.setStyle(Paint.Style.STROKE);
+                    mPaint.setStrokeWidth(50);
+                    r = width / 2 * 0.7f - mPaint.getStrokeWidth() * 0.5f;
+
+                    //中心圆参数
+                    mCenterPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                    mCenterPaint.setColor(mInitialColor);
+                    mCenterPaint.setStrokeWidth(5);
+                    centerRadius = (r - mPaint.getStrokeWidth() / 2) * 0.7f;
+
+                    //边框参数
+                    mLinePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                    mLinePaint.setColor(Color.parseColor("#72A1D1"));
+                    mLinePaint.setStrokeWidth(4);
+
+                    //黑白渐变参数
+                    mRectColors = new int[]{0xFF000000, mCenterPaint.getColor(), 0xFFFFFFFF};
+                    mRectPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                    mRectPaint.setStrokeWidth(5);
+                    rectLeft = -r - mPaint.getStrokeWidth() * 0.5f;
+                    rectTop = r + mPaint.getStrokeWidth() * 0.5f +
+                            mLinePaint.getStrokeMiter() * 0.5f + 15;
+                    rectRight = r + mPaint.getStrokeWidth() * 0.5f;
+                    rectBottom = rectTop + 50;
+                }
+
+                @Override
+                protected void onDraw(Canvas canvas) {
+                    //移动中心
+                    canvas.translate(mWidth / 2, mHeight / 2 - 50);
+                    //画中心圆
+                    canvas.drawCircle(0, 0, centerRadius, mCenterPaint);
+                    //是否显示中心圆外的小圆环
+                    if (highlightCenter || highlightCenterLittle) {
+                        int c = mCenterPaint.getColor();
+                        mCenterPaint.setStyle(Paint.Style.STROKE);
+                        if (highlightCenter) {
+                            mCenterPaint.setAlpha(0xFF);
+                        } else if (highlightCenterLittle) {
+                            mCenterPaint.setAlpha(0x90);
+                        }
+                        canvas.drawCircle(0, 0,
+                                centerRadius + mCenterPaint.getStrokeWidth(), mCenterPaint);
+
+                        mCenterPaint.setStyle(Paint.Style.FILL);
+                        mCenterPaint.setColor(c);
+                    }
+                    //画色环
+                    canvas.drawOval(new RectF(-r, -r, r, r), mPaint);
+                    //画黑白渐变块
+                    if (downInCircle) {
+                        mRectColors[1] = mCenterPaint.getColor();
+                    }
+                    rectShader = new LinearGradient(rectLeft, 0, rectRight, 0, mRectColors, null, Shader.TileMode.MIRROR);
+                    mRectPaint.setShader(rectShader);
+                    canvas.drawRect(rectLeft, rectTop, rectRight, rectBottom, mRectPaint);
+                    float offset = mLinePaint.getStrokeWidth() / 2;
+                    canvas.drawLine(rectLeft - offset, rectTop - offset * 2,
+                            rectLeft - offset, rectBottom + offset * 2, mLinePaint);//左
+                    canvas.drawLine(rectLeft - offset * 2, rectTop - offset,
+                            rectRight + offset * 2, rectTop - offset, mLinePaint);//上
+                    canvas.drawLine(rectRight + offset, rectTop - offset * 2,
+                            rectRight + offset, rectBottom + offset * 2, mLinePaint);//右
+                    canvas.drawLine(rectLeft - offset * 2, rectBottom + offset,
+                            rectRight + offset * 2, rectBottom + offset, mLinePaint);//下
+                    super.onDraw(canvas);
+                }
+
+                @Override
+                public boolean onTouchEvent(MotionEvent event) {
+                    float x = event.getX() - mWidth / 2;
+                    float y = event.getY() - mHeight / 2 + 50;
+                    boolean inCircle = inColorCircle(x, y,
+                            r + mPaint.getStrokeWidth() / 2, r - mPaint.getStrokeWidth() / 2);
+                    boolean inCenter = inCenter(x, y, centerRadius);
+                    boolean inRect = inRect(x, y);
+
+                    switch (event.getAction()) {
+                        case MotionEvent.ACTION_DOWN:
+                            downInCircle = inCircle;
+                            downInRect = inRect;
+                            highlightCenter = inCenter;
+                        case MotionEvent.ACTION_MOVE:
+                            if (downInCircle && inCircle) {//down按在渐变色环内, 且move也在渐变色环内
+                                float angle = (float) Math.atan2(y, x);
+                                float unit = (float) (angle / (2 * Math.PI));
+                                if (unit < 0) {
+                                    unit += 1;
+                                }
+                                mCenterPaint.setColor(interpCircleColor(mCircleColors, unit));
+                            } else if (downInRect && inRect) {//down在渐变方块内, 且move也在渐变方块内
+                                mCenterPaint.setColor(interpRectColor(mRectColors, x));
+                            }
+                            if ((highlightCenter && inCenter) || (highlightCenterLittle && inCenter)) {//点击中心圆, 当前移动在中心圆
+                                highlightCenter = true;
+                                highlightCenterLittle = false;
+                            } else if (highlightCenter || highlightCenterLittle) {//点击在中心圆, 当前移出中心圆
+                                highlightCenter = false;
+                                highlightCenterLittle = true;
+                            } else {
+                                highlightCenter = false;
+                                highlightCenterLittle = false;
+                            }
+                            invalidate();
+                            break;
+                        case MotionEvent.ACTION_UP:
+                            if (highlightCenter && inCenter) {//点击在中心圆, 且当前启动在中心圆
+                                if (mListener != null) {
+                                    mListener.colorChanged(mCenterPaint.getColor());
+                                    ColorPickerDialog.this.dismiss();
+                                }
+                            }
+                            if (downInCircle) {
+                                downInCircle = false;
+                            }
+                            if (downInRect) {
+                                downInRect = false;
+                            }
+                            if (highlightCenter) {
+                                highlightCenter = false;
+                            }
+                            if (highlightCenterLittle) {
+                                highlightCenterLittle = false;
+                            }
+                            invalidate();
+                            break;
+                    }
+                    return true;
+                }
+
+                @Override
+                protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+                    super.onMeasure(mWidth, mHeight);
+                }
+
+                /**
+                 * 坐标是否在色环上
+                 *
+                 * @param x         坐标
+                 * @param y         坐标
+                 * @param outRadius 色环外半径
+                 * @param inRadius  色环内半径
+                 * @return
+                 */
+                private boolean inColorCircle(float x, float y, float outRadius, float inRadius) {
+                    double outCircle = Math.PI * outRadius * outRadius;
+                    double inCircle = Math.PI * inRadius * inRadius;
+                    double fingerCircle = Math.PI * (x * x + y * y);
+                    if (fingerCircle < outCircle && fingerCircle > inCircle) {
+                        return true;
+                    } else {
+                        return false;
+                    }
+                }
+
+                /**
+                 * 坐标是否在中心圆上
+                 *
+                 * @param x            坐标
+                 * @param y            坐标
+                 * @param centerRadius 圆半径
+                 * @return
+                 */
+                private boolean inCenter(float x, float y, float centerRadius) {
+                    double centerCircle = Math.PI * centerRadius * centerRadius;
+                    double fingerCircle = Math.PI * (x * x + y * y);
+                    if (fingerCircle < centerCircle) {
+                        return true;
+                    } else {
+                        return false;
+                    }
+                }
+
+                /**
+                 * 坐标是否在渐变色中
+                 *
+                 * @param x
+                 * @param y
+                 * @return
+                 */
+                private boolean inRect(float x, float y) {
+                    if (x <= rectRight && x >= rectLeft && y <= rectBottom && y >= rectTop) {
+                        return true;
+                    } else {
+                        return false;
+                    }
+                }
+
+                /**
+                 * 获取圆环上颜色
+                 *
+                 * @param colors
+                 * @param unit
+                 * @return
+                 */
+                private int interpCircleColor(int colors[], float unit) {
+                    if (unit <= 0) {
+                        return colors[0];
+                    }
+                    if (unit >= 1) {
+                        return colors[colors.length - 1];
+                    }
+
+                    float p = unit * (colors.length - 1);
+                    int i = (int) p;
+                    p -= i;
+
+                    // now p is just the fractional part [0...1) and i is the index
+                    int c0 = colors[i];
+                    int c1 = colors[i + 1];
+                    int a = ave(Color.alpha(c0), Color.alpha(c1), p);
+                    int r = ave(Color.red(c0), Color.red(c1), p);
+                    int g = ave(Color.green(c0), Color.green(c1), p);
+                    int b = ave(Color.blue(c0), Color.blue(c1), p);
+
+                    return Color.argb(a, r, g, b);
+                }
+
+                /**
+                 * 获取渐变块上颜色
+                 *
+                 * @param colors
+                 * @param x
+                 * @return
+                 */
+                private int interpRectColor(int colors[], float x) {
+                    int a, r, g, b, c0, c1;
+                    float p;
+                    if (x < 0) {
+                        c0 = colors[0];
+                        c1 = colors[1];
+                        p = (x + rectRight) / rectRight;
+                    } else {
+                        c0 = colors[1];
+                        c1 = colors[2];
+                        p = x / rectRight;
+                    }
+                    a = ave(Color.alpha(c0), Color.alpha(c1), p);
+                    r = ave(Color.red(c0), Color.red(c1), p);
+                    g = ave(Color.green(c0), Color.green(c1), p);
+                    b = ave(Color.blue(c0), Color.blue(c1), p);
+                    return Color.argb(a, r, g, b);
+                }
+
+                private int ave(int s, int d, float p) {
+                    return s + Math.round(p * (d - s));
+                }
+            }
+
+
+            public interface OnColorChangedListener {
+
+                void colorChanged(int color);
+            }
+
+            public String getTitle() {
+                return title;
+            }
+
+            public void setTitle(String title) {
+                this.title = title;
+            }
+
+            public int getmInitialColor() {
+                return mInitialColor;
+            }
+
+            public void setmInitialColor(int mInitialColor) {
+                this.mInitialColor = mInitialColor;
+            }
+
+            public OnColorChangedListener getmListener() {
+                return mListener;
+            }
+
+            public void setmListener(OnColorChangedListener mListener) {
+                this.mListener = mListener;
+            }
+
+        }
 
     }
 
@@ -40615,13 +41265,10 @@ public class GT {
         private static void initSQL(Object object) {
             Field[] fields = object.getClass().getDeclaredFields();//获致当前 Activity 所有成员变更
             for (Field field : fields) {
-
                 //获取识别注解
                 Hibernate.Build initView_Hibernate = field.getAnnotation(Hibernate.Build.class);
-
                 //初始化GT数据库
                 if (initView_Hibernate != null) {
-
                     String sqlName = initView_Hibernate.setSqlName();//数据库名称
                     int sqlVersion = initView_Hibernate.setSqlVersion();//数据库版本号
                     Class<?>[] classes = initView_Hibernate.setSqlTables();//数据库映射的表
@@ -40655,24 +41302,20 @@ public class GT {
                                 //如果用户没有自己设置映射的表那就扫描标注Bean,Entity的类做表
                                 Hibernate hibernate = new Hibernate();
                                 hibernate.setTransaction(IsTransaction);
-
                                 if (classes.length == 0) {
-                                    classObject = hibernate.
-                                            initSQL(sqlName, sqlVersion, passWord, ApplicationUtils.getPackageName(getActivity()));
+                                    classObject = hibernate.initSQL(sqlName, sqlVersion, passWord, ApplicationUtils.getPackageName(getActivity()));
                                 } else {
-                                    classObject = hibernate.
-                                            initSQL(sqlName, sqlVersion, passWord, classes);
+                                    classObject = hibernate.initSQL(sqlName, sqlVersion, passWord, classes);
                                 }
 
                                 //存入缓存
                                 GT_Cache.putHibernate(sqlName, hibernate);
-
                                 //实例注入
                                 try {
                                     field.setAccessible(true);
                                     field.set(object, classObject);
                                 } catch (Exception e) {
-                                    e.printStackTrace();
+                                    GT.err("init SQL Error:" + e);
                                 }
                             }
                         });
@@ -42805,8 +43448,7 @@ public class GT {
                     return (T) "true";
                 }
             } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
-                GT.err("e:" + e);
-                e.printStackTrace();
+//                GT.errs("e:" + e);
             }
             if (returnType != null) {
                 return null;
@@ -44506,7 +45148,7 @@ public class GT {
         public static GT_SharedPreferences sp_app;//sp存储-属于应用级别的sp存储,所有关于应用级别的都用这个存储，关于用户级别的用另一个存储
         public static final GT_Animation animation = new GT_Animation();//动画
         public static int height, width;//屏幕宽高
-        public static boolean isOneInstall;//是否第一次安卓
+        public static boolean isOneInstall = false;//是否第一次安卓
         public static boolean isFrontDesk = true;//是否前台
 
         public Application getApplication() {
@@ -46495,7 +47137,9 @@ public class GT {
                                 } else {
                                     bitmap = GT.ImageViewTools.getBitmapFromLocal(new File(urlOrFile));
                                 }
-                                wpManager.setBitmap(bitmap);
+                                if(bitmap != null){
+                                    wpManager.setBitmap(bitmap);
+                                }
                             } catch (IOException e) {
                             }
                         });
