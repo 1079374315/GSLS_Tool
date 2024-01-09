@@ -477,6 +477,7 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
         //发送通知栏
         private NotificationManagerCompat notificationManagerCompat;
 
+        @SuppressLint("MissingPermission")
         public void sendCustomViewNotification() {
 
             //加载自定义布局
@@ -1145,6 +1146,7 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
         }
 
 
+
     }//工具方法结尾
 
     public class UtilsGTApp implements SQLAdapter.ClickSqlTable {
@@ -1159,7 +1161,6 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
 
         public void emptyLog() {
             logBeans.clear();
-            GT.logt("清空日志");
             logAdapter.setBeanList(logBeans);
         }
 
@@ -1210,6 +1211,13 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
         private SQLAdapter tableAdapter;
         private SQLiteDatabase sqLiteDatabase;
         public int hierarchyNumber = 0;
+
+        public void close(){
+            if(logAdapter != null) logAdapter.close();
+            if(sqlAdapter != null) sqlAdapter.close();
+            if(tableAdapter != null) tableAdapter.close();
+            if(tableDataAdapter != null) tableDataAdapter.close();
+        }
 
         public GT.Hibernate getHibernate() {
             return hibernate;
@@ -1470,6 +1478,7 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
         super.onDestroy();
         try {
             listApp.clear();
+            utilsGTApp.close();
             GT.EventBus.getDefault().unregister(this);//解绑订阅者
             unregisterReceiver(utils.mBroadcastReceiver);//解除广播
         } catch (RuntimeException e) {

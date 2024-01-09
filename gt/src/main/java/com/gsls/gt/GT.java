@@ -145,12 +145,14 @@ import android.view.ContextThemeWrapper;
 import android.view.Display;
 import android.view.Gravity;
 import android.view.InputEvent;
+import android.view.KeyCharacterMap;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.ViewParent;
 import android.view.ViewTreeObserver;
@@ -189,6 +191,7 @@ import android.webkit.WebStorage;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.ArrayAdapter;
+import android.widget.Button;
 import android.widget.DatePicker;
 import android.widget.EditText;
 import android.widget.FrameLayout;
@@ -358,6 +361,8 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipException;
 import java.util.zip.ZipFile;
@@ -381,36 +386,14 @@ import dalvik.system.PathClassLoader;
  * GSLS_TOOL
  * <p>
  * <p>
- * 更新时间:2023.10.24
- * 更新内容 v1.4.5.0 版本：
+ * 更新时间:2024.1.9
+ * 更新内容 v1.4.4.6 版本：
  * CSDN 博客/官网教程:https://blog.csdn.net/qq_39799899
  * GitHub https://github.com/1079374315/GT
  * 更新内容如下：
- * 1.优化 GT_Fragment 类，API，修改 GT_Fragment 类 返回策略
- * 2.新增 指纹验证工具类 FingerprintUtils 和 封装好的指纹验证对话框 FingerprintDialogFragment 使用教程清参考官网
- * 3.新增 选择图片 功能
- * 4.GT.Glide 图片加载框架优化内容:
- * (1).优化内存缓存策略
- * (2).提升加载动态图性能 提升透明动画稳定性
- * (3).解决断网时读取本地缓存图片失败的问题
- * (4).解决 加载动态图后，View事件丢失的问题
- * (5).解决 在复杂布局中，加载动态图，动态图错位的问题
- * 5.去掉 U盘工具 API
- * 6.ApplicationUtils 类 增加获取 软键盘高度 API
- * 7.ImageViewUtils 类 增加 生成、解析二维码
- * 8.去掉 GT.ApplicationUtils 封装类中的所有分享api方法， 新增分享工具类 ShareUtils ，支持一键分享文件、网图、GIF图、支持万能渠道分享
- * 9.新增 手电筒 FlashlightUtils 封装类，五行代码 搞定
- * 10.新增 声音分贝 AudioRecordUtils 封装类，三行代码 搞定
- * 11.磁场传感器 MagneticFieldUtils 封装类，四行代码 搞定
- * 12.光源传感器 LightSourceUtils 封装类，四步搞定
- * 13.水平仪传感器 GradienterUtils 封装类，四步搞定
- * 14.新增壁纸管理器 WallpaperManagerUtils，两步搞定
- * 15.新增跳转封装类 SkipUtils，跳转各种系统页面
- * 16.GT.EventBus 新增局部 发布事件 和 订阅事件，灵活多变，支持事件拦截，结果返回等。(具体请参考博客教程)
- * 17.新增 颜色选择封装 对话话框
- * 18.优化 WebUtils 加载web稳定性，新增 解析 html源码 解析资源 api方法
- * 19.增强 Hibernate 数据库稳定性
- * 20.优化 AppAuthorityManagement 权限申请 稳定性
+ * 1.优化 WebView SslErrorHandler 事件，上架googleplay 遇见的问题
+ * 2.优化 Android混合开发中 WebView 上传图片的问题，并增加优化了  拍照、相册选着图片、相册选择视频、拍摄视频、本地文件上传 功能。
+ * 3.更新了 GT动画封装库的次数逻辑
  *
  * <p>
  * <p>
@@ -10288,7 +10271,6 @@ public class GT {
                     });
 
                 } else if (GT_Query.class.equals(call.whereBean.type)) {//查询数据
-
                     //查询条件
                     call.hibernate
                             .where(call.whereBean.sqlWhere, call.whereBean.sqlValue)
@@ -10298,6 +10280,7 @@ public class GT {
                             .groupBy(call.whereBean.groupBy)
                             .having(call.whereBean.having)
                             .isLast(call.whereBean.isList);
+
                     if (call.t instanceof ArrayList) {
                         call.t = (T) call.hibernate.queryAll(call.tClass);//3
                     } else {
@@ -16637,6 +16620,7 @@ public class GT {
                                         key[0] = url;
                                     }
 
+                                    //是否有缓存
                                     bitmapFromMemCache = LruCacheUtil.getBitmapFromMemCache(key[0]);
 
                                     //使用缓存，内存缓存
@@ -16671,6 +16655,11 @@ public class GT {
                                         }
                                         isSaveSD = true;
                                     }
+
+                                    if (glideBean2.imgObjet == null) {
+                                        glideBean2.imgObjet = GT.ImageViewTools.base64ToBitmap(key[0]);
+                                    }
+
                                 } else if (glideBean2.resource instanceof File) {
                                     //加载本地图片(需要加缓存)
                                     String filePath = ((File) glideBean2.resource).getPath();
@@ -17198,19 +17187,23 @@ public class GT {
         private static byte[] readInputStream(HttpURLConnection conn, int webSize2, OnGetHtmlCodeListener onGetHtmlCodeListener) throws Exception {
             InputStream inStream = conn.getInputStream();//通过输入流获取html数据
             ByteArrayOutputStream outStream = new ByteArrayOutputStream();
-            int sumLen = 0;
-            int len = 0;
-            byte[] buffer = new byte[1024];
-            while (isRun) {
-                len = inStream.read(buffer);
-                sumLen += len;
-                int mProgress = (int) (((float) sumLen / webSize2) * 100);
-                if (len < 0) break;
-                onGetHtmlCodeListener.onGetProgress(mProgress);
-                outStream.write(buffer, 0, len);
+            try {
+                int sumLen = 0;
+                int len = 0;
+                byte[] buffer = new byte[1024];
+                while (isRun) {
+                    len = inStream.read(buffer);
+                    sumLen += len;
+                    int mProgress = (int) (((float) sumLen / webSize2) * 100);
+                    if (len < 0) break;
+                    onGetHtmlCodeListener.onGetProgress(mProgress);
+                    outStream.write(buffer, 0, len);
+                }
+                inStream.close();
+                webSize = sumLen;
+            } catch (OutOfMemoryError e) {
+
             }
-            inStream.close();
-            webSize = sumLen;
             return outStream.toByteArray();
         }
 
@@ -17245,15 +17238,18 @@ public class GT {
          * @param url     要加载的网页
          */
         @SuppressLint("SetJavaScriptEnabled")
-        public static WebView loadPCHtml(Context context, WebView webView, String url, boolean isCache, OnLoadWebViewListener onLoadWebViewListener) {
+        public static WebView loadPCHtml(Context context, WebView webView, String url) {
             if (webView == null) return null;
 
             //设置PC网
-            webView.getSettings().setUserAgentString("Mozilla/5.0 (WindowUtilss NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/43.0.2357.134 Safari/537.36");
-            //支持获取手势焦点
-            webView.requestFocusFromTouch();
+            webView.getSettings().setCacheMode(WebSettings.LOAD_NO_CACHE);//不使用缓存，只从网络获取数据.
+            webView.getSettings().setUserAgentString(GT_WebView.BaseWebView.defaultPC);
+            webView.requestFocusFromTouch();//支持获取手势焦点
+            webView.clearCache(true);
 
-            loadAppHtml(context, webView, url, isCache, onLoadWebViewListener);
+            if (url != null) {
+                webView.loadUrl(url);
+            }
 
             return webView;
 
@@ -17268,16 +17264,13 @@ public class GT {
          * @param url
          */
         @SuppressLint("SetJavaScriptEnabled")
-        public static WebView loadAppHtml(Context context, WebView webView, String url, boolean isCache, final OnLoadWebViewListener onLoadWebViewListener) {
+        public static WebView loadAppHtml(Context context, WebView webView, String url) {
             if (webView == null || context == null) return webView;
 
-            //添加所有监听
-            addListener(webView, onLoadWebViewListener);
-
-            // 特别注意：5.1以上默认禁止了https和http混用，以下方式是开启
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                webView.getSettings().setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-            }
+            //手机版
+            webView.getSettings().setCacheMode(WebSettings.LOAD_NO_CACHE);//不使用缓存，只从网络获取数据.
+            webView.getSettings().setUserAgentString(GT_WebView.BaseWebView.defaultPhone);
+            webView.clearCache(true);
 
             if (url != null) {
                 webView.loadUrl(url);
@@ -17294,6 +17287,7 @@ public class GT {
          * @param onLoadWebViewListener
          */
         public static void addListener(WebView webView, OnLoadWebViewListener onLoadWebViewListener) {
+            if (onLoadWebViewListener == null) return;
             //获得网页的加载进度并显示
             webView.setWebChromeClient(new WebChromeClient() {
 
@@ -17508,7 +17502,7 @@ public class GT {
                 @Override
                 public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
                     onLoadWebViewListener.onReceivedSslError(view, handler, error);
-
+                    handler.cancel();
                 }
 
                 @Override
@@ -17516,15 +17510,9 @@ public class GT {
                     if (url.startsWith("http://") || url.startsWith("https://")) {
                         view.loadUrl(url);//防止加载网页时调起系统浏览器
                         return true;
-                    } else if (view.getContext() != null) {
-                        if (url.startsWith("weixin://") ||
-                                url.startsWith("alipays://") ||
-                                url.startsWith("tel://") ||
-                                url.startsWith("baiduboxapp://")) {
-                            return true;
-                        }
                     }
-                    return onLoadWebViewListener.shouldOverrideUrlLoading(view, url);
+                    onLoadWebViewListener.shouldOverrideUrlLoading(view, url);
+                    return true;
                 }
 
                 @Override
@@ -17559,11 +17547,11 @@ public class GT {
          * @param onLoadWebViewListener 接口监听
          * @return
          */
-        public static WebView loadHtml(Context context, boolean isPC, WebView webView, String url, boolean isCache, OnLoadWebViewListener onLoadWebViewListener) {
+        public static WebView loadHtml(Context context, boolean isPC, WebView webView, String url) {
             if (isPC) {
-                return loadPCHtml(context, webView, url, isCache, onLoadWebViewListener);
+                return loadPCHtml(context, webView, url);
             } else {
-                return loadAppHtml(context, webView, url, isCache, onLoadWebViewListener);
+                return loadAppHtml(context, webView, url);
             }
         }
 
@@ -17854,6 +17842,7 @@ public class GT {
             }
 
             public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
+
             }
 
             public void onReceivedClientCertRequest(WebView view, ClientCertRequest request) {
@@ -17898,11 +17887,12 @@ public class GT {
         }
 
 
-        private static final int defaultMaxCount = 50;//默认解析数量
+        private static final int defaultMaxCount = 10000;//默认解析数量
         private static int maxCount = defaultMaxCount;
 
         /**
          * 解析 html 代码
+         *
          * @param htmlCode
          * @param maxCount2 自定义 解析数量
          * @return
@@ -17938,33 +17928,42 @@ public class GT {
          * @param htmlCode
          * @param map
          */
-        private static void addHttpData(String htmlCode, Map<String, List<String>> map) {
-            int indexOf1 = htmlCode.indexOf("http");
-            int indexOf2 = htmlCode.indexOf("\"", indexOf1);
-            if (indexOf1 <= 0 || indexOf2 <= 0)
+        public static void addHttpData(String htmlCode, Map<String, List<String>> map) {
+            if (maxCount <= 0) return;
+            int indexOf1 = htmlCode.indexOf("http://");
+            int indexOf2 = htmlCode.indexOf("https://");
+            if (indexOf1 <= 0 && indexOf2 <= 0)
                 return;
-            String webData = htmlCode.substring(indexOf1, indexOf2);
-            if (webData.contains(".")) {
-                int lastIndexOf = webData.lastIndexOf(".");
-                String type = webData.substring(lastIndexOf + 1);
-                if (!type.contains("/") && !type.contains("?") && !type.contains(":") && !type.contains(".")) {
-                    List<String> list;
-                    if (map.containsKey(type))
-                        list = map.get(type);
-                    else
-                        list = new ArrayList<>();
-                    if (list != null) {
-                        list.add(webData);
-                        map.put(type, list);
-                    }
-                }
+            int indexOf = 0;
+            if (indexOf1 > 0) {
+                indexOf = indexOf1;
             }
-            htmlCode = htmlCode.substring(indexOf2);
-            if (htmlCode == null || !htmlCode.contains("http") || !htmlCode.contains(".") || maxCount <= 0) return;
+            if (indexOf2 > 0 && indexOf2 > indexOf) {
+                indexOf = indexOf2;
+            }
+            int lastIndex = htmlCode.indexOf("\"", indexOf);
+            String url = htmlCode.substring(indexOf, lastIndex);
+            if (!url.contains(".")) {
+                htmlCode = htmlCode.substring(lastIndex, htmlCode.length());
+                addHttpData(htmlCode, map);
+                return;
+            }
+
+            int lastIndexOf = url.lastIndexOf(".");
+            String type = url.substring(lastIndexOf + 1, url.length());
+            List<String> list;
+            if (map.keySet().contains(type))
+                list = map.get(type);
+            else {
+                list = new ArrayList<>();
+            }
             maxCount--;
+            if (!list.contains(url))
+                list.add(url);
+            map.put(type, list);
+            htmlCode = htmlCode.substring(lastIndexOf, htmlCode.length());
             addHttpData(htmlCode, map);
         }
-
 
     }
 
@@ -18672,6 +18671,44 @@ public class GT {
                 return m + "分钟" + s + "秒";
             }
             return s + "秒";
+        }
+
+        public static String secondsToTime2(int seconds, String... units) {
+            int h = seconds / 3600; // 小时
+            int m = (seconds % 3600) / 60; // 分钟
+            int s = (seconds % 3600) % 60; // 秒
+
+            String XS = "小时";
+            String FZ = "分钟";
+            String M = "秒";
+
+            if (units != null && units.length > 0) {
+                switch (units.length) {
+                    case 1: {
+                        M = units[0];
+                        break;
+                    }
+                    case 2: {
+                        M = units[0];
+                        FZ = units[1];
+                        break;
+                    }
+                    case 3: {
+                        M = units[0];
+                        FZ = units[1];
+                        XS = units[2];
+                        break;
+                    }
+                }
+            }
+
+            if (h > 0) {
+                return h + XS + m + FZ + s + M;
+            }
+            if (m > 0) {
+                return m + FZ + s + M;
+            }
+            return s + M;
         }
 
         /**
@@ -20364,6 +20401,98 @@ public class GT {
     public static class ApplicationUtils {
 
         /**
+         * 字符串的压缩
+         *
+         * @param str 待压缩的字符串
+         * @return 返回压缩后的字符串
+         */
+        public static String compress(String str) {
+            if (null == str || str.length() == 0) {
+                return str;
+            }
+            // 创建一个新的输出流
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            // 使用默认缓冲区大小创建新的输出流
+            String str2 = "";
+            try {
+                GZIPOutputStream gzip = new GZIPOutputStream(out);
+                // 将字节写入此输出流
+                gzip.write(str.getBytes("utf-8")); // 因为后台默认字符集有可能是GBK字符集，所以此处需指定一个字符集
+                gzip.close();
+                str2 = out.toString("ISO-8859-1");
+            } catch (IOException e) {
+
+            }
+
+            // 使用指定的 charsetName，通过解码字节将缓冲区内容转换为字符串
+            return str2;
+        }
+
+        /**
+         * 字符串的解压
+         *
+         * @param str 对字符串解压
+         * @return 返回解压缩后的字符串
+         */
+        public static String unCompress(String str) {
+            if (null == str || str.length() == 0) {
+                return str;
+            }
+            String str2 = "";
+            try {
+                // 创建一个新的输出流
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                // 创建一个 ByteArrayInputStream，使用 buf 作为其缓冲区数组
+                ByteArrayInputStream in = new ByteArrayInputStream(str.getBytes("ISO-8859-1"));
+                // 使用默认缓冲区大小创建新的输入流
+                GZIPInputStream gzip = null;
+                gzip = new GZIPInputStream(in);
+                byte[] buffer = new byte[256];
+                int n = 0;
+
+                // 将未压缩数据读入字节数组
+                while ((n = gzip.read(buffer)) >= 0) {
+                    out.write(buffer, 0, n);
+                }
+                // 使用指定的 charsetName，通过解码字节将缓冲区内容转换为字符串
+                str2 = out.toString("utf-8");
+
+            } catch (IOException e) {
+
+            }
+            return str2;
+        }
+
+        /**
+         * 判断app应用是否存在手机里
+         *
+         * @param context
+         * @param pName
+         * @return
+         */
+        public static boolean checkAppInstalled(Context context, String pName) {
+
+            List<String> appAllPackName = ApplicationUtils.getAppAllPackName();
+
+            if (pName == null || pName.isEmpty()) {
+                return false;
+            }
+            final PackageManager packageManager = context.getPackageManager();
+            List<PackageInfo> info = packageManager.getInstalledPackages(0);
+            if (info == null || info.isEmpty()) {
+                return false;
+            }
+            for (int i = 0; i < info.size(); i++) {
+                String packageName = info.get(i).packageName;
+                if (pName.equals(packageName)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+
+        /**
          * 打印 对象属性
          *
          * @param obj
@@ -20496,6 +20625,35 @@ public class GT {
                 // 未安装手Q或安装的版本不支持
                 return false;
             }
+        }
+
+        /**
+         * 跳抖音指定的个人主页
+         *
+         * @param context
+         * @param userId  跳转到这个抖音用户的主页，userId在 抖音设置里的最底下，有一个抖音版本号，连续多点版本号就会展示
+         * @return
+         */
+        public static boolean joinTiktok(Context context, String userId) {
+            Intent intent = new Intent();
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            try {
+                intent.setData(Uri.parse("snssdk1128://user/profile/" + userId));//抖音
+                context.startActivity(intent);
+            } catch (Exception e1) {
+                try {
+                    intent.setData(Uri.parse("snssdk1112://user/profile/" + userId));//抖音极速版
+                    context.startActivity(intent);
+                } catch (Exception e2) {
+                    try {
+                        intent.setData(Uri.parse("snssdk1112://profile?id=" + userId));//抖音火山版
+                        context.startActivity(intent);
+                    } catch (Exception e3) {
+                        return false;
+                    }
+                }
+            }
+            return true;
         }
 
         /**
@@ -20957,7 +21115,9 @@ public class GT {
             if (decorView == null || onListener == null) return;
             decorView.setOnApplyWindowInsetsListener((v, insets) -> {
                 int bottom;
+
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+
                     bottom = insets.getInsets(WindowInsets.Type.ime()).bottom;
                     decorView.setPadding(0, 0, 0, bottom);
                     onListener.onOneListener(bottom);
@@ -21169,17 +21329,21 @@ public class GT {
          * @return
          */
         public static boolean isFrontDesk(Context context) {
-            ActivityManager am = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
-            List<ActivityManager.RunningAppProcessInfo> runnings = am.getRunningAppProcesses();
-            for (ActivityManager.RunningAppProcessInfo running : runnings) {
-                if (running.processName.equals(ApplicationUtils.getPackageName(context))) {
-                    if (running.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
-                            || running.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_VISIBLE) {
-                        return true;
-                    } else {
-                        return false;
+            try {
+                ActivityManager am = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
+                List<ActivityManager.RunningAppProcessInfo> runnings = am.getRunningAppProcesses();
+                for (ActivityManager.RunningAppProcessInfo running : runnings) {
+                    if (running.processName.equals(ApplicationUtils.getPackageName(context))) {
+                        if (running.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
+                                || running.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_VISIBLE) {
+                            return true;
+                        } else {
+                            return false;
+                        }
                     }
                 }
+            } catch (Exception e) {
+
             }
             return false;
         }
@@ -21258,9 +21422,10 @@ public class GT {
          * @return
          */
         public static boolean isPhoneNumber(String input) {
-            String regex = "(1[0-9][0-9]|15[0-9]|18[0-9])\\d{8}";
-            Pattern p = Pattern.compile(regex);
-            return p.matches(regex, input);
+            String pattern = "^(13[0-9]|15[012356789]|17[013678]|18[0-9]|14[57]|19[89]|166)[0-9]{8}";
+            Pattern r = Pattern.compile(pattern);
+            Matcher m = r.matcher(input);
+            return m.matches();
         }
 
         /**
@@ -21910,6 +22075,19 @@ public class GT {
 
     }
 
+    //机型判断类
+    public class MIUIUtils {
+
+        public static boolean isMIUI() {
+            String manufacturer = Build.MANUFACTURER;
+            //这个字符串可以自己定义,例如判断华为就填写huawei,魅族就填写meizu
+            if ("xiaomi".equalsIgnoreCase(manufacturer)) {
+                return true;
+            }
+            return false;
+        }
+    }
+
     //分享工具类
     public static class ShareUtils {
 
@@ -21935,6 +22113,7 @@ public class GT {
         public static final String TYPE_All = "*/*";//所有(不推荐,微信需要指定类型)
         public static final String TYPE_TEXT = "text/plain";//文本
         public static final String TYPE_IMAGE = "image/*";//图片
+        public static final String TYPE_FILE = "file/*";//文件
         public static final String TYPE_VIDEO = "video/*";//视频
         public static final String TYPE_AUDIO = "audio/*";//音频
         public static final String TYPE_HTML = "text/html";//html
@@ -21961,7 +22140,7 @@ public class GT {
                 @Override
                 public void onDownloadSuccess(File file) {
                     super.onDownloadSuccess(file);
-                    ShareUtils.shareFile(context, file, GT.ShareUtils.TYPE_IMAGE, sendPack, isAcceptor, AUTHORITY, new OneListener<String>() {
+                    ShareUtils.shareFile(context, file, GT.ShareUtils.TYPE_IMAGE, sendPack, isAcceptor, AUTHORITY, new OneListener<>() {
                         @Override
                         public void onOneListener(String obj) {
                             super.onOneListener(obj);
@@ -22602,9 +22781,13 @@ public class GT {
             return context;
         }
 
-        public static String string(Context context, @StringRes int id) {
-            return getContext(context).getResources().getString(id);
+        public static String string(Context context, @StringRes int id, Object... formatArgs) {
+            if (formatArgs == null || formatArgs.length == 0) {
+                return getContext(context).getResources().getString(id);
+            }
+            return getContext(context).getResources().getString(id, formatArgs);
         }
+
 
         public static int color(Context context, @ColorRes int id) {
             return ContextCompat.getColor(getContext(context), id);
@@ -23268,6 +23451,13 @@ public class GT {
             return bitmap;
         }
 
+        public static String bitmapToBase64(Bitmap bitmap) {
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream);
+            byte[] byteArray = outputStream.toByteArray();
+            return Base64.encodeToString(byteArray, Base64.DEFAULT);
+        }
+
         /**
          * 获取非 Gif 圆角差值
          *
@@ -23431,9 +23621,23 @@ public class GT {
             return cursor.getString(cursor.getColumnIndex(picPathColumns[0]));
         }
 
-        public static Uri bitmapToUri(Context context, Bitmap bitmap) {
+       /* public static Uri bitmapToUri(Context context, Bitmap bitmap) {
             return Uri.parse(MediaStore.Images.Media.insertImage(context.getContentResolver(), bitmap, null, null));
+        }*/
+
+
+        public static Uri bitmapToUri(Context context, Bitmap bitmap) {
+            try {
+                ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, bytes);
+                String path = MediaStore.Images.Media.insertImage(context.getContentResolver(), bitmap, "Title", null);
+                return Uri.parse(path);
+            } catch (Exception e) {
+                e.printStackTrace();
+                return null;
+            }
         }
+
 
         public static Bitmap uriToBitmap2(Context context, Uri uri) {
             String[] pathColumns = {MediaStore.Images.Media.DATA};
@@ -26551,10 +26755,10 @@ public class GT {
         public GT_Animation translateY_T(float y, float toY, long time, int runCount, boolean toAndFro, View view, long... sleepTime) {
             ObjectAnimator translateY = ObjectAnimator.ofFloat(view, "translationY", y, toY);
             translateY.setDuration(time);      //动画执行时间
-            if (runCount == -1) {
+            if (runCount <= 0) {
                 translateY.setRepeatCount(ValueAnimator.INFINITE);//无限循环
             } else {
-                translateY.setRepeatCount(runCount);//循环多少次
+                translateY.setRepeatCount(runCount - 1);//循环多少次
             }
             if (toAndFro) translateY.setRepeatMode(ValueAnimator.REVERSE);//是否来回播放
             if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
@@ -26578,10 +26782,10 @@ public class GT {
         public ObjectAnimator translateY_Item_T(float y, float toY, long time, int runCount, boolean toAndFro, View view, long... sleepTime) {
             ObjectAnimator translateY = ObjectAnimator.ofFloat(view, "translationY", y, toY);
             translateY.setDuration(time);      //动画执行时间
-            if (runCount == -1) {
+            if (runCount <= 0) {
                 translateY.setRepeatCount(ValueAnimator.INFINITE);//无限循环
             } else {
-                translateY.setRepeatCount(runCount);//循环多少次
+                translateY.setRepeatCount(runCount - 1);//循环多少次
             }
             if (toAndFro) translateY.setRepeatMode(ValueAnimator.REVERSE);//是否来回播放
             if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
@@ -26614,12 +26818,12 @@ public class GT {
             translationX.setDuration(time);
             translationY.setDuration(time);
 
-            if (runCount == -1) {
+            if (runCount <= 0) {
                 translationX.setRepeatCount(ValueAnimator.INFINITE);//无限循环
                 translationY.setRepeatCount(ValueAnimator.INFINITE);//无限循环
             } else {
-                translationX.setRepeatCount(runCount);//循环多少次
-                translationY.setRepeatCount(runCount);//循环多少次
+                translationX.setRepeatCount(runCount - 1);//循环多少次
+                translationY.setRepeatCount(runCount - 1);//循环多少次
             }
 
             //设置动画是否来回播放
@@ -26663,12 +26867,12 @@ public class GT {
             translationX.setDuration(time);
             translationY.setDuration(time);
 
-            if (runCount == -1) {
+            if (runCount <= 0) {
                 translationX.setRepeatCount(ValueAnimator.INFINITE);//无限循环
                 translationY.setRepeatCount(ValueAnimator.INFINITE);//无限循环
             } else {
-                translationX.setRepeatCount(runCount);//循环多少次
-                translationY.setRepeatCount(runCount);//循环多少次
+                translationX.setRepeatCount(runCount - 1);//循环多少次
+                translationY.setRepeatCount(runCount - 1);//循环多少次
             }
 
             //设置动画是否来回播放
@@ -26707,10 +26911,10 @@ public class GT {
             scaleAnimation.setDuration(time);                   //动画时间
             scaleAnimation.setFillAfter(isSaveClose);           //设置动画结束之后的状态是否是动画的最终状态，true，表示是保持动画结束时的最终状态
             scaleAnimation.setFillBefore(!isSaveClose);         //动画播放完后，视图是否会停留在动画开始的状态，默认为true
-            if (runCount == -1) {
+            if (runCount <= 0) {
                 scaleAnimation.setRepeatCount(Animation.INFINITE);  //播放无限次数
             } else {
-                scaleAnimation.setRepeatCount(runCount);            //播放的次数
+                scaleAnimation.setRepeatCount(runCount - 1);            //播放的次数
             }
             if (toAndFro) scaleAnimation.setRepeatMode(Animation.RESTART);       //是否来回的播放
             if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
@@ -26738,10 +26942,10 @@ public class GT {
             scaleAnimation.setDuration(time);                   //动画时间
             scaleAnimation.setFillAfter(isSaveClose);           //设置动画结束之后的状态是否是动画的最终状态，true，表示是保持动画结束时的最终状态
             scaleAnimation.setFillBefore(!isSaveClose);         //动画播放完后，视图是否会停留在动画开始的状态，默认为true
-            if (runCount == -1) {
+            if (runCount <= 0) {
                 scaleAnimation.setRepeatCount(Animation.INFINITE);  //播放无限次数
             } else {
-                scaleAnimation.setRepeatCount(runCount);            //播放的次数
+                scaleAnimation.setRepeatCount(runCount - 1);            //播放的次数
             }
             if (toAndFro) scaleAnimation.setRepeatMode(Animation.RESTART);       //是否来回的播放
             if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
@@ -26765,10 +26969,10 @@ public class GT {
         public GT_Animation scaleX_T(float x, float toX, long time, boolean isSaveClose, int runCount, boolean toAndFro, View view, long... sleepTime) {
             ObjectAnimator scaleX = ObjectAnimator.ofFloat(view, "scaleX", x, toX);
             scaleX.setDuration(time);      //动画执行时间
-            if (runCount == -1) {
+            if (runCount <= 0) {
                 scaleX.setRepeatCount(ValueAnimator.INFINITE);//无限循环
             } else {
-                scaleX.setRepeatCount(runCount);//循环多少次
+                scaleX.setRepeatCount(runCount - 1);//循环多少次
             }
             if (toAndFro) scaleX.setRepeatMode(ValueAnimator.REVERSE);//是否来回播放
             if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
@@ -26793,10 +26997,10 @@ public class GT {
         public ObjectAnimator scaleX_item_T(float x, float toX, long time, boolean isSaveClose, int runCount, boolean toAndFro, View view, long... sleepTime) {
             ObjectAnimator scaleX = ObjectAnimator.ofFloat(view, "scaleX", x, toX);
             scaleX.setDuration(time);      //动画执行时间
-            if (runCount == -1) {
+            if (runCount <= 0) {
                 scaleX.setRepeatCount(ValueAnimator.INFINITE);//无限循环
             } else {
-                scaleX.setRepeatCount(runCount);//循环多少次
+                scaleX.setRepeatCount(runCount - 1);//循环多少次
             }
             if (toAndFro) scaleX.setRepeatMode(ValueAnimator.REVERSE);//是否来回播放
             if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
@@ -26820,10 +27024,10 @@ public class GT {
         public GT_Animation scaleY_T(float y, float toY, long time, boolean isSaveClose, int runCount, boolean toAndFro, View view, long... sleepTime) {
             ObjectAnimator scaleY = ObjectAnimator.ofFloat(view, "scaleY", y, toY);
             scaleY.setDuration(time);      //动画执行时间
-            if (runCount == -1) {
+            if (runCount <= 0) {
                 scaleY.setRepeatCount(ValueAnimator.INFINITE);//无限循环
             } else {
-                scaleY.setRepeatCount(runCount);//循环多少次
+                scaleY.setRepeatCount(runCount - 1);//循环多少次
             }
             if (toAndFro) scaleY.setRepeatMode(ValueAnimator.REVERSE);//是否来回播放
             if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
@@ -26848,10 +27052,10 @@ public class GT {
         public ObjectAnimator scaleY_item_T(float y, float toY, long time, boolean isSaveClose, int runCount, boolean toAndFro, View view, long... sleepTime) {
             ObjectAnimator scaleY = ObjectAnimator.ofFloat(view, "scaleY", y, toY);
             scaleY.setDuration(time);      //动画执行时间
-            if (runCount == -1) {
+            if (runCount <= 0) {
                 scaleY.setRepeatCount(ValueAnimator.INFINITE);//无限循环
             } else {
-                scaleY.setRepeatCount(runCount);//循环多少次
+                scaleY.setRepeatCount(runCount - 1);//循环多少次
             }
             if (toAndFro) scaleY.setRepeatMode(ValueAnimator.REVERSE);//是否来回播放
             if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
@@ -26884,12 +27088,12 @@ public class GT {
             scaleX.setDuration(time);
             scaleY.setDuration(time);
 
-            if (runCount == -1) {
+            if (runCount <= 0) {
                 scaleX.setRepeatCount(ValueAnimator.INFINITE);//无限循环
                 scaleY.setRepeatCount(ValueAnimator.INFINITE);//无限循环
             } else {
-                scaleX.setRepeatCount(runCount);//循环多少次
-                scaleY.setRepeatCount(runCount);//循环多少次
+                scaleX.setRepeatCount(runCount - 1);//循环多少次
+                scaleY.setRepeatCount(runCount - 1);//循环多少次
             }
 
             //设置动画是否来回播放
@@ -26933,12 +27137,12 @@ public class GT {
             scaleX.setDuration(time);
             scaleY.setDuration(time);
 
-            if (runCount == -1) {
+            if (runCount <= 0) {
                 scaleX.setRepeatCount(ValueAnimator.INFINITE);//无限循环
                 scaleY.setRepeatCount(ValueAnimator.INFINITE);//无限循环
             } else {
-                scaleX.setRepeatCount(runCount);//循环多少次
-                scaleY.setRepeatCount(runCount);//循环多少次
+                scaleX.setRepeatCount(runCount - 1);//循环多少次
+                scaleY.setRepeatCount(runCount - 1);//循环多少次
             }
 
             //设置动画是否来回播放
@@ -26976,10 +27180,10 @@ public class GT {
             rotateAnimation.setDuration(time);                   //动画时间
             rotateAnimation.setFillAfter(isSaveClose);           //设置动画结束之后的状态是否是动画的最终状态，true，表示是保持动画结束时的最终状态
             rotateAnimation.setFillBefore(!isSaveClose);         //动画播放完后，视图是否会停留在动画开始的状态，默认为true
-            if (runCount == -1) {
+            if (runCount <= 0) {
                 rotateAnimation.setRepeatCount(Animation.INFINITE);  //播放无限次数
             } else {
-                rotateAnimation.setRepeatCount(runCount);            //播放的次数
+                rotateAnimation.setRepeatCount(runCount - 1);            //播放的次数
             }
             if (toAndFro) rotateAnimation.setRepeatMode(Animation.RESTART);       //是否来回的播放
             if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
@@ -27006,10 +27210,10 @@ public class GT {
             rotateAnimation.setDuration(time);                   //动画时间
             rotateAnimation.setFillAfter(isSaveClose);           //设置动画结束之后的状态是否是动画的最终状态，true，表示是保持动画结束时的最终状态
             rotateAnimation.setFillBefore(!isSaveClose);         //动画播放完后，视图是否会停留在动画开始的状态，默认为true
-            if (runCount == -1) {
+            if (runCount <= 0) {
                 rotateAnimation.setRepeatCount(Animation.INFINITE);  //播放无限次数
             } else {
-                rotateAnimation.setRepeatCount(runCount);            //播放的次数
+                rotateAnimation.setRepeatCount(runCount - 1);            //播放的次数
             }
             if (toAndFro) rotateAnimation.setRepeatMode(Animation.RESTART);       //是否来回的播放
             if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
@@ -27034,10 +27238,10 @@ public class GT {
 
             rotationX.setDuration(time);//设置时间
 
-            if (runCount == -1) {
+            if (runCount <= 0) {
                 rotationX.setRepeatCount(ValueAnimator.INFINITE);//无限循环
             } else {
-                rotationX.setRepeatCount(runCount);//循环多少次
+                rotationX.setRepeatCount(runCount - 1);//循环多少次
             }
 
             //设置动画是否来回播放
@@ -27069,10 +27273,10 @@ public class GT {
 
             rotationX.setDuration(time);//设置时间
 
-            if (runCount == -1) {
+            if (runCount <= 0) {
                 rotationX.setRepeatCount(ValueAnimator.INFINITE);//无限循环
             } else {
-                rotationX.setRepeatCount(runCount);//循环多少次
+                rotationX.setRepeatCount(runCount - 1);//循环多少次
             }
 
             //设置动画是否来回播放
@@ -27104,10 +27308,10 @@ public class GT {
 
             rotationY.setDuration(time);//设置时间
 
-            if (runCount == -1) {
+            if (runCount <= 0) {
                 rotationY.setRepeatCount(ValueAnimator.INFINITE);//无限循环
             } else {
-                rotationY.setRepeatCount(runCount);//循环多少次
+                rotationY.setRepeatCount(runCount - 1);//循环多少次
             }
 
             //设置动画是否来回播放
@@ -27139,10 +27343,10 @@ public class GT {
 
             rotationY.setDuration(time);//设置时间
 
-            if (runCount == -1) {
+            if (runCount <= 0) {
                 rotationY.setRepeatCount(ValueAnimator.INFINITE);//无限循环
             } else {
-                rotationY.setRepeatCount(runCount);//循环多少次
+                rotationY.setRepeatCount(runCount - 1);//循环多少次
             }
 
             //设置动画是否来回播放
@@ -27173,10 +27377,10 @@ public class GT {
 
             rotationZ.setDuration(time);//设置时间
 
-            if (runCount == -1) {
+            if (runCount <= 0) {
                 rotationZ.setRepeatCount(ValueAnimator.INFINITE);//无限循环
             } else {
-                rotationZ.setRepeatCount(runCount);//循环多少次
+                rotationZ.setRepeatCount(runCount - 1);//循环多少次
             }
 
             //设置动画是否来回播放
@@ -27208,10 +27412,10 @@ public class GT {
 
             rotationZ.setDuration(time);//设置时间
 
-            if (runCount == -1) {
+            if (runCount <= 0) {
                 rotationZ.setRepeatCount(ValueAnimator.INFINITE);//无限循环
             } else {
-                rotationZ.setRepeatCount(runCount);//循环多少次
+                rotationZ.setRepeatCount(runCount - 1);//循环多少次
             }
 
             //设置动画是否来回播放
@@ -27243,10 +27447,10 @@ public class GT {
             alphaAnimation.setDuration(time);                   //动画时间
             alphaAnimation.setFillAfter(isSaveClose);           //设置动画结束之后的状态是否是动画的最终状态，true，表示是保持动画结束时的最终状态
             alphaAnimation.setFillBefore(!isSaveClose);         //动画播放完后，视图是否会停留在动画开始的状态，默认为true
-            if (runCount == -1) {
+            if (runCount <= 0) {
                 alphaAnimation.setRepeatCount(Animation.INFINITE);  //播放无限次数
             } else {
-                alphaAnimation.setRepeatCount(runCount);            //播放的次数
+                alphaAnimation.setRepeatCount(runCount - 1);            //播放的次数
             }
             if (toAndFro) alphaAnimation.setRepeatMode(Animation.RESTART);       //是否来回的播放
 
@@ -27274,10 +27478,10 @@ public class GT {
             alphaAnimation.setDuration(time);                   //动画时间
             alphaAnimation.setFillAfter(isSaveClose);           //设置动画结束之后的状态是否是动画的最终状态，true，表示是保持动画结束时的最终状态
             alphaAnimation.setFillBefore(!isSaveClose);         //动画播放完后，视图是否会停留在动画开始的状态，默认为true
-            if (runCount == -1) {
+            if (runCount <= 0) {
                 alphaAnimation.setRepeatCount(Animation.INFINITE);  //播放无限次数
             } else {
-                alphaAnimation.setRepeatCount(runCount);            //播放的次数
+                alphaAnimation.setRepeatCount(runCount - 1);            //播放的次数
             }
             if (toAndFro) alphaAnimation.setRepeatMode(Animation.RESTART);       //是否来回的播放
             if (sleepTime != null && sleepTime.length > 0 && sleepTime[0] > 0) {
@@ -27301,10 +27505,10 @@ public class GT {
 
             rotationX.setDuration(time);//设置时间
 
-            if (runCount == -1) {
+            if (runCount <= 0) {
                 rotationX.setRepeatCount(ValueAnimator.INFINITE);//无限循环
             } else {
-                rotationX.setRepeatCount(runCount);//循环多少次
+                rotationX.setRepeatCount(runCount - 1);//循环多少次
             }
 
             //设置动画是否来回播放
@@ -27335,10 +27539,10 @@ public class GT {
 
             rotationX.setDuration(time);//设置时间
 
-            if (runCount == -1) {
+            if (runCount <= 0) {
                 rotationX.setRepeatCount(ValueAnimator.INFINITE);//无限循环
             } else {
-                rotationX.setRepeatCount(runCount);//循环多少次
+                rotationX.setRepeatCount(runCount - 1);//循环多少次
             }
 
             //设置动画是否来回播放
@@ -27571,7 +27775,7 @@ public class GT {
         }
 
         /**
-         * 隐藏导航栏
+         * 隐藏导航栏(虚拟按钮)
          *
          * @param activity
          */
@@ -27583,6 +27787,63 @@ public class GT {
                                 | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                                 | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
             }
+        }
+
+        /**
+         * 显示导航栏(虚拟按钮)
+         *
+         * @param activity
+         */
+        public static void showNavigationBar(Activity activity) {
+            if (Build.VERSION.SDK_INT >= 19) {
+                View decorView = activity.getWindow().getDecorView();
+                decorView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
+            }
+        }
+
+        /**
+         * 单独设置导航栏背景颜色
+         *
+         * @param activity
+         * @param color
+         */
+        public static View setNavigationBarBGColor(Activity activity, int color) {
+            Window window = activity.getWindow();
+            ViewGroup decorViewGroup = (ViewGroup) activity.getWindow().getDecorView();
+            View statusBarView = new View(window.getContext());
+            statusBarView.setId(1079);
+            int statusBarHeight = GT.ApplicationUtils.getStatusBarHeight(window.getContext());
+            FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, statusBarHeight);
+            params.gravity = Gravity.TOP;
+            statusBarView.setLayoutParams(params);
+            statusBarView.setBackgroundColor(Res.color(activity, color));
+            decorViewGroup.addView(statusBarView);
+            monitorSoftKeyboardHeight(activity);
+            return statusBarView;
+        }
+
+        /**
+         * 配合着 设置状态栏背景颜色
+         *
+         * @param activity
+         */
+        private static void monitorSoftKeyboardHeight(Activity activity) {
+            if (activity == null) return;
+            View decorView = activity.getWindow().getDecorView();
+            decorView.setOnApplyWindowInsetsListener((v, insets) -> {
+                int bottom;
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                    bottom = insets.getInsets(WindowInsets.Type.ime()).bottom;
+                } else {
+                    int height = decorView.getHeight();
+                    if (height >= 2400) {
+                        bottom = (int) (decorView.getHeight() / 2.55);//2412
+                    } else {
+                        bottom = (int) (decorView.getHeight() / 2.2);//2160
+                    }
+                }
+                return insets;
+            });
         }
 
         /**
@@ -27599,6 +27860,39 @@ public class GT {
                 activity.getWindow().setStatusBarColor(Color.TRANSPARENT);
             }
         }
+
+        /**
+         * 适配导航栏,  也可以试试在 xml 顶布局上加上 android:fitsSystemWindows="true"，这样就不会和导航栏重叠UI了
+         * 此方法需要在 setContentView 方法之前设置
+         *
+         * @param activity
+         */
+        public static void adaptiveNavigationBar(Activity activity) {
+            if (AndroidWorkaround.checkDeviceHasNavigationBar(activity)) {
+                AndroidWorkaround.assistActivity(activity.findViewById(android.R.id.content));
+            }
+        }
+
+        /**
+         * 判断是否显示了导航栏
+         *
+         * @param activity
+         * @return
+         */
+        public static boolean checkDeviceHasNavigationBar(Context activity) {
+            //通过判断设备是否有返回键、菜单键(不是虚拟键,是手机屏幕外的按键)来确定是否有navigation bar
+            boolean hasMenuKey = ViewConfiguration.get(activity)
+                    .hasPermanentMenuKey();
+            boolean hasBackKey = KeyCharacterMap
+                    .deviceHasKey(KeyEvent.KEYCODE_BACK);
+
+            if (!hasMenuKey && !hasBackKey) {
+                // 做任何你需要做的,这个设备有一个导航栏
+                return true;
+            }
+            return false;
+        }
+
 
         /**
          * 透明导航栏
@@ -27695,6 +27989,66 @@ public class GT {
             }
 
 
+        }
+
+        //适配 虚拟按钮(导航栏)封装类
+        private static class AndroidWorkaround {
+            public static void assistActivity(View content) {
+                new AndroidWorkaround(content);
+            }
+
+            private View mChildOfContent;
+            private int usableHeightPrevious;
+            private ViewGroup.LayoutParams frameLayoutParams;
+
+            private AndroidWorkaround(View content) {
+                mChildOfContent = content;
+                mChildOfContent.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
+                    public void onGlobalLayout() {
+                        possiblyResizeChildOfContent();
+                    }
+                });
+                frameLayoutParams = mChildOfContent.getLayoutParams();
+            }
+
+            private void possiblyResizeChildOfContent() {
+                int usableHeightNow = computeUsableHeight();
+                if (usableHeightNow != usableHeightPrevious) {
+
+                    frameLayoutParams.height = usableHeightNow;
+                    mChildOfContent.requestLayout();
+                    usableHeightPrevious = usableHeightNow;
+                }
+            }
+
+            private int computeUsableHeight() {
+                Rect r = new Rect();
+                mChildOfContent.getWindowVisibleDisplayFrame(r);
+                return (r.bottom);
+            }
+
+            public static boolean checkDeviceHasNavigationBar(Context context) {
+                boolean hasNavigationBar = false;
+                Resources rs = context.getResources();
+                int id = rs.getIdentifier("config_showNavigationBar", "bool", "android");
+                if (id > 0) {
+                    hasNavigationBar = rs.getBoolean(id);
+                }
+                try {
+                    Class systemPropertiesClass = Class.forName("android.os.SystemProperties");
+                    Method m = systemPropertiesClass.getMethod("get", String.class);
+                    String navBarOverride = (String) m.invoke(systemPropertiesClass, "qemu.hw.mainkeys");
+                    if ("1".equals(navBarOverride)) {
+                        hasNavigationBar = false;
+                    } else if ("0".equals(navBarOverride)) {
+                        hasNavigationBar = true;
+                    }
+                } catch (Exception e) {
+
+                }
+                return hasNavigationBar;
+
+            }
         }
 
     }
@@ -30452,14 +30806,15 @@ public class GT {
                 DialogFragment dialogFragment = null;
                 try {
                     dialogFragment = (DialogFragment) dialogFragmentClass.newInstance();
+                    dialogFragment.setTargetFragment(this, 1);
+                    dialogFragment.show(getFragmentManager(), dialogFragment.getClass().toString());// 弹出退出提示
                 } catch (IllegalAccessException e) {
                     e.printStackTrace();
                 } catch (java.lang.InstantiationException e) {
                     e.printStackTrace();
                 }
 
-                dialogFragment.setTargetFragment(this, 1);
-                dialogFragment.show(getFragmentManager(), dialogFragment.getClass().toString());// 弹出退出提示
+
             }
 
             /**
@@ -32153,14 +32508,33 @@ public class GT {
                 return beanList;
             }
 
+            public void update() {
+                notifyDataSetChanged();
+            }
+
+            private int loadMaxNumber = 10;
+
+            public int getLoadMaxNumber() {
+                return loadMaxNumber;
+            }
+
+            public void setLoadMaxNumber(int loadMaxNumber) {
+                this.loadMaxNumber = loadMaxNumber;
+            }
+
+            //局部刷新
+            public void setBeanList(int position) {
+                if (this.beanList == null) return;
+                notifyItemChanged(position);
+            }
+
             /**
              * 用于一次性刷新加载数据 (只需要加载一次)
              *
              * @param beanList
              */
             public void setBeanList(List<T> beanList, int... pages) {
-                if (beanList == null) return;
-
+                if (beanList == null || this.beanList == null) return;
                 if (pages.length > 0) {
                     page = pages[0];
                 }
@@ -32170,7 +32544,7 @@ public class GT {
                         break;
                     case 0://第一页
                         this.beanList.clear();
-                        notifyDataSetChanged();
+//                        notifyDataSetChanged();
                         this.beanList.addAll(beanList);
                         break;
                 }
@@ -32184,7 +32558,7 @@ public class GT {
              * @param beanList
              */
             public void setBeanLists(List<T> beanList, int... pages) {
-                if (beanList == null) return;
+                if (beanList == null || this.beanList == null) return;
                 if (pages.length > 0) {
                     page = pages[0];
                 }
@@ -32194,7 +32568,7 @@ public class GT {
                         break;
                     case 1://第一页
                         this.beanList.clear();
-                        notifyDataSetChanged();
+//                        notifyDataSetChanged();
                         this.beanList.addAll(beanList);
                         break;
                     default://累加分页
@@ -33717,7 +34091,7 @@ public class GT {
                 if (height < width) {
                     height = width;
                 }
-                animation.translateY_T(height, -this.addHeight, time, 0, false, view_main);
+                animation.translateY_T(height, -this.addHeight, time, 1, false, view_main);
                 view_bg.setVisibility(View.VISIBLE);
                 Thread.getInstance(0).execute(() -> {
                     for (float a = 0; a < 1; ) {
@@ -33754,7 +34128,7 @@ public class GT {
                 if (height < width) {
                     height = width;
                 }
-                animation.translateY_T(height, -addHeight, time, 0, false, view_main);
+                animation.translateY_T(height, -addHeight, time, 1, false, view_main);
                 return this;
             }
 
@@ -33772,11 +34146,11 @@ public class GT {
                 height = view_bg.getHeight();
                 width = view_bg.getWidth();
                 if (height == 0) {
-                    animation.translateY_T(0, 3000, 0, 0, false, view_main);
+                    animation.translateY_T(0, 3000, 0, 1, false, view_main);
                     view_bg.setAlpha(0);
                     view_bg.setVisibility(View.INVISIBLE);
                 } else {
-                    animation.translateY_T(-addHeight, height, time, 0, false, view_main);
+                    animation.translateY_T(-addHeight, height, time, 1, false, view_main);
                     Thread.getInstance(0).execute(() -> {
                         for (float a = 1; a > 0; ) {
                             a -= 0.01;
@@ -34149,6 +34523,7 @@ public class GT {
             protected boolean isCache = false;//是否缓存 (默认不缓存)
             protected boolean isZoom = false;//是否缩放
             protected boolean isPC = false;//是否以PC端方式加载
+            protected boolean isParseSourceCode = false;//是否解析源码
             protected boolean isAddListener = true;//是否 是否添加监听
             protected String url = "";//当前加载成功的 URL
             private boolean isResume = false;//激活WebView为活跃状态，能正常执行网页的响应
@@ -34156,8 +34531,12 @@ public class GT {
             protected String jsToAndroidName = "";//js调用Android 名称
             public WebSettings webSettings;
             public static WebView webView;
-            public PhotoView photoView;
+            public FileView fileView;
             private String cacheKey;//缓存标识
+            public String phone, PC = defaultPC;//手机或电脑动态数据
+            //手机或电脑默认数据
+            public static String defaultPhone = "Mozilla/5.0 (Linux; Android 14; NE2210 Build/UKQ1.230924.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/119.0.6045.66 Mobile Safari/537.36";
+            public static String defaultPC = "Mozilla/5.0 (WindowUtilss NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/43.0.2357.134 Safari/537.36";
 
             public boolean isAddListener() {
                 return isAddListener;
@@ -34207,6 +34586,11 @@ public class GT {
                     cacheKey = context.getPackageName() + getClass().getName();
                 }
                 webView = this;
+                webSettings = getSettings();
+                if (!isPC && phone == null) {//手机
+                    phone = webSettings.getUserAgentString();
+                }
+
                 initView(context, this);
                 getCache(GT_Cache.getCacheData(cacheKey, String.class));//获取缓存数据
                 loadData(context, this);
@@ -34266,6 +34650,14 @@ public class GT {
                 isCache = cache;
             }
 
+            public boolean isParseSourceCode() {
+                return isParseSourceCode;
+            }
+
+            public void setParseSourceCode(boolean parseSourceCode) {
+                isParseSourceCode = parseSourceCode;
+            }
+
             public boolean isPC() {
                 return isPC;
             }
@@ -34305,7 +34697,6 @@ public class GT {
             }
 
             protected void initView(Context context, WebView webView) {
-
                 //设置监听者
                 if (Build.VERSION.SDK_INT >= 19 && mLifecycleRegistry == null) {
                     mLifecycleRegistry = new LifecycleRegistry(this);
@@ -34374,17 +34765,22 @@ public class GT {
 
                 //设置背景颜色
                 setBackgroundColor(85621);
-
-                webSettings = getSettings();
             }
 
             public void loadData(Context context, WebView webView) {
+                if (isPC) {//设置PC网
+                    webView.getSettings().setUserAgentString(PC);
+                    webView.requestFocusFromTouch();//支持获取手势焦点
+                } else {//设置手机网
+                    String userAgentString = webView.getSettings().getUserAgentString();
+                    if (userAgentString != null && userAgentString == PC) {
+                        if (phone == null) {
+                            phone = defaultPhone;
+                            userAgentString = phone;
+                        }
+                        webView.getSettings().setUserAgentString(userAgentString);
+                    }
 
-                if (isPC) {
-                    //设置PC网
-                    webView.getSettings().setUserAgentString("Mozilla/5.0 (WindowUtilss NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/43.0.2357.134 Safari/537.36");
-                    //支持获取手势焦点
-                    webView.requestFocusFromTouch();
                 }
 
                 //设置WebView强化功能
@@ -34403,6 +34799,37 @@ public class GT {
 
             }
 
+            public static void setPhotoName(String photoName) {
+                if (photoName == null) return;
+                FileView.photoName = photoName;
+            }
+
+            public static void setPhotographName(String photographName) {
+                if (photographName == null) return;
+                FileView.photographName = photographName;
+            }
+
+            public static void setVideoName(String videoName) {
+                if (videoName == null) return;
+                FileView.videoName = videoName;
+            }
+
+            public static void setShootVideoName(String shootVideoName) {
+                if (shootVideoName == null) return;
+                FileView.shootVideoName = shootVideoName;
+            }
+
+            public static void setFileName(String fileName) {
+                if (fileName == null) return;
+                FileView.fileName = fileName;
+            }
+
+            public static void setCancelName(String cancelName) {
+                if (cancelName == null) return;
+                FileView.cancelName = cancelName;
+            }
+
+
             public boolean isDefaultDialog = false;
             public static ValueCallback<Uri[]> valueCallback2;//安卓5.0之上适配
 
@@ -34412,18 +34839,17 @@ public class GT {
                 @Override
                 public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
                     //设置 H5 调用原生 相册与拍照
-                    if (photoView == null) {
-                        photoView = new PhotoView(context, (ViewGroup) webView.getParent());
+                    if (fileView == null) {
+                        fileView = new FileView(context, (ViewGroup) webView.getParent());
                     }
                     valueCallback2 = filePathCallback;
                     String[] acceptTypes = fileChooserParams.getAcceptTypes();
                     if (acceptTypes.length > 0) {
                         if (onShowFileChoosers(acceptTypes[0])) {
-                            if (!photoView.isShow) {
-                                photoView.show();
+                            if (!fileView.isShow) {
+                                fileView.show2();
                             }
                         } else {//如果返回的是 false 那就让自定义处理
-
                             return true;
                         }
                     } else {
@@ -34466,28 +34892,30 @@ public class GT {
                     if (!url.equals(loadUrl)) {
                         loadUrl = url;
                         WebViewUtils.isRun = false;
-                        WebViewUtils.getHtmlData(url, new WebViewUtils.OnGetHtmlCodeListener() {
-                            @Override
-                            public void onGetStart(String url) {
-                                onFeedbackHtmlCode(0, "GetStart:" + url);
-                            }
+                        if (isParseSourceCode) {
+                            WebViewUtils.getHtmlData(url, new WebViewUtils.OnGetHtmlCodeListener() {
+                                @Override
+                                public void onGetStart(String url) {
+                                    onFeedbackHtmlCode(0, "GetStart:" + url);
+                                }
 
-                            @Override
-                            public void onGetProgress(int progress) {
-                                if (progress < 100)
-                                    onFeedbackHtmlCode(progress, "GetProgress:" + url);
-                            }
+                                @Override
+                                public void onGetProgress(int progress) {
+                                    if (progress < 100)
+                                        onFeedbackHtmlCode(progress, "GetProgress:" + url);
+                                }
 
-                            @Override
-                            public void onGetClose(String url, String htmlCode, long htmlSize) {
-                                onFeedbackHtmlCode(100, htmlCode);
-                            }
+                                @Override
+                                public void onGetClose(String url, String htmlCode, long htmlSize) {
+                                    onFeedbackHtmlCode(100, htmlCode);
+                                }
 
-                            @Override
-                            public void onGetError(String url, Object errorMessage) {
-                                onFeedbackHtmlCode(0, "GetError:" + errorMessage);
-                            }
-                        });
+                                @Override
+                                public void onGetError(String url, Object errorMessage) {
+                                    onFeedbackHtmlCode(0, "GetError:" + errorMessage);
+                                }
+                            });
+                        }
                     }
 
 
@@ -34501,6 +34929,15 @@ public class GT {
                 @Override
                 public void onPageStarted(WebView view, String url, Bitmap favicon) {
                     super.onPageStarted(view, url, favicon);
+                    if (isPC) {//电脑
+                        if (PC == null) {
+                            PC = defaultPC;
+                        }
+                    } else {//手机
+                        if (phone == null) {
+                            phone = view.getSettings().getUserAgentString();
+                        }
+                    }
                     pageStarted(view, url, favicon);
                 }
 
@@ -34536,17 +34973,19 @@ public class GT {
                 return true;
             }
 
-            //返回相册资源
-            public void onFeedbackPhoto(Object photo) {
+            //返回选中的资源
+
+            public void onFeedbackFile(Object obj) {
             }
 
-            public void onFeedbackPhoto(Intent photo) {
+            public void onFeedbackFile(Intent intent) {
             }
 
-            public void onFeedbackPhoto(Uri photo) {
+            public void onFeedbackFile(Uri uri) {
+
             }
 
-            public void onFeedbackPhoto(Bitmap photo) {
+            public void onFeedbackFile(Bitmap bitmap) {
             }
 
 
@@ -34696,6 +35135,10 @@ public class GT {
                 loadDataSave();
             }
 
+            public void clearLoadData() {
+                loadUrl("");
+            }
+
             public void loadWeb(String url) {
                 loadUrl(url);
             }
@@ -34779,8 +35222,8 @@ public class GT {
             public void loadProgress(int progress) {
             }
 
+            //默认处理 下载文件的逻辑，自定义可重写该方法
             public void onDownloadFile(String downloadUrl, String userAgent, String contentDisposition, String mimetype, String fileSize, long contentLength) {
-
 
             }
 
@@ -34874,9 +35317,9 @@ public class GT {
                     }
                     destroy();//销毁WebView
                     context = null;
-                    if (photoView != null) {
-                        photoView.finish();
-                        photoView = null;
+                    if (fileView != null) {
+                        fileView.finish();
+                        fileView = null;
                     }
                     onDestroy();
                 } catch (Exception e) {
@@ -35035,7 +35478,6 @@ public class GT {
              * 根据多个元素 className属性 查找
              *
              * @param className
-             * @param index     查找第多少位元素
              * @return
              */
             public BaseWebView findViewByClassNames(String className) {
@@ -35420,17 +35862,32 @@ public class GT {
         }
 
 
-        /************************ Web拍摄相册工具类 ******************************/
+        /************************ Web 调用安卓 获取文件、拍摄相册工具类 ******************************/
 
-        public static class PhotoView extends GT_View.AnnotationView implements View.OnClickListener {
+        public static class FileView extends GT_View.AnnotationView implements View.OnClickListener {
             private int height;
 
             private View ll_bottom1;
             private View view_bg;
-            private View btn_cancel;
+            private Button btn_cancel;
+            private TextView tv_img;
+            private TextView tv_photo;
+            private TextView tv_video;
+            private TextView tv_shoot_video;
+            private TextView tv_file;
+
             private boolean isShow = false;
 
-            private String feedbackMethodName = "onFeedbackPhoto";//反馈方法名称
+            private String feedbackMethodName = "onFeedbackFile";//反馈方法名称
+
+            //支持自定义 按钮名称
+            private static String photoName = "";
+            private static String photographName = "";
+            private static String videoName = "";
+            private static String shootVideoName = "";
+            private static String fileName = "";
+
+            private static String cancelName = "";
 
             public String getFeedbackMethodName() {
                 return feedbackMethodName;
@@ -35442,10 +35899,10 @@ public class GT {
 
             @Override
             protected int loadLayout() {
-                return R.layout.view_photo;
+                return R.layout.view_file;
             }
 
-            public PhotoView(Context context, ViewGroup viewGroup, String... feedbackMethodNames) {
+            public FileView(Context context, ViewGroup viewGroup, String... feedbackMethodNames) {
                 super(context, viewGroup);
                 if (feedbackMethodNames.length > 0) {
                     feedbackMethodName = feedbackMethodNames[0];
@@ -35458,29 +35915,101 @@ public class GT {
                 ll_bottom1 = findViewById(R.id.ll_bottom1);
                 ll_bottom1.setOnClickListener(null);
                 view_bg = findViewById(R.id.view_bg);
-                btn_cancel = findViewById(R.id.btn_cancel);
+                btn_cancel = (Button) findViewById(R.id.btn_cancel);
 
-                findViewById(R.id.tv_photo).setOnClickListener(this);
-                findViewById(R.id.tv_img).setOnClickListener(this);
-                findViewById(R.id.btn_cancel).setOnClickListener(this);
+                tv_img = (TextView) findViewById(R.id.tv_img);
+                tv_photo = (TextView) findViewById(R.id.tv_photo);
+                tv_video = (TextView) findViewById(R.id.tv_video);
+                tv_shoot_video = (TextView) findViewById(R.id.tv_shoot_video);
+                tv_file = (TextView) findViewById(R.id.tv_file);
+
+                tv_img.setOnClickListener(this);
+                tv_photo.setOnClickListener(this);
+                tv_video.setOnClickListener(this);
+                tv_shoot_video.setOnClickListener(this);
+                tv_file.setOnClickListener(this);
+                btn_cancel.setOnClickListener(this);
+                view_bg.setOnClickListener(this);
 
                 hide();
             }
 
             @Override
             public void onClick(View view) {
-                if (view.getId() == R.id.tv_photo) {//拍摄
+                if (view.getId() == R.id.tv_photo) {//拍照
                     GTActivity.startActivity(context, GTActivity.CODE_PHOTOGRAPH, feedbackMethodName);
                     hide();
                 } else if (view.getId() == R.id.tv_img) {//从相册里选择
                     GTActivity.startActivity(context, GTActivity.CODE_PHOTO, feedbackMethodName);
                     hide();
-                } else if (view.getId() == R.id.btn_cancel) {//取消
+                } else if (view.getId() == R.id.tv_video) {//视频
+                    GTActivity.startActivity(context, GTActivity.CODE_VIDEO, feedbackMethodName);
+                    hide();
+                } else if (view.getId() == R.id.tv_shoot_video) {//拍摄视频
+                    GTActivity.startActivity(context, GTActivity.CODE_SHOOT_VIDEO, feedbackMethodName);
+                    hide();
+                } else if (view.getId() == R.id.tv_file) {//上传文件
+                    GTActivity.startActivity(context, GTActivity.CODE_FILE, feedbackMethodName);
+                    hide();
+                } else if (view.getId() == R.id.btn_cancel || view.getId() == R.id.view_bg) {//取消
                     BaseWebView.valueCallback2.onReceiveValue(null);
                     hide();
                 } else {
 
                 }
+            }
+
+            public void show2(String... feedbackMethodNames) {
+
+                //默认显示全部选项
+                if (
+                        photographName.length() != 0 || photoName.length() != 0 ||
+                                shootVideoName.length() != 0 || videoName.length() != 0 ||
+                                fileName.length() != 0 || cancelName.length() != 0
+                ) {
+                    if (photographName.length() != 0) {
+                        tv_photo.setText(photographName);
+                        tv_photo.setVisibility(View.VISIBLE);
+                    } else {
+                        tv_photo.setVisibility(View.GONE);
+                    }
+
+                    if (photoName.length() != 0) {
+                        tv_img.setText(photoName);
+                        tv_img.setVisibility(View.VISIBLE);
+                    } else {
+                        tv_img.setVisibility(View.GONE);
+                    }
+
+                    if (shootVideoName.length() != 0) {
+                        tv_shoot_video.setText(shootVideoName);
+                        tv_shoot_video.setVisibility(View.VISIBLE);
+                    } else {
+                        tv_shoot_video.setVisibility(View.GONE);
+                    }
+
+                    if (videoName.length() != 0) {
+                        tv_video.setText(videoName);
+                        tv_video.setVisibility(View.VISIBLE);
+                    } else {
+                        tv_video.setVisibility(View.GONE);
+                    }
+
+                    if (fileName.length() != 0) {
+                        tv_file.setText(fileName);
+                        tv_file.setVisibility(View.VISIBLE);
+                    } else {
+                        tv_file.setVisibility(View.GONE);
+                    }
+
+                    if (cancelName.length() != 0) {
+                        btn_cancel.setText(cancelName);
+                    } else {
+                        btn_cancel.setText(Res.string(context, R.string.gt_string_cancel));
+                    }
+                }
+
+                show(feedbackMethodNames);
             }
 
             //显示动画
@@ -35491,8 +36020,8 @@ public class GT {
                 }
                 height = view_bg.getHeight();
                 view_bg.setVisibility(View.VISIBLE);
-                GT_Animation.getDefault().translateY_T(height, 0, 300, 0, false, ll_bottom1);
-                GT_Animation.getDefault().translateY_T(height, 0, 300, 0, false, btn_cancel);
+                GT_Animation.getDefault().translateY_T(height, 0, 300, 1, false, ll_bottom1);
+                GT_Animation.getDefault().translateY_T(height, 0, 300, 1, false, btn_cancel);
                 Thread.getInstance(0).execute(() -> {
                     for (float a = 0; a < 1; ) {
                         if (view_bg == null) break;
@@ -35516,13 +36045,13 @@ public class GT {
                 isShow = false;
                 height = view_bg.getHeight();
                 if (height == 0) {
-                    GT_Animation.getDefault().translateY_T(0, 3000, 1, 0, false, ll_bottom1);
-                    GT_Animation.getDefault().translateY_T(0, 3000, 1, 0, false, btn_cancel);
+                    GT_Animation.getDefault().translateY_T(0, 3000, 1, 1, false, ll_bottom1);
+                    GT_Animation.getDefault().translateY_T(0, 3000, 1, 1, false, btn_cancel);
                     view_bg.setAlpha(0);
                     view_bg.setVisibility(View.INVISIBLE);
                 } else {
-                    GT_Animation.getDefault().translateY_T(0, height, 300, 0, false, ll_bottom1);
-                    GT_Animation.getDefault().translateY_T(0, height, 300, 0, false, btn_cancel);
+                    GT_Animation.getDefault().translateY_T(0, height, 300, 1, false, ll_bottom1);
+                    GT_Animation.getDefault().translateY_T(0, height, 300, 1, false, btn_cancel);
                     Thread.getInstance(0).execute(() -> {
                         for (float a = 1; a > 0; ) {
                             a -= 0.01;
@@ -36574,7 +37103,7 @@ public class GT {
          */
         public static void startNotification(FragmentActivity activity, NotificationCompat.Builder builder, int... notifyids) {
             if (activity != null) {
-                GT.AppAuthorityManagement.notification(activity, new OneListener<Boolean>() {
+                GT.AppAuthorityManagement.notification(activity, new OneListener<>() {
                     @Override
                     public void onOneListener(Boolean obj) {
                         super.onOneListener(obj);
@@ -36987,7 +37516,7 @@ public class GT {
          */
         private static void analysisLayout(Context context, View view) {
             if (view == null) return;
-            try{
+            try {
                 ViewBean viewBean = new ViewBean();
                 if (view instanceof ViewGroup) {
                     ViewGroup viewGroup = (ViewGroup) view;
@@ -37013,7 +37542,7 @@ public class GT {
                     }
                     viewBeanList.put(viewBean.getViewName(), viewBean);
                 }
-            }catch (Exception e){
+            } catch (Exception e) {
 
             }
         }
@@ -40608,10 +41137,8 @@ public class GT {
          * @return
          */
         public GT_Video play() {
-            GT.err("mediaPlayer:" + mediaPlayer);
             if (mediaPlayer != null) {
                 recover_play();
-                GT.err("播放");
                 mediaPlayer.start();
             }
             return this;
@@ -45147,7 +45674,7 @@ public class GT {
         public static ExecutorService thread;//普通逻辑 线程池
         public static GT_SharedPreferences sp_app;//sp存储-属于应用级别的sp存储,所有关于应用级别的都用这个存储，关于用户级别的用另一个存储
         public static final GT_Animation animation = new GT_Animation();//动画
-        public static int height, width;//屏幕宽高
+        public static int height, width, navigationBarHeight;//屏幕宽高、导航栏高度
         public static boolean isOneInstall = false;//是否第一次安卓
         public static boolean isFrontDesk = true;//是否前台
 
@@ -45302,9 +45829,11 @@ public class GT {
     public static class GTActivity extends AppCompatActivity {
 
         //所有请求码
-        public static final int CODE_PHOTO = 1; //相册
-        public static final int CODE_PHOTOGRAPH = 2; //拍照
-        public static final int CODE_VIDEO = 3; //视频
+        public static final int CODE_PHOTO = 1; //从相册图片
+        public static final int CODE_PHOTOGRAPH = 2; //拍摄照片
+        public static final int CODE_VIDEO = 3; //从相册视频
+        public static final int CODE_SHOOT_VIDEO = 4; //拍摄视频
+        public static final int CODE_FILE = 5; //文件
         private static int CODE = 0; //默认请求码
 
         private String feedBack;
@@ -45345,24 +45874,35 @@ public class GT {
                     getPermissionCamera();
                     Intent openAlbumIntent = new Intent(Intent.ACTION_PICK); //打开相册
                     openAlbumIntent.setType("image/*");     //选择全部照片
-                    startActivityForResult(openAlbumIntent, CODE_PHOTO); //发送请求
+                    startActivityForResult(openAlbumIntent, CODE); //发送请求
                     break;
                 case CODE_PHOTOGRAPH://拍照
                     getPermissionCamera();
                     Intent intentPhoto = new Intent(Intent.ACTION_PICK);
                     intentPhoto.setDataAndType(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, "image/*");
                     intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-                    startActivityForResult(intent, CODE_PHOTOGRAPH);
+                    startActivityForResult(intent, CODE);
                     break;
                 case CODE_VIDEO://视频
+                    getPermissionCamera();
+                    Intent openVideoIntent = new Intent(Intent.ACTION_PICK); //打开相册
+                    openVideoIntent.setType("video/*");     //选择全部视频
+                    startActivityForResult(openVideoIntent, CODE); //发送请求
+                    break;
+                case CODE_SHOOT_VIDEO://拍摄视频
                     getPermissionCamera();
                     Intent intentVideo = new Intent(MediaStore.ACTION_VIDEO_CAPTURE);
                     intentVideo.putExtra(MediaStore.EXTRA_VIDEO_QUALITY, 1);
                     intentVideo.putExtra(MediaStore.EXTRA_DURATION_LIMIT, videoDuration);//限制时长
-                    startActivityForResult(intentVideo, CODE_VIDEO);//开启摄像机
+                    startActivityForResult(intentVideo, CODE);//开启摄像机
+                    break;
+                case CODE_FILE://文件
+                    getPermissionCamera();
+                    Intent intentFile = new Intent(Intent.ACTION_GET_CONTENT);
+                    intentFile.setType("*/*");//选择全部文件
+                    startActivityForResult(intentFile, CODE);//开启系统文件选着
                     break;
                 default:
-                    logt("非法参数！");
                     EventBus.posts(new Intent(), feedBack);
                     EventBus.posts(Uri.parse(""), feedBack);
                     EventBus.posts(Bitmap.createBitmap(1, 1, Bitmap.Config.ALPHA_8), feedBack);
@@ -45394,44 +45934,40 @@ public class GT {
         @Override
         protected void onActivityResult(int requestCode, int resultCode, Intent intent) {
             super.onActivityResult(requestCode, resultCode, intent);
-        /*    logt("requestCode:" + requestCode);
-            logt("resultCode:" + resultCode);
-            logt("RESULT_OK:" + RESULT_OK);
-            logt("intent:" + intent);*/
-
-            if (intent == null) {
-                intent = new Intent();
-            }
+            if (intent == null) intent = new Intent();
 
             Bitmap bitmap = null;
-            Uri uri = null;
-
-
+            Uri uri = intent.getData();
             switch (CODE) {
                 case CODE_PHOTO://相册
-                    uri = intent.getData();
                     if (uri != null) {
-                        Bitmap data = ImageViewTools.uriToBitmap2(this, uri);
-                        if (data != null) {
-                            bitmap = data;
+                        try {
+                            bitmap = ImageViewTools.uriToBitmap(this, uri);
+                            if (bitmap != null) uri = ImageViewTools.bitmapToUri(this, bitmap);
+                        } catch (Exception e) {
+
                         }
                     }
                     break;
                 case CODE_PHOTOGRAPH://拍照
-                    Bitmap data = (Bitmap) intent.getExtras().get("data");
-                    if (data != null) {
-                        uri = ImageViewTools.bitmapToUri(this, data);
-                        bitmap = data;
+                    Object obj = intent.getExtras().get("data");
+                    if (obj != null && obj instanceof Bitmap) {
+                        bitmap = (Bitmap) obj;
+                        try {
+                            uri = ImageViewTools.bitmapToUri(this, bitmap);
+                        } catch (Exception e) {
+
+                        }
                     }
                     break;
                 case CODE_VIDEO://视频
                     uri = intent.getData();
-                    if (uri != null) {
-                        data = ImageViewTools.uriToBitmap2(this, uri);
-                        if (data != null) {
-                            bitmap = data;
-                        }
-                    }
+                    break;
+                case CODE_SHOOT_VIDEO://摄视频
+                    uri = intent.getData();
+                    break;
+                case CODE_FILE://其他文件
+                    uri = intent.getData();
                     break;
                 default:
                     logt("非法参数！");
@@ -45445,6 +45981,8 @@ public class GT {
                 case CODE_PHOTO://相册
                 case CODE_PHOTOGRAPH://拍照
                 case CODE_VIDEO://视频
+                case CODE_SHOOT_VIDEO://拍摄视频
+                case CODE_FILE://其他文件
                     //初始化必要参数
                     if (uri == null) {
                         uri = Uri.parse("");
@@ -45463,6 +46001,14 @@ public class GT {
 
                     //返回 H5 相片资源
                     GT_WebView.BaseWebView.initShowFileChoosers(uri, this);
+
+                    //清空本次选着
+                    GT_WebView.FileView.photoName = "";
+                    GT_WebView.FileView.photographName = "";
+                    GT_WebView.FileView.videoName = "";
+                    GT_WebView.FileView.shootVideoName = "";
+                    GT_WebView.FileView.fileName = "";
+                    GT_WebView.FileView.cancelName = "";
                     break;
                 default:
                     logt("非法参数！");
@@ -47137,7 +47683,7 @@ public class GT {
                                 } else {
                                     bitmap = GT.ImageViewTools.getBitmapFromLocal(new File(urlOrFile));
                                 }
-                                if(bitmap != null){
+                                if (bitmap != null) {
                                     wpManager.setBitmap(bitmap);
                                 }
                             } catch (IOException e) {

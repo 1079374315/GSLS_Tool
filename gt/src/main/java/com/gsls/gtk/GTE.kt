@@ -92,11 +92,12 @@ fun String.toast(context: Context, time: Int = 1500) = GT.toast_time(context, th
 //********************************** R资源 扩展 ***********************************
 
 //string
-fun stringGet(context: Context, @StringRes id: Int): String = GT.Res.string(context, id)
-fun Context.string(@StringRes id: Int): String = GT.Res.string(this, id)
-fun Activity.string(@StringRes id: Int): String = GT.Res.string(this, id)
-fun Fragment.string(@StringRes id: Int): String = GT.Res.string(requireContext(), id)
-fun DialogFragment.string(@StringRes id: Int): String = GT.Res.string(requireContext(), id)
+fun stringGet(context: Context, @StringRes id: Int, format: Any? = null): String = GT.Res.string(context, id, format)
+fun Context.string(@StringRes id: Int, format: Any? = null): String = GT.Res.string(this, id, format)
+fun Activity.string(@StringRes id: Int, format: Any? = null): String = GT.Res.string(this, id, format)
+fun Fragment.string(@StringRes id: Int, format: Any? = null): String = GT.Res.string(requireContext(), id, format)
+fun DialogFragment.string(@StringRes id: Int, format: Any? = null): String = GT.Res.string(requireContext(), id, format)
+
 fun GT.GT_FloatingWindow.BaseFloatingWindow.string(@StringRes id: Int): String =
     GT.Res.string(context, id)
 
@@ -342,11 +343,14 @@ fun GT.GT_WebView.BaseWebView.assets(assetsName: String, onListener: GT.OnListen
 //********************************** GT_SharedPreferences 扩展 ***********************************
 private var sp: GT_SharedPreferences? = null
 
+private var userID2 = ""
+
 /**
  * 用户级别的SP
  */
 fun Context.initSP(userID: String = packageName, commit: Boolean = true): GT_SharedPreferences? {
-    if (sp == null) {
+    if ((userID2.isNotEmpty() && userID2 != userID) || sp == null) {
+        userID2 = userID
         sp = GT.GT_Cache.getSP(userID)
         if (sp == null) {
             sp = GT_SharedPreferences(this, userID, commit)
@@ -366,16 +370,21 @@ fun String.deleteSP(): GT_SharedPreferences? {
     return sp
 }
 
-fun <T> String.querySP(dataType: Class<T>? = null): T? {
+fun <T> String.querySP(dataType: Class<T>): T? {
     if (sp != null) {
-        return if (dataType == null) {
-            sp!!.query(this) as T
-        } else {
-            sp!!.query(this, dataType) as T
-        }
+        return sp!!.query(this, dataType) as T
     }
     return null
 }
+
+fun <T> String.querySP(): Any? {
+    if (sp != null) {
+        return  sp!!.query(this)
+    }
+    return null
+}
+
+
 
 fun String.updataSP(key: Any): GT_SharedPreferences? {
     if (sp != null) sp!!.updata(key.toString(), this)
@@ -585,23 +594,49 @@ fun Any.toStrings(): String {
 }
 
 //显示所有View父类节点
-fun View.showAllViewParent() {
-    "view:$this".logt()
+fun View.showAllViewParent(index: Int, isLog: Boolean = true) {
+    if(isLog)"view:$this".logt()
+    if(index == 0) mutableListOf.clear()
+    if(!mutableListOf.contains(this)) mutableListOf.add(this)
     parent?.let {
-        (it as View).showAllViewParent()
+        val view = it as View
+        if(!mutableListOf.contains(view)) mutableListOf.add(view)
+        view.showAllViewParent(1, isLog)
     }
 }
 
+private val mutableListOf = mutableListOf<View>()
 //显示所有View子类节点
-fun View.showAllViewChild() {
-    "view:$this".logt()
-    if(this is ViewGroup && childCount > 0){
-        for(i in 0 until childCount){
+fun View.showAllViewChild(index: Int, isLog: Boolean = true): MutableList<View> {
+    if (isLog) "view:$this".logt()
+    if (index == 0) mutableListOf.clear()
+    if (!mutableListOf.contains(this)) mutableListOf.add(this)
+    if (this is ViewGroup && childCount > 0) {
+        for (i in 0 until childCount) {
             val childAt = getChildAt(i)
-            childAt.showAllViewChild()
+            if (!mutableListOf.contains(childAt)) mutableListOf.add(childAt)
+            childAt.showAllViewChild(1, isLog)
         }
     }
+    return mutableListOf
 }
+
+private const val VIEW_ID_KEY = "app:id/"
+fun View.getViewMap(): MutableMap<String, Int> {
+    val showAllViewChild = showAllViewChild(0, false)
+    val mutableMapOf = mutableMapOf<String, Int>()
+    for (view in showAllViewChild) {
+        if (view.id > 0) {
+            val viewStr = view.toString()
+            val idName = viewStr.substring(viewStr.indexOf(VIEW_ID_KEY) + VIEW_ID_KEY.length, viewStr.length - 1)
+            mutableMapOf[idName] = view.id
+        }
+    }
+    return mutableMapOf
+}
+
+fun View.getViewList(): MutableList<View> = showAllViewChild(0, false)
+
 
 
 //延时加载
