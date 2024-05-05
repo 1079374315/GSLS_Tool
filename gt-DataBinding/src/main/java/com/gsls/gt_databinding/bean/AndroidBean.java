@@ -52,6 +52,7 @@ public class AndroidBean {
         if (javaLibraryNames == null) {
             javaLibraryNames = new ArrayList<>();
         }
+        if(javaLibraryNames.contains(libraryName)) return;
         javaLibraryNames.add(libraryName);
     }
 

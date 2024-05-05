@@ -25,7 +25,6 @@ import javax.tools.JavaFileObject;
 @AutoService(Processor.class)//编译时运行这个类
 public class GT_HttpCallBuildMain extends AbstractProcessor {
 
-    private List<String> filtrationList;
 
     /**
      * 必须要的
@@ -42,9 +41,7 @@ public class GT_HttpCallBuildMain extends AbstractProcessor {
         DataBindingUtils.log("GSLS_King");
         DataBindingUtils.log("roundEnv" + roundEnv);
 
-        filtrationList = Arrays.asList(DataBindingUtils.filtrationArray);
-        DataBindingUtils.log("filtrationList:" + filtrationList);
-        DataBindingUtils.log("filtrationListSize:" + filtrationList.size());
+        DataBindingUtils.init();
 
         for (Element element : roundEnv.getElementsAnnotatedWith(GT_HttpCallBuild.class)) {
             DataBindingUtils.log("element:" + element);
@@ -81,7 +78,7 @@ public class GT_HttpCallBuildMain extends AbstractProcessor {
             for (String filePath : filesAllName) {
                 String[] split = filePath.split("\\\\");
                 String fileName = split[split.length - 1];
-                if (FileUtils.fileIsDirectory(filePath) && !filtrationList.contains(fileName)) {
+                if (FileUtils.fileIsDirectory(filePath) && DataBindingUtils.filtrationArray.contains(fileName)) {
                     DataBindingUtils.log("FileDir:" + filePath);
                     split = filePath.split("\\\\");
                     DataBindingUtils.androidBean.addJavaLibraryName(split[split.length - 1]);

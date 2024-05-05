@@ -183,7 +183,7 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
         super.loadData(context, intent, view);
         registerReceiver(utils.mBroadcastReceiver, new IntentFilter(Utils.ACTION));//单击事件 注册广播
         utils.setTitleListener(sv_find); //设置状态栏事件
-        animation.translateY_T(0, -getHeight(), 1, 0, false, ll_StatusBar_titleAll);//状态栏默认收起来
+        animation.translateY_T(0, -getHeight(), 1, 1, false, ll_StatusBar_titleAll);//状态栏默认收起来
         utils.setStatusBarShrinkListener(tv_statusBar_message, true);//设置状态栏内部上滑收缩事件
         utils.setStatusBarShrinkListener(sv_StatusBar_titleData, false);//设置状态栏内部上滑收缩事件
         utils.setStatusBarDiaphaneityDrag(sb_diaphaneity);//设置透明度拖动事件
@@ -284,7 +284,7 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
                 if (utils.operationType == 2) return;//屏蔽掉长按事件的冲突
                 utils.isUnfold = true;
                 utils.setStatusBarBgHide(true);
-                animation.translateY_T(-getHeight(), 0, 500, 0, false, ll_StatusBar_titleAll);
+                animation.translateY_T(-getHeight(), 0, 500, 1, false, ll_StatusBar_titleAll);
 //                GT.log("单击 状态栏");
             } else if (id == R.id.tv_hide) {//隐藏按钮
                 utils.sendCustomViewNotification();//发送通知
@@ -296,7 +296,7 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
 
                 //状态栏内
             } else if (id == R.id.tv_statusBar_message) {//状态栏内的消息提示
-                animation.translateY_T(0, -getHeight(), 500, 0, false, ll_StatusBar_titleAll);
+                animation.translateY_T(0, -getHeight(), 500, 1, false, ll_StatusBar_titleAll);
                 utils.setStatusBarBgHide(false);
                 utils.isUnfold = false;
                 tv_statusBar_message.setText("暂无通知");
@@ -327,7 +327,7 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
 //                    GT.log("进入返回上级");
                     utils.isUnfold = false;
                     utils.setStatusBarBgHide(false);
-                    animation.translateY_T(0, -getHeight(), 500, 0, false, ll_StatusBar_titleAll);
+                    animation.translateY_T(0, -getHeight(), 500, 1, false, ll_StatusBar_titleAll);
                     return;
                 }
 
@@ -610,10 +610,10 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
                             if (ll_StatusBar_titleAll.getY() == topMax) {//下拉到顶了
                                 isUnfold = true;
                             } else if (event.getY() >= (getLayoutParams().height / 4)) {//下拉到展开状态，进行展开操作
-                                animation.translateY_T(pullY, 0, 500, 0, false, ll_StatusBar_titleAll);
+                                animation.translateY_T(pullY, 0, 500, 1, false, ll_StatusBar_titleAll);
                                 isUnfold = true;
                             } else {//未下拉到展开状态，进行收缩回去
-                                animation.translateY_T(pullY, -getHeight() - pullY, 500, 0, false, ll_StatusBar_titleAll);
+                                animation.translateY_T(pullY, -getHeight() - pullY, 500, 1, false, ll_StatusBar_titleAll);
                                 isUnfold = false;
                                 setStatusBarBgHide(false);
                             }
@@ -638,7 +638,7 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
                                 //下拉状态栏逻辑
                                 if (event.getY() <= (getLayoutParams().height / 2) - (slidingRate / 2)) {//设置下拉限度
                                     pullY = event.getY() - (getLayoutParams().height / 2);
-                                    animation.translateY_T(pullY, pullY, 10, 0, false, ll_StatusBar_titleAll);
+                                    animation.translateY_T(pullY, pullY, 10, 1, false, ll_StatusBar_titleAll);
                                     //下拉渐变色
                                     alphaBG += movedY * 0.005;
                                     if (alphaBG > bgTransparencyValue) {//状态栏背景色显示限制
@@ -647,7 +647,7 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
                                     view_bg_floating_title.setAlpha(alphaBG);
                                 } else {//拉到顶了
                                     topMax = ll_StatusBar_titleAll.getY();
-                                    animation.translateY_T(pullY, 0, 0, 0, false, ll_StatusBar_titleAll);
+                                    animation.translateY_T(pullY, 0, 0, 1, false, ll_StatusBar_titleAll);
                                     view_bg_floating_title.setAlpha(bgTransparencyValue);
                                 }
                                 operationType = 1;
@@ -744,7 +744,7 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
                         if (oldY - nowY >= slidingRate) {
                             //直接划掉
                             isUnfold = false;
-                            animation.translateY_T(0, -getHeight(), 500, 0, false, ll_StatusBar_titleAll);
+                            animation.translateY_T(0, -getHeight(), 500, 1, false, ll_StatusBar_titleAll);
                             setStatusBarBgHide(false);
                             tv_statusBar_message.setText("暂无通知");
                         }

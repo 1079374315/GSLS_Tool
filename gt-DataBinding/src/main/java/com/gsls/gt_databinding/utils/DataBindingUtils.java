@@ -20,7 +20,40 @@ public class DataBindingUtils {
     private static JavaFile.Builder builder;
     public static final AndroidBean androidBean = new AndroidBean();
     private static final boolean isLog = true;//是否日志
-    public static final String[] filtrationArray = {".git", ".gradle", ".idea", "gradle"};//过滤文件名单
+    public static final List<String> filtrationArray = new ArrayList<>();//默认过滤文件名单
+
+    //初始化
+    public static void init() {
+        String projectName = System.getProperty("user.dir");
+        List<String> filesAllName = FileUtils.getFilesAllName(projectName);
+        for(String path : filesAllName){
+            if(path.contains("settings.gradle")){
+                String code = FileUtils.query(path);
+                List<String> modelNames = analysisModelName(code);
+                filtrationArray.addAll(modelNames);
+                break;
+            }
+        }
+    }
+
+
+    /**
+     * 解析模块名称
+     * @param data
+     * @return
+     */
+    private static List<String> analysisModelName(String data) {
+        List<String> list = new ArrayList<>();
+        while (data.contains("include")) {
+            int indexOf = data.indexOf("include"); if (indexOf == -1) break;
+            int indexOf2 = data.indexOf(":", indexOf) + 1; if (indexOf2 == -1) break;
+            int indexOf3 = data.indexOf("'", indexOf2); if (indexOf3 == -1 || indexOf2 >= indexOf3) break;
+            String modeName = data.substring(indexOf2, indexOf3);
+            if (!list.contains(modeName) && !modeName.equals("gt") && !modeName.equals("gt-DataBinding")) list.add(modeName);
+            data = data.substring(indexOf3);
+        }
+        return list;
+    }
 
     public static void startLog(Elements mElementsUtil, TypeElement element) {
         logTypeSpec = TypeSpec.annotationBuilder("GT_Log").build();

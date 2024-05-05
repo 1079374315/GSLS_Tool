@@ -17,6 +17,7 @@ import android.animation.ValueAnimator;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.ActivityManager;
+import android.app.ActivityOptions;
 import android.app.AlertDialog;
 import android.app.Application;
 import android.app.Dialog;
@@ -111,6 +112,7 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.os.Message;
 import android.os.Messenger;
+import android.os.Parcelable;
 import android.os.PowerManager;
 import android.os.RemoteException;
 import android.os.StatFs;
@@ -260,6 +262,10 @@ import com.google.zxing.qrcode.QRCodeReader;
 import com.google.zxing.qrcode.QRCodeWriter;
 import com.gsls.gt_databinding.annotation.GT_DaoBuild;
 import com.gsls.gt_databinding.annotation.GT_HttpCallBuild;
+import com.gsls.gt_databinding.route.GT_RouteMeta;
+import com.gsls.gt_databinding.route.annotation.GT_ARouterName;
+import com.gsls.gt_databinding.route.annotation.GT_Autowired;
+import com.gsls.gt_databinding.route.annotation.GT_Route;
 import com.gsls.gtk.GTEKt;
 import com.gsls.toolkit.GT_Floating;
 
@@ -300,6 +306,7 @@ import java.lang.annotation.Target;
 import java.lang.ref.SoftReference;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Array;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
@@ -386,7 +393,7 @@ import dalvik.system.PathClassLoader;
  * GSLS_TOOL
  * <p>
  * <p>
- * 更新时间:2024.1.9
+ * 更新时间:2024.5.5
  * 更新内容 v1.4.4.6 版本：
  * CSDN 博客/官网教程:https://blog.csdn.net/qq_39799899
  * GitHub https://github.com/1079374315/GT
@@ -394,6 +401,7 @@ import dalvik.system.PathClassLoader;
  * 1.优化 WebView SslErrorHandler 事件，上架googleplay 遇见的问题
  * 2.优化 Android混合开发中 WebView 上传图片的问题，并增加优化了  拍照、相册选着图片、相册选择视频、拍摄视频、本地文件上传 功能。
  * 3.更新了 GT动画封装库的次数逻辑
+ * 4.增加 路由框架 GT.ARouter，教程请参考：https://blog.csdn.net/qq_39799899
  *
  * <p>
  * <p>
@@ -1194,18 +1202,31 @@ public class GT {
      *
      * @param toFragment
      */
-    public static void startFloatingWindow(Context context, Class<?> toFragment) {
+    public static void startFloatingWindow(Context context, Class<?> toFragment, Bundle... bundles) {
         if (Build.VERSION.SDK_INT >= 23) {
             if (!Settings.canDrawOverlays(context)) {
                 Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + context.getPackageName()));
                 FragmentActivity fragmentActivity = (FragmentActivity) context;
                 fragmentActivity.startActivityForResult(intent, 0);
-            } else {
-                context.startService(new Intent(context, toFragment));
+                return;
             }
-        } else {
-            context.startService(new Intent(context, toFragment));
         }
+
+        Intent intent = new Intent(context, toFragment);
+        if (bundles != null && bundles.length != 0 && bundles[0] != null)
+            intent.putExtras(bundles[0]);
+        context.startService(intent);
+    }
+
+
+    /**
+     * 启动悬浮窗
+     *
+     * @param toFragment
+     */
+    public static void startFloatingWindow(Context context, GT_FloatingWindow.BaseFloatingWindow floatingWindow) {
+        startFloatingWindow(context, floatingWindow.getClass(), floatingWindow.getArguments());
+        floatingWindow = null;
     }
 
     //============================================= 日志功能 =========================================
@@ -1759,6 +1780,1218 @@ public class GT {
     }
 
     //============================================= 数据类 =====================================
+
+    public static class ARouter {
+
+        public interface IProvider {
+            void init(Context context);
+        }
+
+        public interface IInterceptor {
+            void init(Context context, String injectObject);
+
+            boolean process(Intent intent, InterceptorCallback callback);
+        }
+
+        public static abstract class InterceptorCallback {
+            public boolean onContinue(Intent intent) {
+                return true;
+            }
+
+            public boolean onAbort(Intent intent) {
+                return false;
+            }
+        }
+
+
+        private static boolean isDebugARouter = false;//ARouter调试开关
+        private volatile static ARouter instance = null;//路由
+        private static final Map<String, GT_RouteMeta> aRouterMap = new ArrayMap<>();//路由容器
+        private static final Map<String, Object> aRouterStickyMap = new ArrayMap<>();//临时粘性参数事件
+        private static SoftReference<Context> softReference;//内部引用 Application
+        private static SoftReference<Activity> softReferenceActivity;//内部引用 activity
+        private static SoftReference<GT.ARouter.InterceptorCallback> softReferenceNavigationCallback;//内部引用 NavigationCallback
+        private ARouterBean aRouterBean;
+
+        private class ARouterBean {
+
+            public static final int INDEX_DEFAULT = -1079;//默认Int值
+            private String path;//目标路径
+            private String[] claIntercepts;//绿色通道
+
+            public void setClaIntercepts(String[] claIntercepts) {
+                this.claIntercepts = claIntercepts;
+            }
+
+            public String[] getClaIntercepts() {
+                return claIntercepts;
+            }
+
+            private int flags = INDEX_DEFAULT;//activity的启动模式
+            //启动动画
+            private int enterAnim = INDEX_DEFAULT, exitAnim = INDEX_DEFAULT, enterBackAnim = INDEX_DEFAULT, exitBackAnim = INDEX_DEFAULT;
+            private int[] anim;
+            private Map<String, Object> paramsType;  // 注册参数
+            private Map<String, Object> bundleParams;  //bundle 参数
+
+            private Class<?>[] constructorKey;//bundle 类型
+            private Object[] constructorValue;//bundle 值
+
+            public ARouterBean(String path) {
+                this.path = path;
+            }
+
+            public String getPath() {
+                return path;
+            }
+
+            public void setPath(String path) {
+                this.path = path;
+            }
+
+            public int getFlags() {
+                return flags;
+            }
+
+            public void setFlags(int flags) {
+                this.flags = flags;
+            }
+
+            public Map<String, Object> getBundleParams() {
+                return bundleParams;
+            }
+
+            public void addBundleParams(String key, Object value) {
+                if (bundleParams == null) bundleParams = new HashMap<>();
+                bundleParams.put(key, value);//每次都只保存最新的那个
+            }
+
+            public Map<String, Object> getParamsType() {
+                return paramsType;
+            }
+
+            public void addParamsType(String key, Object value) {
+                if (paramsType == null) paramsType = new HashMap<>();
+                paramsType.put(key, value);//每次都只保存最新的那个
+            }
+
+            /**
+             * 添加构造方法值
+             *
+             * @param constructorKey
+             * @param constructorValue
+             */
+            public void addConstructorParams(Class<?>[] constructorKey, Object... constructorValue) {
+                if (constructorKey == null || constructorKey.length == 0 ||
+                        constructorValue == null || constructorValue.length == 0 ||
+                        constructorKey.length != constructorValue.length) return;
+                this.constructorKey = constructorKey;
+                this.constructorValue = constructorValue;
+            }
+
+            public Class<?>[] getConstructorKey() {
+                if (constructorKey == null) return null;
+                return (Class<?>[]) constructorKey;
+            }
+
+            public Object[] getConstructorValue() {
+                if (constructorValue == null) return null;
+                return constructorValue;
+            }
+        }
+
+        public static ARouter getInstance() {
+            if (instance == null) {
+                synchronized (ARouter.class) {
+                    if (instance == null) {
+                        instance = new ARouter();
+                    }
+                }
+            }
+            return instance;
+        }
+
+        /**
+         * 注册 获取注解
+         *
+         * @param object
+         * @return
+         */
+        public ARouter inject(Object object, String... gtRoutePaths) {
+            Context context = softReference.get();
+            //路由检查是否自动依赖注入值
+            Field[] fields = object.getClass().getDeclaredFields();//获致当前 Activity 所有成员变更
+            for (Field field : fields) {
+                GT_Autowired annotation = field.getAnnotation(GT_Autowired.class);
+                if (annotation == null) continue;
+                String name = annotation.value();
+                //如果 注解里的key为空，那就直接用当前变量名作为key
+                if (name == null || name.isEmpty()) {
+                    name = field.getName();
+                }
+
+                Object value = null;
+                try {
+
+                    //获取当前注解类路由路径 作为依赖注解参数的 前缀 key
+                    String gtRoutePath = "";
+                    boolean isRemove = true;//是否注解参数自动释放
+                    if (gtRoutePaths != null && gtRoutePaths.length != 0 && gtRoutePaths[0] != null) {
+                        gtRoutePath = gtRoutePaths[0];
+                        isRemove = false;
+                    }
+
+                    if (gtRoutePath.isEmpty()) {
+                        GT_Route gtRoute = object.getClass().getAnnotation(GT_Route.class);
+                        if (gtRoute != null) {
+                            gtRoutePath = gtRoute.value();
+                        }
+                    }
+
+                    //要保证，主动传参优先级大于一切架构赋值
+                    if (aRouterStickyMap.containsKey(gtRoutePath + name)) {
+                        value = aRouterStickyMap.get(gtRoutePath + name);
+                        if (isRemove) {
+                            aRouterStickyMap.remove(gtRoutePath + name);
+                        }
+                    } else if (aRouterMap.containsKey(name)) {//判断是否依赖 路由路径来自动注入
+                        GT_RouteMeta gtRouteMeta = aRouterMap.get(name);
+                        if (gtRouteMeta != null && gtRouteMeta.getDestination() != null) {
+                            value = GT.AnnotationAssist.classToObject(gtRouteMeta.getDestination());
+                        }
+                    } else {//如果 既没有主动传值 也没有 依赖路由路径，那就自动生成默认对象
+                        if (GT.ARouter.IProvider.class.isAssignableFrom(field.getType())) {
+                            for (String key : aRouterMap.keySet()) {
+                                GT_RouteMeta gtRouteMeta = aRouterMap.get(key);
+                                if (field.getType().isAssignableFrom(gtRouteMeta.getDestination())) {
+                                    value = GT.AnnotationAssist.classToObject(gtRouteMeta.getDestination());
+                                    GT.AnnotationAssist.setReflectMethodValue(value, "init", null, Context.class, context);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    //给注解类进行依赖注入
+                    if (value != null) {
+                        GT.AnnotationAssist.setReflectVariateValue(object, field.getName(), value);
+                    }
+                } catch (Exception e) {
+                    if (GT.LOG.GT_LOG_TF) {
+                        GT.errs("类型有不匹配的 e:" + e);
+                    }
+                }
+
+            }
+            return this;
+        }
+
+        /**
+         * 手动释放依赖注解资源
+         *
+         * @param object
+         * @return
+         */
+        public ARouter unregister(Object object) {
+            //路由检查是否自动依赖注入值
+            Field[] fields = object.getClass().getDeclaredFields();//获致当前 Activity 所有成员变更
+            for (Field field : fields) {
+                GT_Autowired annotation = field.getAnnotation(GT_Autowired.class);
+                if (annotation == null) continue;
+                String name = annotation.value();
+                //如果 注解里的key为空，那就直接用当前变量名作为key
+                if (name == null || name.isEmpty()) {
+                    name = field.getName();
+                }
+                try {
+                    //获取当前注解类路由路径 作为依赖注解参数的 前缀 key
+                    String gtRoutePath = "";
+                    GT_Route gtRoute = object.getClass().getAnnotation(GT_Route.class);
+                    if (gtRoute != null) {
+                        gtRoutePath = gtRoute.value();
+                    }
+                    aRouterStickyMap.remove(gtRoutePath + name);
+                } catch (Exception e) {
+                    if (GT.LOG.GT_LOG_TF) {
+                        GT.errs("类型有不匹配的 e:" + e);
+                    }
+                }
+
+            }
+            return this;
+        }
+
+
+        /**
+         * 销毁路由所有资源
+         *
+         * @return
+         */
+        public ARouter destroy() {
+            clear();
+            if (softReference != null) softReference.clear();
+            if (aRouterMap != null) aRouterMap.clear();
+            instance = null;
+            return this;
+        }
+
+        /**
+         * 清空路由 可清空缓存数据
+         * 该方法请谨慎使用，会将路由传参也清理掉，
+         * 若你确定没有传参缓存，即可使用
+         *
+         * @return
+         */
+        public ARouter clear() {
+            aRouterBean = null;//2
+            if (aRouterStickyMap != null) aRouterStickyMap.clear();
+            if (softReferenceActivity != null) softReferenceActivity.clear();
+            if (softReferenceNavigationCallback != null) softReferenceNavigationCallback.clear();
+            return this;
+        }
+
+        /**
+         * 构建跳转路由目的
+         *
+         * @param path
+         * @return
+         */
+        public ARouter build(String path) {
+            aRouterBean = new ARouterBean(path);
+            return this;
+        }
+
+        /**
+         * 动态设置 跳转Activity的Flags
+         *
+         * @param flags 参数值
+         * @return
+         */
+        public ARouter withFlags(int flags) {
+            if (aRouterBean == null) return this;
+            aRouterBean.setFlags(flags);
+            return this;
+        }
+
+        /**
+         * 添加构造参数
+         *
+         * @param key   参数名称
+         * @param value 参数值
+         * @return
+         */
+        public ARouter constructorParams(Class<?>[] key, Object[] value) {
+            if (aRouterBean == null) return this;
+            //需要完成，注解赋值
+            aRouterBean.addConstructorParams(key, value);
+            return this;
+        }
+
+        /**
+         * 注解传递参数
+         *
+         * @param key   参数名称
+         * @param value 参数值
+         * @return
+         */
+        public ARouter withObject(String key, Object value) {
+            if (aRouterBean == null) return this;
+            //需要完成，注解赋值
+            aRouterBean.addParamsType(aRouterBean.getPath() + key, value);
+            return this;
+        }
+
+        /**
+         * 通过 Bundle 传递参数
+         *
+         * @param key   参数key
+         * @param value 参数值
+         * @return
+         */
+        public ARouter putExtra(String key, Object value) {
+            if (aRouterBean == null) return this;
+            aRouterBean.addBundleParams(key, value);
+            return this;
+        }
+
+        /**
+         * 使用转场动画
+         *
+         * @param anim [0][1] = 启动动画 、[2][3] = 返回动画
+         * @return
+         */
+        public ARouter withTransition(int... anim) {
+            if (aRouterBean == null || anim == null || anim.length <= 1) return this;
+            aRouterBean.anim = anim;
+            switch (anim.length) {
+                case 2:
+                    aRouterBean.enterAnim = anim[0];
+                    aRouterBean.exitAnim = anim[1];
+                    break;
+                case 3:
+                    aRouterBean.enterAnim = anim[0];
+                    aRouterBean.exitAnim = anim[1];
+                    aRouterBean.enterBackAnim = anim[2];
+                    aRouterBean.exitBackAnim = anim[1];
+                    break;
+                case 4:
+                    aRouterBean.enterAnim = anim[0];
+                    aRouterBean.exitAnim = anim[1];
+                    aRouterBean.enterBackAnim = anim[2];
+                    aRouterBean.exitBackAnim = anim[3];
+                    break;
+            }
+
+            return this;
+        }
+
+        /**
+         * 使用转场动画
+         *
+         * @param enterAnim
+         * @param exitAnim
+         * @return
+         */
+        public ARouter withTransition(int enterAnim, int exitAnim) {
+            if (aRouterBean == null) return this;
+            aRouterBean.enterAnim = enterAnim;
+            aRouterBean.exitAnim = exitAnim;
+            return this;
+        }
+
+        /**
+         * 使用绿色通道，默认跳过所有拦截器，可指定跳过的拦截器
+         *
+         * @param claIntercepts
+         * @return
+         */
+        public ARouter greenChannal(String... claIntercepts) {
+            if (aRouterBean == null) return this;
+            aRouterBean.claIntercepts = claIntercepts;
+            return this;
+        }
+
+        /**
+         * @param cla 指定返回类型q
+         * @param <T>
+         * @return
+         */
+        public <T> T navigation(Class<T> cla) {
+            //如果是需要通过 cla 依赖注入
+            if (aRouterBean == null || aRouterBean.path == null) {
+                if (GT.ARouter.IProvider.class.isAssignableFrom(cla)) {
+                    for (String key : aRouterMap.keySet()) {
+                        GT_RouteMeta gtRouteMeta = aRouterMap.get(key);
+                        if (gtRouteMeta == null) continue;
+                        if (cla.isAssignableFrom(gtRouteMeta.getDestination())) {
+                            T value = (T) GT.AnnotationAssist.classToObject(gtRouteMeta.getDestination());
+                            Context context = softReference.get();
+                            if (context != null) {
+                                GT.AnnotationAssist.setReflectMethodValue(value, "init", null, Context.class, context);
+                            }
+                            return value;
+                        }
+                    }
+                }
+            }
+            //否则就执行 路由基本逻辑
+            return navigation();
+        }
+
+        /**
+         * 启动拦截器
+         *
+         * @param interceptorCallback 拦截器监听
+         * @param <T>
+         * @return
+         */
+        public <T> T navigation(GT.ARouter.InterceptorCallback interceptorCallback) {
+            softReferenceNavigationCallback = new SoftReference(interceptorCallback);
+            //否则就执行 路由基本逻辑
+            return navigation();
+        }
+
+        /**
+         * 拦截器方式
+         *
+         * @param activity            上下文
+         * @param interceptorCallback 拦截器监听
+         * @param <T>
+         * @return
+         */
+        public <T> T navigation(Activity activity, GT.ARouter.InterceptorCallback... interceptorCallback) {
+            softReferenceActivity = new SoftReference(activity);
+            if (interceptorCallback != null && interceptorCallback.length > 0 && interceptorCallback[0] != null) {
+                softReferenceNavigationCallback = new SoftReference(interceptorCallback[0]);
+            }
+            //否则就执行 路由基本逻辑
+            return navigation();
+        }
+
+        public <T> T navigation(Activity activity) {
+            softReferenceActivity = new SoftReference(activity);
+            //否则就执行 路由基本逻辑
+            return navigation();
+        }
+
+
+        public <T> T navigation() {
+            if (aRouterBean == null) return null;
+            GT_RouteMeta gt_routeMeta = aRouterMap.get(aRouterBean.path);
+            if (gt_routeMeta == null) return null;
+            Context context = null;
+
+            //先拿Activity
+            if (softReferenceActivity != null) {
+                context = softReferenceActivity.get();
+            }
+
+            //若没有就直接拿 Application
+            if (softReference != null && context == null) {
+                context = softReference.get();
+            }
+
+            try {
+                //如果使用注解传递，那就进行 监听者消息 方法传递
+                Map<String, Object> paramsType = aRouterBean.getParamsType();
+                if (paramsType != null && !paramsType.keySet().isEmpty()) {
+                    for (String key : paramsType.keySet()) {
+                        Object value = paramsType.get(key);
+                        aRouterStickyMap.put(key, value);
+                    }
+                }
+
+                boolean isAbort;//默认不拦截
+                switch (gt_routeMeta.getType()) {
+                    case ACTIVITY, VIEW,
+                            FRAGMENT, FRAGMENT_X, DIALOG_FRAGMENT, DIALOG_FRAGMENT_X, VIEW_MODEL,
+                            BASE_VIEW, FLOATING_WINDOW, POPUP_WINDOW, NOTIFICATION, WEB_VIEW, ADAPTER,
+                            PROVIDER://需要添加拦截器的
+                        isAbort = loadInterceptor(context, gt_routeMeta);//加载拦截器
+                        if (!isAbort) {
+                            switch (gt_routeMeta.getType()) {
+                                case ACTIVITY:
+                                    setActivity(context, gt_routeMeta);//处理 路由逻辑
+                                    break;
+                                case VIEW:
+                                    View view;
+                                    view = setView(gt_routeMeta);//处理 路由逻辑
+                                    if (view != null) {
+                                        aRouterBean = null;
+                                        return (T) view;
+                                    }
+                                    break;
+                                case FRAGMENT, FRAGMENT_X:
+                                    Fragment fragment;
+                                    fragment = setFragment(gt_routeMeta);//处理 路由逻辑
+                                    if (fragment != null) {
+                                        aRouterBean = null;
+                                        return (T) fragment;
+                                    }
+                                case DIALOG_FRAGMENT, DIALOG_FRAGMENT_X:
+                                    DialogFragment dialogFragment;
+                                    dialogFragment = setDialogFragment(gt_routeMeta);//处理 路由逻辑
+                                    if (dialogFragment != null) {
+                                        aRouterBean = null;
+                                        return (T) dialogFragment;
+                                    }
+                                case BASE_VIEW:
+                                    GT.GT_View.BaseView baseView;
+                                    baseView = setBaseView(gt_routeMeta);//处理 路由逻辑
+                                    if (baseView != null) {
+                                        aRouterBean = null;
+                                        return (T) baseView;
+                                    }
+                                case FLOATING_WINDOW://悬浮窗
+                                    GT.GT_FloatingWindow.BaseFloatingWindow floatingWindow;
+                                    floatingWindow = setFloatingWindow(gt_routeMeta);//处理 路由逻辑
+                                    if (floatingWindow != null) {
+                                        aRouterBean = null;
+                                        return (T) floatingWindow;
+                                    }
+                                case POPUP_WINDOW://悬浮窗
+                                    GT.GT_PopupWindow.BasePopupWindow popupWindow;
+                                    popupWindow = setPopupWindow(gt_routeMeta);//处理 路由逻辑
+                                    if (popupWindow != null) {
+                                        aRouterBean = null;
+                                        return (T) popupWindow;
+                                    }
+
+                                case NOTIFICATION://悬浮窗
+                                    GT.GT_Notification.BaseNotification notification;
+                                    notification = setNotification(gt_routeMeta);//处理 路由逻辑
+                                    if (notification != null) {
+                                        aRouterBean = null;
+                                        return (T) notification;
+                                    }
+
+                                case WEB_VIEW://悬浮窗
+                                    GT.GT_WebView.BaseWebView webView;
+                                    webView = setWebView(gt_routeMeta);//处理 路由逻辑
+                                    if (webView != null) {
+                                        aRouterBean = null;
+                                        return (T) webView;
+                                    }
+
+                                case ADAPTER://适配器
+                                    RecyclerView.Adapter<RecyclerView.ViewHolder> adapter;
+                                    adapter = setAdapter(gt_routeMeta);//处理 路由逻辑
+                                    if (adapter != null) {
+                                        aRouterBean = null;
+                                        return (T) adapter;
+                                    }
+
+                                case VIEW_MODEL://viewModel
+                                    ViewModel viewModel;
+                                    viewModel = setViewModel(gt_routeMeta);//处理 路由逻辑
+                                    if (viewModel != null) {
+                                        aRouterBean = null;
+                                        return (T) viewModel;
+                                    }
+
+                                case PROVIDER://接口方法、传值、传参
+                                    Object obj;
+                                    obj = setProvider(context, gt_routeMeta);//处理 接口方法 路由逻辑
+                                    if (obj != null) {
+                                        aRouterBean = null;
+                                        return (T) obj;
+                                    }
+                            }
+                        }
+                        aRouterBean = null;//1
+                        return null;
+                    case INTERCEPTOR://直接跳转拦截器
+                        startInterceptor(context, gt_routeMeta);//加载拦截器
+                        aRouterBean = null;//1
+                        return null;
+                    //待实现
+                    case SERVICE:
+                        break;
+                    case CONTENT_PROVIDER:
+                        break;
+                    case UNKNOWN:
+                        break;
+                }
+            } catch (Exception e) {
+                if (ARouter.isDebugARouter) {
+                    GT.err(" e:" + e);
+                }
+            }
+            aRouterBean = null;//9
+            return (T) gt_routeMeta;
+        }
+
+        @SuppressLint("WrongConstant")
+        private void setActivity(Context context, GT_RouteMeta gt_routeMeta) {
+            if (context != null) {
+                Intent intent = new Intent(context, gt_routeMeta.getDestination());
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                if (aRouterBean.flags != ARouterBean.INDEX_DEFAULT) {
+                    intent.setFlags(aRouterBean.flags);
+                }
+                setBundleParams(intent);
+
+                //设置Activity 动态转场
+                if (aRouterBean.enterBackAnim != ARouterBean.INDEX_DEFAULT && aRouterBean.exitBackAnim != ARouterBean.INDEX_DEFAULT) {
+                    //传递参数
+                    intent.putExtra(gt_routeMeta.getDestination() + "enterBackAnim", aRouterBean.enterBackAnim);
+                    intent.putExtra(gt_routeMeta.getDestination() + "exitBackAnim", aRouterBean.exitBackAnim);
+                }
+
+                //动态添加 转场
+                if (aRouterBean.enterAnim != ARouterBean.INDEX_DEFAULT && aRouterBean.exitAnim != ARouterBean.INDEX_DEFAULT) {
+                    ActivityOptions options = ActivityOptions.makeCustomAnimation(context, aRouterBean.enterAnim, aRouterBean.exitAnim);
+                    try {
+                        context.startActivity(intent, options.toBundle());
+                    } catch (Exception e) {
+                        context.startActivity(intent);
+                    }
+                } else {
+                    context.startActivity(intent);
+                }
+            }
+        }
+
+        private DialogFragment setDialogFragment(GT_RouteMeta gt_routeMeta) {
+            DialogFragment dialogFragment = null;
+            try {
+                Object obj = GT.AnnotationAssist.classToObject(gt_routeMeta.getPackClassPath());
+                if (obj instanceof DialogFragment) {
+                    dialogFragment = (DialogFragment) obj;
+                    Bundle bundle = new Bundle();
+                    setFragmentParams(bundle);
+                    dialogFragment.setArguments(bundle);
+                }
+            } catch (Exception e) {
+            }
+            return dialogFragment;
+        }
+
+        private Fragment setFragment(GT_RouteMeta gt_routeMeta) {
+            Fragment fragment = null;
+            try {
+                Object obj = GT.AnnotationAssist.classToObject(gt_routeMeta.getPackClassPath());
+                if (obj instanceof Fragment) {
+                    fragment = (Fragment) obj;
+                    Bundle bundle = new Bundle();
+                    setFragmentParams(bundle);
+                    bundle.putIntArray(gt_routeMeta.getDestination() + "anim", aRouterBean.anim);
+                    fragment.setArguments(bundle);
+                }
+            } catch (Exception e) {
+            }
+            return fragment;
+        }
+
+        /**
+         * 创建 Object
+         *
+         * @param gt_routeMeta
+         * @param isContext
+         * @return
+         */
+        private Object creationObject(GT_RouteMeta gt_routeMeta, Boolean... isContext) {
+            Object obj;
+            if (aRouterBean != null && aRouterBean.constructorKey != null && aRouterBean.constructorValue != null) {//是否传递参数 Bundle
+                obj = GT.AnnotationAssist.classToObject(gt_routeMeta.getPackClassPath(), aRouterBean.constructorKey, aRouterBean.constructorValue);
+                aRouterBean.constructorKey = null;
+                aRouterBean.constructorValue = null;
+            } else {//没有传递 Bundle 参数
+                if (isContext != null && isContext.length > 0 && isContext[0] != null && isContext[0]) {
+                    obj = GT.AnnotationAssist.classToObject(gt_routeMeta.getPackClassPath(), new Class[]{Context.class}, new Object[]{softReference.get()});
+                } else {
+                    obj = GT.AnnotationAssist.classToObject(gt_routeMeta.getPackClassPath());
+                }
+            }
+            return obj;
+        }
+
+        private GT.GT_View.BaseView setBaseView(GT_RouteMeta gt_routeMeta) {
+            GT.GT_View.BaseView baseView = null;
+            try {
+                Object obj = creationObject(gt_routeMeta);
+                if (obj instanceof GT.GT_View.BaseView) {
+                    baseView = (GT.GT_View.BaseView) obj;
+                    Bundle bundle = new Bundle();
+                    setFragmentParams(bundle);
+                    baseView.setArguments(bundle);
+                }
+            } catch (Exception e) {
+                GT.errt("e:" + e);
+            }
+            return baseView;
+        }
+
+        private GT.GT_FloatingWindow.BaseFloatingWindow setFloatingWindow(GT_RouteMeta gt_routeMeta) {
+            GT.GT_FloatingWindow.BaseFloatingWindow floatingWindow = null;
+            try {
+                Object obj = creationObject(gt_routeMeta);
+                if (obj instanceof GT.GT_FloatingWindow.BaseFloatingWindow) {
+                    floatingWindow = (GT.GT_FloatingWindow.BaseFloatingWindow) obj;
+                    Bundle bundle = new Bundle();
+                    setFragmentParams(bundle);
+                    floatingWindow.setArguments(bundle);
+                }
+            } catch (Exception e) {
+                GT.errt("e:" + e);
+            }
+            return floatingWindow;
+        }
+
+
+        private Object setProvider(Context context, GT_RouteMeta gt_routeMeta) {
+            Object obj = null;
+            try {
+                obj = GT.AnnotationAssist.classToObject(gt_routeMeta.getDestination());
+                GT.AnnotationAssist.setReflectMethodValue(obj, "init", null, Context.class, context);
+            } catch (Exception e) {
+            }
+            return obj;
+        }
+
+        private View setView(GT_RouteMeta gt_routeMeta) {
+            try {
+                Object obj = creationObject(gt_routeMeta, true);
+                if (obj instanceof View) {
+                    return (View) obj;
+                }
+            } catch (Exception e) {
+                GT.errt("e:" + e);
+            }
+            return null;
+        }
+
+
+        private GT.GT_PopupWindow.BasePopupWindow setPopupWindow(GT_RouteMeta gt_routeMeta) {
+            GT.GT_PopupWindow.BasePopupWindow popupWindow = null;
+            try {
+                Object obj = creationObject(gt_routeMeta, true);
+                if (obj instanceof GT.GT_PopupWindow.BasePopupWindow) {
+                    popupWindow = (GT.GT_PopupWindow.BasePopupWindow) obj;
+                    Bundle bundle = new Bundle();
+                    setFragmentParams(bundle);
+                    popupWindow.setArguments(bundle);
+                }
+
+            } catch (Exception e) {
+                GT.errt("e:" + e);
+            }
+            return popupWindow;
+
+        }
+
+        private GT.GT_WebView.BaseWebView setWebView(GT_RouteMeta gt_routeMeta) {
+            GT.GT_WebView.BaseWebView webView = null;
+            try {
+                Object obj = creationObject(gt_routeMeta, true);
+                if (obj instanceof GT.GT_WebView.BaseWebView) {
+                    webView = (GT.GT_WebView.BaseWebView) obj;
+                    Bundle bundle = new Bundle();
+                    setFragmentParams(bundle);
+                    webView.setArguments(bundle);
+                }
+            } catch (Exception e) {
+                GT.errt("e:" + e);
+            }
+            return webView;
+
+        }
+
+        private RecyclerView.Adapter<RecyclerView.ViewHolder> setAdapter(GT_RouteMeta gt_routeMeta) {
+            RecyclerView.Adapter<RecyclerView.ViewHolder> adapter = null;
+            try {
+                Object obj = creationObject(gt_routeMeta, true);
+                if (obj instanceof GT.Adapters.BaseAdapter) {
+                    adapter = (RecyclerView.Adapter<RecyclerView.ViewHolder>) obj;
+                }
+            } catch (Exception e) {
+                GT.errt("e:" + e);
+            }
+            return adapter;
+
+        }
+
+
+        private ViewModel setViewModel(GT_RouteMeta gt_routeMeta) {
+            ViewModel viewModel = null;
+            try {
+                Object obj = creationObject(gt_routeMeta, true);
+                if (obj instanceof ViewModel) {
+                    viewModel = (ViewModel) obj;
+                }
+            } catch (Exception e) {
+                GT.errt("e:" + e);
+            }
+            return viewModel;
+
+        }
+
+        private GT.GT_Notification.BaseNotification setNotification(GT_RouteMeta gt_routeMeta) {
+            GT.GT_Notification.BaseNotification notification = null;
+            try {
+                Object obj = creationObject(gt_routeMeta, true);
+                if (obj instanceof GT.GT_Notification.BaseNotification) {
+                    notification = (GT.GT_Notification.BaseNotification) obj;
+                    Bundle bundle = new Bundle();
+                    setFragmentParams(bundle);
+                    notification.setArguments(bundle);
+                }
+            } catch (Exception e) {
+                GT.errt("e:" + e);
+            }
+            return notification;
+
+        }
+
+
+        /**
+         * 启动拦截器
+         *
+         * @param context
+         * @param gt_routeMeta
+         * @return
+         */
+        private boolean startInterceptor(Context context, GT_RouteMeta gt_routeMeta) {
+            //本次跳转 是否存在拦截
+            String[] interceptors = gt_routeMeta.getInterceptors();
+            if (interceptors == null || interceptors.length == 0) return false;//如果没有设置拦截器，那就返回不拦截
+
+            //本次拦截 是否存在监听
+            GT.ARouter.InterceptorCallback interceptorCallback = null;
+            if (softReferenceNavigationCallback != null) {
+                interceptorCallback = softReferenceNavigationCallback.get();
+            }
+
+            //默认不拦截
+            final boolean[] isAbort = {false};
+
+            //传递参数
+            Intent intent = null;
+            if (context instanceof Activity) {
+                Activity actvity = (Activity) context;
+                intent = actvity.getIntent();
+            }
+
+            Intent intentBundleParam = setBundleParams(intent);
+            if (intent == null) {
+                intent = intentBundleParam;
+            }
+
+            //按被调用的拦截器遍历顺序处理
+            for (int i = 0; i < interceptors.length; i++) {
+                if (isAbort[0]) break;//如果上个拦截器已拦截，那就直接停止遍历拦截
+                String interceptor = interceptors[i];
+                Object obj;
+                GT_RouteMeta gtRouteMeta = aRouterMap.get(interceptor);//获取这个拦截器的信息
+                try {
+                    //实例化拦截器
+                    obj = GT.AnnotationAssist.classToObject(gtRouteMeta.getDestination());
+
+                    //调用初始化
+                    GT.AnnotationAssist.setReflectMethodValue(obj, "init", null, new Class[]{Context.class, String.class}, context, "");
+
+                    GT.ARouter.InterceptorCallback finalInterceptorCallback = interceptorCallback;
+                    //进行拦截返回
+                    int finalI = i;
+                    GT.AnnotationAssist.setReflectMethodValue(obj, "process", Boolean.class,
+                            new Class[]{Intent.class, GT.ARouter.InterceptorCallback.class}, intent, new GT.ARouter.InterceptorCallback() {
+                                @Override
+                                public boolean onContinue(Intent intent) {
+                                    if (finalI == interceptors.length - 1 && finalInterceptorCallback != null) {
+                                        finalInterceptorCallback.onContinue(intent);
+                                    }
+                                    if (softReferenceNavigationCallback != null)
+                                        softReferenceNavigationCallback.clear();
+                                    return super.onContinue(intent);
+                                }
+
+                                @Override
+                                public boolean onAbort(Intent intent) {
+                                    isAbort[0] = true;
+                                    if (finalInterceptorCallback != null) {
+                                        finalInterceptorCallback.onAbort(intent);
+                                    }
+                                    if (softReferenceNavigationCallback != null)
+                                        softReferenceNavigationCallback.clear();
+                                    return super.onAbort(intent);
+                                }
+                            });
+
+
+                } catch (Exception e) {
+                }
+
+                if (softReferenceActivity != null) softReferenceActivity.clear();
+                //遍历拦截循环结束
+            }
+
+            return isAbort[0];
+        }
+
+        /**
+         * 加载拦截器
+         *
+         * @param context
+         * @param gt_routeMeta
+         * @return
+         */
+        private boolean loadInterceptor(Context context, GT_RouteMeta gt_routeMeta) {
+            //本次跳转 是否存在拦截
+            String[] interceptors = gt_routeMeta.getInterceptors();
+            if (interceptors == null || interceptors.length == 0) return false;//如果没有设置拦截器，那就返回不拦截
+
+            //本次拦截 是否存在监听
+            GT.ARouter.InterceptorCallback interceptorCallback = null;
+            if (softReferenceNavigationCallback != null) {
+                interceptorCallback = softReferenceNavigationCallback.get();
+            }
+
+            //默认不拦截
+            final boolean[] isAbort = {false};
+
+            //传递参数
+            Intent intent = null;
+            if (context instanceof Activity activity) {
+                intent = activity.getIntent();
+            }
+
+            Intent intentBundleParam = setBundleParams(intent);
+            if (intent == null) {
+                intent = intentBundleParam;
+            }
+
+            List<String> claInterceptsList = null;
+            if (aRouterBean != null) {
+                String[] claIntercepts = aRouterBean.claIntercepts;
+                if (claIntercepts != null) {
+                    claInterceptsList = new ArrayList<>(Arrays.asList(claIntercepts));
+                }
+            }
+
+            //按被调用的拦截器遍历顺序处理
+            for (int i = 0; i < interceptors.length; i++) {
+                if (isAbort[0]) break;//如果上个拦截器已拦截，那就直接停止遍历拦截
+                String interceptor = interceptors[i];
+                if (claInterceptsList != null && interceptor != null) {
+                    if (claInterceptsList.isEmpty()) {
+                        if (interceptorCallback != null) interceptorCallback.onContinue(intent);//返回通过拦截
+                        break;//全绿色通道
+                    } else if (claInterceptsList.contains(interceptor)) continue;//跳过绿色通道拦截器
+                }
+                Object obj;
+                GT_RouteMeta gtRouteMeta = aRouterMap.get(interceptor);//获取这个拦截器的信息
+                try {
+                    //实例化拦截器
+                    obj = GT.AnnotationAssist.classToObject(gtRouteMeta.getDestination());
+                    //调用初始化
+                    GT.AnnotationAssist.setReflectMethodValue(obj, "init", null, new Class[]{Context.class, String.class}, context, gt_routeMeta.getPath());
+
+                    GT.ARouter.InterceptorCallback finalInterceptorCallback = interceptorCallback;
+                    //进行拦截返回
+                    int finalI = i;
+                    GT.AnnotationAssist.setReflectMethodValue(obj, "process", Boolean.class,
+                            new Class[]{Intent.class, GT.ARouter.InterceptorCallback.class}, intent, new GT.ARouter.InterceptorCallback() {
+                                @Override
+                                public boolean onContinue(Intent intent) {
+                                    if (finalI == interceptors.length - 1 && finalInterceptorCallback != null) {
+                                        finalInterceptorCallback.onContinue(intent);
+                                    }
+                                    if (softReferenceNavigationCallback != null)
+                                        softReferenceNavigationCallback.clear();
+                                    return super.onContinue(intent);
+                                }
+
+                                @Override
+                                public boolean onAbort(Intent intent) {
+                                    isAbort[0] = true;
+                                    if (finalInterceptorCallback != null) {
+                                        finalInterceptorCallback.onAbort(intent);
+                                    }
+                                    if (softReferenceNavigationCallback != null)
+                                        softReferenceNavigationCallback.clear();
+                                    return super.onAbort(intent);
+                                }
+                            });
+
+
+                } catch (Exception e) {
+                }
+
+                if (softReferenceActivity != null) softReferenceActivity.clear();
+                //遍历拦截循环结束
+            }
+            return isAbort[0];
+        }
+
+        /**
+         * Bundle 参数
+         *
+         * @param intent
+         */
+        private Intent setBundleParams(Intent intent) {
+            if (aRouterBean == null) return intent;
+            //如果传递的int是 Bundle 数据，那就通过 ent 传递
+            try {
+                Map<String, Object> bundleParams = aRouterBean.getBundleParams();
+                if (bundleParams != null && !bundleParams.keySet().isEmpty()) {
+                    if (intent == null) intent = new Intent();
+                    for (String key : bundleParams.keySet()) {
+                        Object object = bundleParams.get(key);
+                        if (object instanceof String) {
+                            intent.putExtra(key, object.toString());
+                        } else if (object instanceof Integer) {
+                            intent.putExtra(key, (Integer) object);
+                        } else if (object instanceof Long) {
+                            intent.putExtra(key, (Long) object);
+                        } else if (object instanceof Float) {
+                            intent.putExtra(key, (Float) object);
+                        } else if (object instanceof Boolean) {
+                            intent.putExtra(key, (Boolean) object);
+                        } else if (object instanceof Double) {
+                            intent.putExtra(key, (Double) object);
+                        } else if (object instanceof Short) {
+                            intent.putExtra(key, (Short) object);
+                        } else if (object instanceof Byte) {
+                            intent.putExtra(key, (Byte) object);
+                        } else if (object instanceof Parcelable) {
+                            intent.putExtra(key, (Parcelable) object);
+                        } else if (object instanceof Serializable) {
+                            intent.putExtra(key, (Serializable) object);
+                        } else if (object instanceof Bundle) {
+                            intent.putExtra(key, (Bundle) object);
+                        } else if (object instanceof Character) {
+                            intent.putExtra(key, (Character) object);
+                        } else if (object instanceof String[]) {
+                            intent.putExtra(key, (String[]) object);
+                        } else if (object instanceof Integer[]) {
+                            intent.putExtra(key, (Integer[]) object);
+                        } else if (object instanceof Float[]) {
+                            intent.putExtra(key, (Float[]) object);
+                        } else if (object instanceof Boolean[]) {
+                            intent.putExtra(key, (Boolean[]) object);
+                        } else if (object instanceof Short[]) {
+                            intent.putExtra(key, (Short[]) object);
+                        } else if (object instanceof Byte[]) {
+                            intent.putExtra(key, (Byte[]) object);
+                        } else if (object instanceof Double[]) {
+                            intent.putExtra(key, (Double[]) object);
+                        } else if (object instanceof Long[]) {
+                            intent.putExtra(key, (Long[]) object);
+                        } else if (object instanceof Serializable[]) {
+                            intent.putExtra(key, (Serializable[]) object);
+                        } else if (object instanceof Parcelable[]) {
+                            intent.putExtra(key, (Parcelable[]) object);
+                        } else if (object instanceof Character[]) {
+                            intent.putExtra(key, (Character[]) object);
+                        } else {//转入 json 存储
+                            intent.putExtra(key, GT.JSON.toJson2(object));
+                        }
+
+                    }
+                }
+            } catch (Exception e) {
+
+            }
+            return intent;
+        }
+
+        /**
+         * Fragment 参数
+         *
+         * @param bundle
+         */
+        private void setFragmentParams(Bundle bundle) {
+            if (aRouterBean == null) return;
+            //如果传递的int是 Bundle 数据，那就通过 ent 传递
+            try {
+                Map<String, Object> bundleParams = aRouterBean.getBundleParams();
+                if (bundleParams != null && !bundleParams.keySet().isEmpty()) {
+                    for (String key : bundleParams.keySet()) {
+                        Object object = bundleParams.get(key);
+                        if (object instanceof String) {
+                            bundle.putString(key, object.toString());
+                        } else if (object instanceof Integer) {
+                            bundle.putInt(key, (Integer) object);
+                        } else if (object instanceof Long) {
+                            bundle.putLong(key, (Long) object);
+                        } else if (object instanceof Float) {
+                            bundle.putFloat(key, (Float) object);
+                        } else if (object instanceof Boolean) {
+                            bundle.putBoolean(key, (Boolean) object);
+                        } else if (object instanceof Double) {
+                            bundle.putDouble(key, (Double) object);
+                        } else if (object instanceof Short) {
+                            bundle.putShort(key, (Short) object);
+                        } else if (object instanceof Byte) {
+                            bundle.putByte(key, (Byte) object);
+                        } else if (object instanceof Parcelable) {
+                            bundle.putParcelable(key, (Parcelable) object);
+                        } else if (object instanceof Serializable) {
+                            bundle.putSerializable(key, (Serializable) object);
+                        } else if (object instanceof Bundle) {
+                            bundle = (Bundle) object;
+                        } else if (object instanceof Character) {
+                            bundle.putChar(key, (char) object);
+                        } else if (object instanceof String[]) {
+                            bundle.putStringArray(key, (String[]) object);
+                        } else if (object instanceof Integer[]) {
+                            bundle.putIntArray(key, (int[]) object);
+                        } else if (object instanceof Float[]) {
+                            bundle.putFloatArray(key, (float[]) object);
+                        } else if (object instanceof Boolean[]) {
+                            bundle.putBooleanArray(key, (boolean[]) object);
+                        } else if (object instanceof Short[]) {
+                            bundle.putShort(key, (Short) object);
+                        } else if (object instanceof Byte[]) {
+                            bundle.putByteArray(key, (byte[]) object);
+                        } else if (object instanceof Double[]) {
+                            bundle.putDoubleArray(key, (double[]) object);
+                        } else if (object instanceof Long[]) {
+                            bundle.putLongArray(key, (long[]) object);
+                        } else if (object instanceof Character[]) {
+                            bundle.putCharArray(key, (char[]) object);
+                        } else {//转入 json 存储
+                            bundle.putString(key, GT.JSON.toJson2(object));
+                        }
+
+                    }
+                }
+            } catch (Exception e) {
+
+            }
+        }
+
+        public static synchronized void openDebug() {
+            isDebugARouter = true;
+        }
+
+        public static synchronized void printStackTrace() {
+
+        }
+
+        /**
+         * Application 初始化
+         *
+         * @param context
+         */
+        public static synchronized void init(Context context) {
+            softReference = new SoftReference(context);
+            //加载路由注解
+            loadHibernateAnnotation(context, context.getPackageName());
+        }
+
+        /**
+         * 处理 路由初始化数据
+         *
+         * @param context
+         * @param packagePath
+         */
+        private static void loadHibernateAnnotation(Context context, String packagePath) {
+            if (packagePath == null) return;
+            try {
+                String packageCodePath = context.getPackageCodePath();
+                DexFile dexFile = new DexFile(packageCodePath);
+                Enumeration<String> enumeration = dexFile.entries();
+                while (enumeration.hasMoreElements()) {
+                    String className = enumeration.nextElement();
+                    //在当前所有可执行的类里面查找包含有该包名的所有类
+                    if (className.contains(packagePath)) {
+                        Class<?> clazz1 = null;
+                        try {
+                            clazz1 = Class.forName(className);
+                        } catch (ClassNotFoundException ignored) {
+
+                        }
+                        if (clazz1 == null) continue;//在扫描到第三模块时会为null
+                        //过滤掉未被注解过的类
+                        GT_ARouterName aRouterName = clazz1.getAnnotation(GT_ARouterName.class);//获取该类 ContextView 的注解类
+                        if (aRouterName != null) {
+                            String[] values = aRouterName.value();
+                            for (String value : values) {
+                                Object object = GT.AnnotationAssist.classToObject(value);
+                                if (object == null) continue;
+                                Map<String, GT_RouteMeta> map = GT.AnnotationAssist.getReflectMethodValue(object, "loadInto", Map.class);
+                                for (String key : map.keySet()) {
+                                    if (!aRouterMap.containsKey(key)) {
+                                        aRouterMap.put(key, map.get(key));
+                                    }
+                                }
+
+                            }
+                        }
+
+                    }
+                }
+
+            } catch (Exception e) {
+                if (isDebugARouter) {
+                    GT.errt("e:" + e);
+                }
+            }
+
+        }
+
+    }
 
     /**
      * 观察者与订阅者-(增加跨进程能力)
@@ -2553,7 +3786,6 @@ public class GT {
          */
         private <T> T setMethodValue(EventBusBean eventBusBean, Object eventData) {
             try {
-//                GT.log(eventBusBean.object + ":" + eventBusBean.methodName + ":" + eventBusBean.returnType + ":" + eventBusBean.parameterTypes);
                 return (T) AnnotationAssist.setReflectMethodValue(eventBusBean.object, eventBusBean.methodName, eventBusBean.returnType, eventBusBean.parameterTypes, eventData == null ? "null" : eventData);
             } catch (Exception e) {
                 if (LOG.GT_LOG_TF) {
@@ -9699,7 +10931,7 @@ public class GT {
 
             //如果该类被 GT_Dao 所标识，那就进行反射获取绑定对象进行解析
             if (gt_dao != null) {
-                Object object = new AnnotationAssist().classToObject(classz.getName() + "Binding");
+                Object object = AnnotationAssist.classToObject(classz.getName() + "Binding");
                 if (object != null) {
                     String javaCode = object.toString();
                     if (javaCode != null) {
@@ -10280,7 +11512,6 @@ public class GT {
                             .groupBy(call.whereBean.groupBy)
                             .having(call.whereBean.having)
                             .isLast(call.whereBean.isList);
-
                     if (call.t instanceof ArrayList) {
                         call.t = (T) call.hibernate.queryAll(call.tClass);//3
                     } else {
@@ -14679,7 +15910,7 @@ public class GT {
 
             //如果该类被 GT_HttpCallBuild 所标识，那就进行反射获取绑定对象进行解析
             if (httpCallBuild != null) {
-                Object object = new AnnotationAssist().classToObject(classz.getName() + "Binding");
+                Object object = AnnotationAssist.classToObject(classz.getName() + "Binding");
                 if (object != null) {
                     String javaCode = object.toString();
                     if (javaCode != null) {
@@ -14730,7 +15961,7 @@ public class GT {
                         }
                         //如果不是下载夜班不是上传文件，那就根据 class 反射出实体类
                         if (fileDownload == null && fileUploading == null) {
-                            call.t = (T) new AnnotationAssist().classToObject(typeName);
+                            call.t = (T) AnnotationAssist.classToObject(typeName);
                         }
                     } catch (Exception e) {
                         call.exception = e;
@@ -16927,7 +18158,7 @@ public class GT {
                                     gtIv.setScrollY(iv.getScrollY());
 
                                     //拷贝view事件
-                                    AnnotationAssist.copyViewEvent(iv, gtIv, View.OnClickListener.class, true);
+                                    GT.AnnotationAssist.copyViewEvent(iv, gtIv, View.OnClickListener.class, true);
                                     GT.AnnotationAssist.copyViewEvent(iv, gtIv, View.OnLongClickListener.class, true);
                                     GT.AnnotationAssist.copyViewEvent(iv, gtIv, View.OnTouchListener.class, true);
                                     GT.AnnotationAssist.copyViewEvent(iv, gtIv, View.OnFocusChangeListener.class, true);
@@ -17842,7 +19073,6 @@ public class GT {
             }
 
             public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
-
             }
 
             public void onReceivedClientCertRequest(WebView view, ClientCertRequest request) {
@@ -18657,7 +19887,8 @@ public class GT {
         /**
          * 将多少秒转换成 时分秒 如：100秒 = 1分钟40秒
          *
-         * @param seconds
+         * @param seconds 秒数
+         * @param units   动态设置 时分秒 单位
          * @return
          */
         public static String secondsToTime(int seconds) {
@@ -18665,9 +19896,11 @@ public class GT {
             int m = (seconds % 3600) / 60; // 分钟
             int s = (seconds % 3600) % 60; // 秒
             if (h > 0) {
+                if (s == 0) return h + "小时" + m + "分钟";
                 return h + "小时" + m + "分钟" + s + "秒";
             }
             if (m > 0) {
+                if (s == 0) return m + "分钟";
                 return m + "分钟" + s + "秒";
             }
             return s + "秒";
@@ -18825,7 +20058,7 @@ public class GT {
         /**
          * 时间戳转 时间 YYYY-MM-DD 00:00:00
          *
-         * @param dataTime
+         * @param dataTime "yyyy-MM-dd HH:mm:ss"
          * @return
          */
         public static String toTime(String dataTime, String timeFormat) {
@@ -21115,9 +22348,7 @@ public class GT {
             if (decorView == null || onListener == null) return;
             decorView.setOnApplyWindowInsetsListener((v, insets) -> {
                 int bottom;
-
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-
                     bottom = insets.getInsets(WindowInsets.Type.ime()).bottom;
                     decorView.setPadding(0, 0, 0, bottom);
                     onListener.onOneListener(bottom);
@@ -22076,7 +23307,7 @@ public class GT {
     }
 
     //机型判断类
-    public class MIUIUtils {
+    public static class MIUIUtils {
 
         public static boolean isMIUI() {
             String manufacturer = Build.MANUFACTURER;
@@ -22606,6 +23837,13 @@ public class GT {
 
     //跳转工具类
     public static class SkipUtils {
+
+        //网页
+        public static void skipWeb(Context context, String url) {
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            intent.setData(Uri.parse(url));
+            context.startActivity(intent);
+        }
 
         //壁纸
         public static void skipWallpaper(Context context, String title) {
@@ -23620,11 +24858,6 @@ public class GT {
             cursor.moveToFirst();
             return cursor.getString(cursor.getColumnIndex(picPathColumns[0]));
         }
-
-       /* public static Uri bitmapToUri(Context context, Bitmap bitmap) {
-            return Uri.parse(MediaStore.Images.Media.insertImage(context.getContentResolver(), bitmap, null, null));
-        }*/
-
 
         public static Uri bitmapToUri(Context context, Bitmap bitmap) {
             try {
@@ -26108,6 +27341,20 @@ public class GT {
         }
 
         /**
+         * 检查读写权限
+         * <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" /> <!-- 读写 图片 -->
+         * <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" /> <!-- 读写 视频 -->
+         * <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" /> <!-- 读写 音频 -->
+         *
+         * @param activity
+         * @return true:开启  false:未开启
+         */
+        public static boolean checkStoragePermission(Activity activity) {
+            return ContextCompat.checkSelfPermission(activity, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED &&
+                    ContextCompat.checkSelfPermission(activity, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+        }
+
+        /**
          * 通知栏权限
          * <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
          * 跳转通知栏权限页面,引导用户开启权限
@@ -26159,6 +27406,21 @@ public class GT {
                     }
                 }
             });
+        }
+
+        /**
+         * 通知栏权限是否开启
+         * 需要静态xml注册的权限: <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+         *
+         * @param context
+         * @return true:开启  false:未开启
+         */
+        public static boolean areNotificationsEnabled(Context context) {
+            NotificationManager mNotificationManager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                return mNotificationManager.areNotificationsEnabled();// 检查通知权限是否被用户授予
+            }
+            return true; // 在Android O之前，通知权限默认是开启的，可以直接返回true
         }
 
         /**
@@ -28290,17 +29552,18 @@ public class GT {
              *
              * @param toFragment
              */
-            public void startFloatingWindow(Class<?> toFragment) {
-                if (Build.VERSION.SDK_INT >= 23) {
-                    if (!Settings.canDrawOverlays(this)) {
-                        Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName()));
-                        startActivityForResult(intent, 0);
-                    } else {
-                        startService(new Intent(this, toFragment));
-                    }
-                } else {
-                    startService(new Intent(this, toFragment));
-                }
+            public void startFloatingWindow(Class<?> toFragment, Bundle... bundles) {
+                GT.startFloatingWindow(this, toFragment, bundles);
+            }
+
+            /**
+             * 启动悬浮窗
+             *
+             * @param toFragment
+             */
+            public void startFloatingWindow(Context context, GT_FloatingWindow.BaseFloatingWindow floatingWindow) {
+                startFloatingWindow(floatingWindow.getClass(), floatingWindow.getArguments());
+                floatingWindow = null;
             }
 
             public GT_Fragment getGT_Fragment() {
@@ -28349,6 +29612,13 @@ public class GT {
                         //用户自定义
                         if (cutIndex == -1 && startAnim != 0 && closeAnim != 0) {
                             overridePendingTransition(startAnim, closeAnim);
+                        } else {
+                            //触发 路由传递的 返回动画
+                            int enterBackAnim = getIntent().getIntExtra(getClass() + "enterBackAnim", -1079);
+                            int exitBackAnim = getIntent().getIntExtra(getClass() + "exitBackAnim", -1079);
+                            if (enterBackAnim != -1079 && exitBackAnim != -1079) {
+                                overridePendingTransition(enterBackAnim, exitBackAnim);
+                            }
                         }
                         break;
                 }
@@ -28381,7 +29651,10 @@ public class GT {
                         if (!GT_Fragment.backFragmentList.contains(fragment.getClass().getName())) {
                             if (fragment instanceof GT_Fragment.BaseFragment) {
                                 GT_Fragment.BaseFragment baseFragment = (GT_Fragment.BaseFragment) fragment;
-                                if (baseFragment.onBackPressed()) {//1
+                                if (!baseFragment.isBackPressed()) {//不持有返回事件
+                                    return super.onKeyDown(keyCode, event);
+                                }
+                                if (baseFragment.onBackPressed()) {//持有返回事件
                                     return true;
                                 }
                             }
@@ -28397,6 +29670,11 @@ public class GT {
                 for (Fragment fragment : stackFragments) {
                     if (fragment instanceof GT_Fragment.BaseFragment && gt_fragment.stackTopHashCode.equals(fragment.toString())) {
                         GT_Fragment.BaseFragment baseFragment = (GT_Fragment.BaseFragment) fragment;
+
+                        if (!baseFragment.isBackPressed()) {//不持有返回事件
+                            return super.onKeyDown(keyCode, event);
+                        }
+
                         boolean isBack = baseFragment.onBackPressed();//2
                         if (!isBack) {
                             List<String> finish1 = gt_fragment.getStackFragmentSimpleNames();
@@ -28760,10 +30038,12 @@ public class GT {
          * @return
          */
         public FragmentTransaction getTransaction() {
-            if (fragmentManager != null) {
+            if (fragmentManager != null && !fragmentManager.isDestroyed()) {
                 return fragmentManager.beginTransaction();//获取事务
+            } else {
+                GT_Fragment.fragmentManager = getFragmentActivity().getSupportFragmentManager();
             }
-            return null;
+            return fragmentManager.beginTransaction();//获取事务
         }
 
         //设置与获取 Home页面的 fragment 容器ID
@@ -28851,9 +30131,13 @@ public class GT {
             if (fragmentId == 0 || fragmentClass == null) return;
             String fragmentName = fragmentClass.getName();
             try {
-                //切换页面特效
-                cutEffects(transaction);
 
+                //处理来自路由的动画参数
+                if (fragment == null || !setAnim(fragment, transaction)) {
+                    cutEffects(transaction);//切换页面特效
+                }
+
+                //处理来自路由的动画参数
                 Fragment fragmentByTag = null;
 
                 if (oldFragmentId == 0) {
@@ -28907,7 +30191,12 @@ public class GT {
                             }
                         }
 
-                        transaction.add(fragmentId, fragment, fragmentName);
+                        //判断当前Fragment是否被添加多次
+                        if (!fragment.isAdded()) {
+                            transaction.add(fragmentId, fragment, fragmentName);
+                        } else {
+                            GT.err("无法将同一个Fragment添加多次:" + fragment);
+                        }
                         break;
                     }
 
@@ -29866,6 +31155,397 @@ public class GT {
         //=========================================== 启动新的 Fragment ====================================
 
         /**
+         * 设置动画
+         *
+         * @param fragment
+         * @param transaction
+         */
+        private boolean setAnim(Fragment fragment, FragmentTransaction transaction) {
+            Bundle arguments = fragment.getArguments();
+            if (arguments != null) {
+                int[] animArray = arguments.getIntArray(fragment.getClass().toString() + "anim");
+                if (animArray == null || animArray.length == 0) return false;
+                switch (animArray.length) {
+                    case 1:
+                        transaction.setTransition(animArray[0]);
+                        break;
+                    case 2:
+                        transaction.setCustomAnimations(animArray[0], animArray[1], animArray[0], animArray[1]);
+                        break;
+                    case 4:
+                        transaction.setCustomAnimations(animArray[0], animArray[1], animArray[2], animArray[3]);
+                        break;
+                }
+                return true;
+            } else {
+                return false;
+            }
+        }
+
+        /**
+         * 添加Fragment(非页面性质的) 自动提交
+         *
+         * @param containerViewId 容器
+         * @param fragment        实体类 或 Class<Fragment>
+         * @param bundles         (非必填)
+         * @return
+         */
+        public GT_Fragment addCommit(@IdRes int containerViewId, @NonNull Object fragmentObj, Bundle... bundles) {
+            FragmentTransaction transaction = gt_fragment.getTransaction();
+            try {
+                transaction = add(containerViewId, fragmentObj, bundles);
+                activity = getActivity();
+                if (activity != null && ApplicationUtils.isFrontDesk(activity)) {//判断是否在前台，如果是就正常提交事务
+                    transaction.commit();
+                } else {//负责使用不推荐的方式提交
+                    transaction.commitAllowingStateLoss();
+                }
+            } catch (Exception e) {
+                GT.errs("e:" + e);
+                try {
+                    transaction.commitAllowingStateLoss();
+                } catch (Exception e1) {
+                    GT.errs("e1:" + e1);
+                }
+            }
+            return this;
+        }
+
+        /**
+         * 添加Fragment(非页面性质的)
+         *
+         * @param containerViewId 容器
+         * @param fragment        实体类 或 Class<Fragment>
+         * @param bundles         (非必填)
+         * @return
+         */
+        public FragmentTransaction add(@IdRes int containerViewId, @NonNull Object fragmentObj, Bundle... bundles) {
+            FragmentTransaction transaction = gt_fragment.getTransaction();
+            Fragment fragment = AnnotationAssist.<Fragment>ObjToObj(fragmentObj);
+            if (fragment == null) return transaction;
+            if (fragment.isAdded()) {
+                GT.err("无法将同一个Fragment添加多次:" + fragment);
+                return transaction;
+            }
+
+            setAnim(fragment, transaction);
+
+            Bundle bundle = null;
+            if (bundles != null && bundles.length > 0) {
+                bundle = bundles[0];
+                fragment.setArguments(bundle);
+            }
+
+            if (fragment instanceof BaseFragment) {
+                BaseFragment baseFragment = (BaseFragment) fragment;
+                baseFragment.setBackPressed(false);
+                transaction.add(containerViewId, baseFragment);
+            } else {
+                transaction.add(containerViewId, fragment);
+            }
+
+            return transaction;
+        }
+
+        /**
+         * 添加Fragment(非页面性质的) 自动提交
+         *
+         * @param containerViewId 容器
+         * @param fragment        实体类 或 Class<Fragment>
+         * @param tag             标签
+         * @param bundles         (非必填)
+         * @return
+         */
+        public GT_Fragment addCommit(@IdRes int containerViewId, @NonNull Object fragmentObj, String tag, Bundle... bundles) {
+            FragmentTransaction transaction = gt_fragment.getTransaction();
+            try {
+                transaction = add(containerViewId, fragmentObj, tag, bundles);
+                activity = getActivity();
+                if (activity != null && ApplicationUtils.isFrontDesk(activity)) {//判断是否在前台，如果是就正常提交事务
+                    transaction.commit();
+                } else {//负责使用不推荐的方式提交
+                    transaction.commitAllowingStateLoss();
+                }
+            } catch (IllegalStateException e) {
+                GT.errs("e:" + e);
+                try {
+                    transaction.commitAllowingStateLoss();
+                } catch (Exception e1) {
+                    GT.errs("e1:" + e1);
+                }
+            }
+            return this;
+        }
+
+        /**
+         * 添加Fragment(非页面性质的)
+         *
+         * @param containerViewId 容器
+         * @param fragment        实体类 或 Class<Fragment>
+         * @param tag             标签
+         * @param bundles         (非必填)
+         * @return
+         */
+        public FragmentTransaction add(@IdRes int containerViewId, @NonNull Object fragmentObj, String tag, Bundle... bundles) {
+            FragmentTransaction transaction = gt_fragment.getTransaction();
+            Fragment fragment = AnnotationAssist.<Fragment>ObjToObj(fragmentObj);
+            if (fragment == null) return transaction;
+
+            setAnim(fragment, transaction);
+
+            Bundle bundle = null;
+            if (bundles != null && bundles.length > 0) {
+                bundle = bundles[0];
+                fragment.setArguments(bundle);
+            }
+
+            if (fragment instanceof BaseFragment) {
+                BaseFragment baseFragment = (BaseFragment) fragment;
+                baseFragment.setBackPressed(false);
+                transaction.add(containerViewId, baseFragment, tag);
+            } else {
+                transaction.add(containerViewId, fragment, tag);
+            }
+            return transaction;
+        }
+
+
+        //替换
+
+        /**
+         * 替换 Fragment(非页面性质的) 自动提交
+         *
+         * @param containerViewId 容器
+         * @param fragment        实体类 或 Class<Fragment>
+         * @param bundles         (非必填)
+         * @return
+         */
+        public GT_Fragment replaceCommit(@IdRes int containerViewId, @NonNull Object fragmentObj, Bundle... bundles) {
+            FragmentTransaction transaction = gt_fragment.getTransaction();
+            try {
+                transaction = replace(containerViewId, fragmentObj, bundles);
+                activity = getActivity();
+                if (activity != null && ApplicationUtils.isFrontDesk(activity)) {//判断是否在前台，如果是就正常提交事务
+                    transaction.commit();
+                } else {//负责使用不推荐的方式提交
+                    transaction.commitAllowingStateLoss();
+                }
+            } catch (IllegalStateException e) {
+                GT.errs("e:" + e);
+                try {
+                    transaction.commitAllowingStateLoss();
+                } catch (Exception e1) {
+                    GT.errs("e1:" + e1);
+                }
+            }
+            return this;
+        }
+
+        /**
+         * 替换 Fragment(非页面性质的)
+         *
+         * @param containerViewId 容器
+         * @param fragment        实体类 或 Class<Fragment>
+         * @param bundles         (非必填)
+         * @return
+         */
+        public FragmentTransaction replace(@IdRes int containerViewId, @NonNull Object fragmentObj, Bundle... bundles) {
+            FragmentTransaction transaction = gt_fragment.getTransaction();
+            Fragment fragment = AnnotationAssist.<Fragment>ObjToObj(fragmentObj);
+            if (fragment == null) return transaction;
+
+            setAnim(fragment, transaction);
+
+            Bundle bundle = null;
+            if (bundles != null && bundles.length > 0) {
+                bundle = bundles[0];
+                fragment.setArguments(bundle);
+            }
+
+            if (fragment instanceof BaseFragment) {
+                BaseFragment baseFragment = (BaseFragment) fragment;
+                baseFragment.setBackPressed(false);
+                transaction.replace(containerViewId, baseFragment);
+            } else {
+                transaction.replace(containerViewId, fragment);
+            }
+            return transaction;
+        }
+
+        /**
+         * 替换 Fragment(非页面性质的) 自动提交
+         *
+         * @param containerViewId 容器
+         * @param fragment        实体类 或 Class<Fragment>
+         * @param tag             标签
+         * @param bundles         (非必填)
+         * @return
+         */
+        public GT_Fragment replaceCommit(@IdRes int containerViewId, @NonNull Object fragmentObj, String tag, Bundle... bundles) {
+            FragmentTransaction transaction = gt_fragment.getTransaction();
+            try {
+                transaction = replace(containerViewId, fragmentObj, tag, bundles);
+                activity = getActivity();
+                if (activity != null && ApplicationUtils.isFrontDesk(activity)) {//判断是否在前台，如果是就正常提交事务
+                    transaction.commit();
+                } else {//负责使用不推荐的方式提交
+                    transaction.commitAllowingStateLoss();
+                }
+            } catch (IllegalStateException e) {
+                GT.errs("e:" + e);
+                try {
+                    transaction.commitAllowingStateLoss();
+                } catch (Exception e1) {
+                    GT.errs("e1:" + e1);
+                }
+            }
+            return this;
+        }
+
+        /**
+         * 替换 Fragment(非页面性质的)
+         *
+         * @param containerViewId 容器
+         * @param fragment        实体类 或 Class<Fragment>
+         * @param tag             标签
+         * @param bundles         (非必填)
+         * @return
+         */
+        public FragmentTransaction replace(@IdRes int containerViewId, @NonNull Object fragmentObj, String tag, Bundle... bundles) {
+            FragmentTransaction transaction = gt_fragment.getTransaction();
+            Fragment fragment = AnnotationAssist.<Fragment>ObjToObj(fragmentObj);
+            if (fragment == null) return transaction;
+
+            setAnim(fragment, transaction);
+
+            Bundle bundle = null;
+            if (bundles != null && bundles.length > 0) {
+                bundle = bundles[0];
+                fragment.setArguments(bundle);
+            }
+
+            if (fragment instanceof BaseFragment) {
+                BaseFragment baseFragment = (BaseFragment) fragment;
+                baseFragment.setBackPressed(false);
+                transaction.replace(containerViewId, baseFragment, tag);
+            } else {
+                transaction.replace(containerViewId, fragment, tag);
+            }
+            return transaction;
+        }
+
+
+        /**
+         * 隐藏 Fragment(非页面性质的) 自动提交
+         *
+         * @param fragment 实体类 或 Class<Fragment>
+         * @return
+         */
+        public GT_Fragment hideCommit(@NonNull Object fragmentObj) {
+            FragmentTransaction transaction = gt_fragment.getTransaction();
+            try {
+                transaction = hide(fragmentObj);
+                activity = getActivity();
+                if (activity != null && ApplicationUtils.isFrontDesk(activity)) {//判断是否在前台，如果是就正常提交事务
+                    transaction.commit();
+                } else {//负责使用不推荐的方式提交
+                    transaction.commitAllowingStateLoss();
+                }
+            } catch (IllegalStateException e) {
+                GT.errs("e:" + e);
+                try {
+                    transaction.commitAllowingStateLoss();
+                } catch (Exception e1) {
+                    GT.errs("e1:" + e1);
+                }
+            }
+            return this;
+        }
+
+        /**
+         * 隐藏 Fragment(非页面性质的)
+         *
+         * @param fragment 实体类 或 Class<Fragment>
+         * @return
+         */
+        public FragmentTransaction hide(@NonNull Object fragmentObj) {
+            FragmentTransaction transaction = gt_fragment.getTransaction();
+
+            Class<?> fragmentClass = null;
+            Fragment fragment = null;
+            if (fragmentObj instanceof Fragment) {
+                fragment = (Fragment) fragmentObj;
+                return transaction.hide(fragment);
+            } else if (fragmentObj instanceof String) {
+                fragmentClass = AnnotationAssist.stringToClass(fragmentObj.toString());
+            } else if (fragmentObj instanceof Class<?>) {
+                fragmentClass = (Class<?>) fragmentObj;
+            }
+
+            for (Fragment fra : gt_fragment.getStackFragments()) {
+                if (fra.getClass() == fragmentClass) {
+                    return transaction.hide(fra);
+                }
+            }
+            return transaction;
+        }
+
+
+        /**
+         * 删除 Fragment(非页面性质的) 自动提交
+         *
+         * @param fragment 实体类 或 Class<Fragment>
+         * @return
+         */
+        public GT_Fragment removeCommit(@NonNull Object fragmentObj) {
+            FragmentTransaction transaction = gt_fragment.getTransaction();
+            try {
+                transaction = remove(fragmentObj);
+                activity = getActivity();
+                if (activity != null && ApplicationUtils.isFrontDesk(activity)) {//判断是否在前台，如果是就正常提交事务
+                    transaction.commit();
+                } else {//负责使用不推荐的方式提交
+                    transaction.commitAllowingStateLoss();
+                }
+            } catch (IllegalStateException e) {
+                GT.errs("e:" + e);
+                try {
+                    transaction.commitAllowingStateLoss();
+                } catch (Exception e1) {
+                    GT.errs("e1:" + e1);
+                }
+            }
+            return this;
+        }
+
+        /**
+         * 删除 Fragment(非页面性质的)
+         *
+         * @param fragment 实体类 或 Class<Fragment>
+         * @return
+         */
+        public FragmentTransaction remove(@NonNull Object fragmentObj) {
+            FragmentTransaction transaction = gt_fragment.getTransaction();
+            Class<?> fragmentClass = null;
+            Fragment fragment = null;
+            if (fragmentObj instanceof Fragment) {
+                fragment = (Fragment) fragmentObj;
+                return transaction.remove(fragment);
+            } else if (fragmentObj instanceof String) {
+                fragmentClass = AnnotationAssist.stringToClass(fragmentObj.toString());
+            } else if (fragmentObj instanceof Class<?>) {
+                fragmentClass = (Class<?>) fragmentObj;
+            }
+
+            for (Fragment fra : gt_fragment.getStackFragments()) {
+                if (fra.getClass() == fragmentClass)
+                    return transaction.remove(fra);
+            }
+            return transaction;
+        }
+
+
+        /**
          * 启动一个Fragment
          *
          * @param fragmentObj 支持 String(className)、Class(Fragment.class),new Fragemnt(实例化对象)
@@ -29896,6 +31576,7 @@ public class GT {
             FragmentTransaction transaction = getTransaction();
             if (modeManagement(transaction, fragmentClass)) {
                 fragmentSwitchingModeManagement(resLayout, transaction, fragment, fragmentClass);
+            } else {
             }
             return this;
         }
@@ -30447,6 +32128,22 @@ public class GT {
             // 定义 Activity
             public Activity activity;
 
+            private boolean isPrepare;//是否已经创建了
+            private boolean isLazyLoad = false;//是否懒加载
+
+            //是否懒加载
+            public boolean isLazyLoad() {
+                return isLazyLoad;
+            }
+
+            /**
+             * 设置是否懒加载
+             *
+             * @param lazyLoad
+             */
+            public void setLazyLoad(boolean lazyLoad) {
+                isLazyLoad = lazyLoad;
+            }
 
             // 如果重写该方法了的话就需要自己写 接收 Activity
             @Override
@@ -30587,6 +32284,7 @@ public class GT {
             @Override
             public void onViewCreated(View view, @Nullable Bundle savedInstanceState) {
                 super.onViewCreated(view, savedInstanceState);
+                isPrepare = true;
                 view.setOnClickListener(null);//防止点击穿透
                 //如果没有设置背景，那就设置默认背景
                 Drawable background = view.getBackground();
@@ -30600,7 +32298,7 @@ public class GT {
 
                 initView(view, savedInstanceState);// 主要方法
                 getCache(GT_Cache.getCacheData(cacheKey, String.class));//获取缓存数据
-                loadData();
+                if (!isLazyLoad) loadData();
 
                 if (!(activity instanceof GT_Activity.BaseActivity)) {
                     isSolveEditTextBug = true;
@@ -30628,6 +32326,24 @@ public class GT {
                             setEditTextRequestFocus(view);
                         }
                     });
+                }
+            }
+
+            @Override
+            public void onActivityCreated(@Nullable Bundle savedInstanceState) {
+                super.onActivityCreated(savedInstanceState);
+                load();
+            }
+
+            @Override
+            public void setUserVisibleHint(boolean isVisibleToUser) {
+                super.setUserVisibleHint(isVisibleToUser);
+                load();
+            }
+
+            private void load() {
+                if (isLazyLoad && isPrepare && getUserVisibleHint()) {
+                    loadData();
                 }
             }
 
@@ -30855,17 +32571,31 @@ public class GT {
              * @param context
              * @param toFragment
              */
-            public void startFloatingWindow(Context context, Class<?> toFragment) {
-                if (android.os.Build.VERSION.SDK_INT >= 23) {
-                    if (!Settings.canDrawOverlays(context)) {
-                        Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + context.getPackageName()));
-                        FragmentActivity fragmentActivity = (FragmentActivity) context;
-                        fragmentActivity.startActivityForResult(intent, 0);
-                    } else {
-                        context.startService(new Intent(context, toFragment));
-                    }
-                } else {
-                    context.startService(new Intent(context, toFragment));
+            public void startFloatingWindow(Context context, Class<?> toFragment, Bundle... bundles) {
+                GT.startFloatingWindow(context, toFragment, bundles);
+            }
+
+            /**
+             * 启动悬浮窗
+             *
+             * @param toFragment
+             */
+            public void startFloatingWindow(Context context, GT_FloatingWindow.BaseFloatingWindow floatingWindow) {
+                startFloatingWindow(context, floatingWindow.getClass(), floatingWindow.getArguments());
+                floatingWindow = null;
+            }
+
+            /**
+             * 启动悬浮窗
+             *
+             * @param toFragment
+             */
+            public void startFloatingWindow(Class<?> toFragment, Bundle... bundles) {
+                if (activity == null) {
+                    activity = GT_Fragment.gt_fragment.getActivity();
+                }
+                if (activity != null) {
+                    GT.startFloatingWindow(activity, toFragment, bundles);
                 }
             }
 
@@ -30874,24 +32604,9 @@ public class GT {
              *
              * @param toFragment
              */
-            public void startFloatingWindow(Class<?> toFragment) {
-                if (activity == null) {
-                    activity = GT_Fragment.gt_fragment.getActivity();
-                }
-
-                if (activity != null) {
-                    if (android.os.Build.VERSION.SDK_INT >= 23) {
-                        if (!Settings.canDrawOverlays(activity)) {
-                            Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + activity.getPackageName()));
-                            FragmentActivity fragmentActivity = (FragmentActivity) activity;
-                            fragmentActivity.startActivityForResult(intent, 0);
-                        } else {
-                            activity.startService(new Intent(activity, toFragment));
-                        }
-                    } else {
-                        activity.startService(new Intent(activity, toFragment));
-                    }
-                }
+            public void startFloatingWindow(GT_FloatingWindow.BaseFloatingWindow floatingWindow) {
+                startFloatingWindow(floatingWindow.getClass(), floatingWindow.getArguments());
+                floatingWindow = null;
             }
 
 
@@ -30902,6 +32617,21 @@ public class GT {
              */
             protected boolean onBackPressed() {
                 return false;
+            }
+
+            /**
+             * 是否监听返回操作
+             *
+             * @return
+             */
+            private boolean isBackPressed = true;
+
+            public void setBackPressed(boolean backPressed) {
+                isBackPressed = backPressed;
+            }
+
+            protected boolean isBackPressed() {
+                return isBackPressed;
             }
 
             @Override
@@ -31047,7 +32777,6 @@ public class GT {
          * @param <T>
          */
         public abstract static class DataBindingFragment extends AnnotationFragment {
-
 
         }
 
@@ -31976,22 +33705,12 @@ public class GT {
              * @param context
              * @param toFragment
              */
-            public void startFloatingWindow(Context context, Class<?> toFragment) {
+            public void startFloatingWindow(Context context, Class<?> toFragment, Bundle... bundles) {
                 if (context == null) {
                     context = GT_Fragment.gt_fragment.getActivity();
                 }
                 if (context != null) {
-                    if (Build.VERSION.SDK_INT >= 23) {
-                        if (!Settings.canDrawOverlays(context)) {
-                            Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + context.getPackageName()));
-                            FragmentActivity fragmentActivity = (FragmentActivity) context;
-                            fragmentActivity.startActivityForResult(intent, 0);
-                        } else {
-                            context.startService(new Intent(context, toFragment));
-                        }
-                    } else {
-                        context.startService(new Intent(context, toFragment));
-                    }
+                    GT.startFloatingWindow(context, toFragment, bundles);
                 }
 
             }
@@ -32001,24 +33720,34 @@ public class GT {
              *
              * @param toFragment
              */
-            public void startFloatingWindow(Class<?> toFragment) {
+            public void startFloatingWindow(Context context, GT_FloatingWindow.BaseFloatingWindow floatingWindow) {
+                startFloatingWindow(context, floatingWindow.getClass(), floatingWindow.getArguments());
+                floatingWindow = null;
+            }
+
+            /**
+             * 启动悬浮窗
+             *
+             * @param toFragment
+             */
+            public void startFloatingWindow(Class<?> toFragment, Bundle... bundles) {
                 if (activity == null) {
                     activity = GT_Fragment.gt_fragment.getActivity();
                 }
 
                 if (activity != null) {
-                    if (Build.VERSION.SDK_INT >= 23) {
-                        if (!Settings.canDrawOverlays(activity)) {
-                            Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + activity.getPackageName()));
-                            FragmentActivity fragmentActivity = (FragmentActivity) activity;
-                            fragmentActivity.startActivityForResult(intent, 0);
-                        } else {
-                            activity.startService(new Intent(activity, toFragment));
-                        }
-                    } else {
-                        activity.startService(new Intent(activity, toFragment));
-                    }
+                    GT.startFloatingWindow(activity, toFragment, bundles);
                 }
+            }
+
+            /**
+             * 启动悬浮窗
+             *
+             * @param toFragment
+             */
+            public void startFloatingWindow(GT_FloatingWindow.BaseFloatingWindow floatingWindow) {
+                startFloatingWindow(floatingWindow.getClass(), floatingWindow.getArguments());
+                floatingWindow = null;
             }
 
             //是否解决EditText bug
@@ -32376,6 +34105,16 @@ public class GT {
             private int layout = -1;//布局
             private View itemView;
             private int page = 0;
+            private Bundle mArguments;
+
+            public void setArguments(@Nullable Bundle args) {
+                mArguments = args;
+            }
+
+            @Nullable
+            final public Bundle getArguments() {
+                return mArguments;
+            }
 
             //瀑布流
             private boolean isFalls = false;
@@ -32969,14 +34708,27 @@ public class GT {
             private boolean isEventPenetration = false;          //是否事件穿透
             private static boolean isShow = true;                //是否显示
             private String cacheKey;//缓存标识
-            private static int type_screenType = -1079;          //创建屏幕的类型,默认是使用用户设置的Xml宽高
-            public final static int type_self_adaption = -1;    //自适应
-            public final static int type_portraitScreen = 0;    //竖屏
-            public final static int type_landscape = 1;         //横屏
-            public final static int type_screen = 2;            //自适应半屏
-            public final static int type_fullScreen = 3;        //自适应全屏
+            final static int TYPE_SELF_ADAPTION = -1;    //自适应
+            public final static int TYPE_DEFAULT = -1079;    //创建屏幕的类型,默认是使用用户设置的Xml宽高
+            public final static int TYPE_PORTRAIT_SCREEN = 0;    //竖屏
+            public final static int TYPE_LANDSCAPE = 1;         //横屏
+            public final static int TYPE_SCREEN = 2;            //自适应半屏
+            public final static int TYPE_FULL_SCREEN = 3;        //自适应全屏
+
+            private static int TYPE_SCREEN_TYPE = TYPE_DEFAULT;          //创建屏幕的类型,默认是使用用户设置的Xml宽高
 
             private static double screenSizeCoefficient = 1.8;     //屏幕大小系数,系数越大，创建屏幕越小 注意：该系数不能 <= 0
+
+            private Bundle mArguments;
+
+            public void setArguments(@Nullable Bundle args) {
+                mArguments = args;
+            }
+
+            @Nullable
+            final public Bundle getArguments() {
+                return mArguments;
+            }
 
             //是否缓存开启数据
             protected boolean isCacheData() {
@@ -33069,8 +34821,8 @@ public class GT {
                 BaseFloatingWindow.screenSizeCoefficient = screenSizeCoefficient;
             }
 
-            public static int getType_screenType() {
-                return type_screenType;
+            public static int getTypeScreenType() {
+                return TYPE_SCREEN_TYPE;
             }
 
             /**
@@ -33081,10 +34833,10 @@ public class GT {
              * 自适应半屏：2
              * 自适应全屏：3
              *
-             * @param type_screenType 创建屏幕类型
+             * @param typeScreenType 创建屏幕类型
              */
-            public static void setType_screenType(int type_screenType) {
-                BaseFloatingWindow.type_screenType = type_screenType;
+            public static void setType_screenType(int typeScreenType) {
+                BaseFloatingWindow.TYPE_SCREEN_TYPE = typeScreenType;
             }
 
             public boolean isDrag() {
@@ -33290,10 +35042,10 @@ public class GT {
              * 设置屏幕大小、方向
              */
             private void setScreenSize() {
-                if (type_screenType != -1079) {
+                if (TYPE_SCREEN_TYPE != TYPE_DEFAULT) {
                     //自适应设置窗口大小，方向
-                    switch (type_screenType) {
-                        case type_portraitScreen://竖屏
+                    switch (TYPE_SCREEN_TYPE) {
+                        case TYPE_PORTRAIT_SCREEN://竖屏
                             if (width > height) {
                                 layoutParams.width = (int) (width / (2 * screenSizeCoefficient));
                                 layoutParams.height = (int) (height / screenSizeCoefficient);
@@ -33303,7 +35055,7 @@ public class GT {
                             }
                             break;
 
-                        case type_landscape://横屏
+                        case TYPE_LANDSCAPE://横屏
                             if (width > height) {
                                 layoutParams.width = (int) (width / screenSizeCoefficient);
                                 layoutParams.height = (int) (height / screenSizeCoefficient);
@@ -33313,7 +35065,7 @@ public class GT {
                             }
                             break;
 
-                        case type_screen://自适应半屏
+                        case TYPE_SCREEN://自适应半屏
                             if (width > height) {
                                 layoutParams.width = (int) (width / screenSizeCoefficient);
                                 layoutParams.height = height;
@@ -33323,12 +35075,12 @@ public class GT {
                             }
                             break;
 
-                        case type_fullScreen://自适应全屏
+                        case TYPE_FULL_SCREEN://自适应全屏
                             layoutParams.width = width;
                             layoutParams.height = height;
                             break;
 
-                        case type_self_adaption://自适应
+                        case TYPE_SELF_ADAPTION://自适应
                             layoutParams.width = (int) (width / screenSizeCoefficient);
                             layoutParams.height = (int) (height / screenSizeCoefficient);
                             break;
@@ -33455,6 +35207,9 @@ public class GT {
 
             @Override
             public int onStartCommand(Intent intent, int flags, int startId) {
+                if (intent != null) {
+                    mArguments = intent.getExtras();
+                }
                 loadData(this, intent, view);
                 return super.onStartCommand(intent, flags, startId);
             }
@@ -33465,9 +35220,8 @@ public class GT {
              * @param context
              * @param toFragment
              */
-            public void startFloatingWindow(Context context, Class<?> toFragment) {
-                startService(new Intent(context, toFragment));
-
+            public void startFloatingWindow(Context context, Class<?> toFragment, Bundle... bundles) {
+                GT.startFloatingWindow(context, toFragment, bundles);
             }
 
             /**
@@ -33475,8 +35229,28 @@ public class GT {
              *
              * @param toFragment
              */
-            public void startFloatingWindow(Class<?> toFragment) {
-                startService(new Intent(this, toFragment));
+            public void startFloatingWindow(Context context, GT_FloatingWindow.BaseFloatingWindow floatingWindow) {
+                startFloatingWindow(context, floatingWindow.getClass(), floatingWindow.getArguments());
+                floatingWindow = null;
+            }
+
+            /**
+             * 启动悬浮窗
+             *
+             * @param toFragment
+             */
+            public void startFloatingWindow(Class<?> toFragment, Bundle... bundles) {
+                GT.startFloatingWindow(this, toFragment, bundles);
+            }
+
+            /**
+             * 启动悬浮窗
+             *
+             * @param toFragment
+             */
+            public void startFloatingWindow(GT_FloatingWindow.BaseFloatingWindow floatingWindow) {
+                startFloatingWindow(floatingWindow.getClass(), floatingWindow.getArguments());
+                floatingWindow = null;
             }
 
             public static void startView(ViewGroup viewGroup, GT_View.BaseView view) {
@@ -33663,6 +35437,17 @@ public class GT {
             public Context context;
             private String cacheKey;//缓存标识
 
+            private Bundle mArguments;
+
+            public void setArguments(@Nullable Bundle args) {
+                mArguments = args;
+            }
+
+            @Nullable
+            final public Bundle getArguments() {
+                return mArguments;
+            }
+
             //是否缓存开启数据
             protected boolean isCacheData() {
                 return false;
@@ -33685,15 +35470,28 @@ public class GT {
             }
 
             public BasePopupWindow() {
+                if (context == null) {
+                    context = GT.getActivity();
+                }
+                onCreate(context, mArguments);
+            }
 
+            public BasePopupWindow(Context context, Bundle bundle) {
+                onCreate(context, bundle);
             }
 
             public BasePopupWindow(Context context) {
+                onCreate(context, mArguments);
+            }
+
+            public void onCreate(Context context, Bundle bundle) {
                 buildData();
                 if (layout <= 0) {
                     layout = loadLayout();
                 }
+                if (layout <= 0) return;
                 this.context = context;
+                mArguments = bundle;
                 view = LayoutInflater.from(context).inflate(layout, null, false);
                 popWindow = new PopupWindow(view, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, true);
 
@@ -33917,6 +35715,10 @@ public class GT {
                 super(context);
             }
 
+            public AnnotationPopupWindow(Context context, Bundle bundle) {
+                super(context, bundle);
+            }
+
             public void setLayout(int resLayout) {
                 layout = resLayout;
             }
@@ -33955,6 +35757,9 @@ public class GT {
                 super(context);
             }
 
+            public DataBindingPopupWindow(Context context, Bundle bundle) {
+                super(context, bundle);
+            }
         }
 
     }
@@ -33992,6 +35797,7 @@ public class GT {
             private View view;
             protected int layout;
             public Context context;
+            private Bundle mArguments;
             protected GT_Animation animation = GT_Animation.getDefault();
 
             //默认显示隐藏动画
@@ -34013,6 +35819,14 @@ public class GT {
                 this.time = time;
             }
 
+            @Nullable
+            final public Bundle getArguments() {
+                return mArguments;
+            }
+
+            public void setArguments(@Nullable Bundle args) {
+                mArguments = args;
+            }
 
             /**
              * 设置隐藏背景
@@ -34205,7 +36019,7 @@ public class GT {
                 init(context, null);
             }
 
-            private void init(Context context, ViewGroup viewGroup) {
+            public void init(Context context, ViewGroup viewGroup) {
                 if (context == null) return;
                 bingData();
                 this.context = context;
@@ -34538,6 +36352,17 @@ public class GT {
             public static String defaultPhone = "Mozilla/5.0 (Linux; Android 14; NE2210 Build/UKQ1.230924.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/119.0.6045.66 Mobile Safari/537.36";
             public static String defaultPC = "Mozilla/5.0 (WindowUtilss NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/43.0.2357.134 Safari/537.36";
 
+            private Bundle mArguments;
+
+            public void setArguments(@Nullable Bundle args) {
+                mArguments = args;
+            }
+
+            @Nullable
+            final public Bundle getArguments() {
+                return mArguments;
+            }
+
             public boolean isAddListener() {
                 return isAddListener;
             }
@@ -34558,6 +36383,14 @@ public class GT {
 
             public BaseWebView(@NonNull Context context, ViewGroup viewGroup) {
                 super(context);
+                onCreateView(context);
+                if (viewGroup == null) return;
+                viewGroup.addView(this);
+            }
+
+            public BaseWebView(@NonNull Context context, ViewGroup viewGroup, Bundle bundle) {
+                super(context);
+                mArguments = bundle;
                 onCreateView(context);
                 if (viewGroup == null) return;
                 viewGroup.addView(this);
@@ -34765,6 +36598,8 @@ public class GT {
 
                 //设置背景颜色
                 setBackgroundColor(85621);
+
+                webSettings = getSettings();
             }
 
             public void loadData(Context context, WebView webView) {
@@ -35794,6 +37629,10 @@ public class GT {
                 super(context, viewGroup);
             }
 
+            public AnnotationWebView(@NonNull Context context, ViewGroup viewGroup, Bundle bundle) {
+                super(context, viewGroup, bundle);
+            }
+
             public AnnotationWebView(@NonNull Context context, @Nullable AttributeSet attrs) {
                 super(context, attrs);
             }
@@ -35846,6 +37685,10 @@ public class GT {
 
             public DataBindingWebView(@NonNull Context context, ViewGroup viewGroup) {
                 super(context, viewGroup);
+            }
+
+            public DataBindingWebView(@NonNull Context context, ViewGroup viewGroup, Bundle bundle) {
+                super(context, viewGroup, bundle);
             }
 
             public DataBindingWebView(@NonNull Context context, @Nullable AttributeSet attrs) {
@@ -36152,6 +37995,16 @@ public class GT {
             private long time;
             public int NOTIFYID = 0x1079; //通知id
             private String cacheKey;//缓存标识
+            private Bundle mArguments;
+
+            public void setArguments(@Nullable Bundle args) {
+                mArguments = args;
+            }
+
+            @Nullable
+            final public Bundle getArguments() {
+                return mArguments;
+            }
 
             //是否缓存开启数据
             protected boolean isCacheData() {
@@ -36245,6 +38098,15 @@ public class GT {
             }
 
             public BaseNotification(Context context) {
+                onCreate(context);
+            }
+
+            public BaseNotification(Context context, Bundle bundles) {
+                mArguments = bundles;
+                onCreate(context);
+            }
+
+            public void onCreate(Context context) {
                 this.context = context;
                 builder = new NotificationCompat.Builder(context);
                 bingData();
@@ -36563,6 +38425,11 @@ public class GT {
                 registerNotificationReceiver(context);
             }
 
+            public AnnotationNotification(Context context, Bundle bundle) {
+                super(context, bundle);
+                registerNotificationReceiver(context);
+            }
+
             private int[] clickViews;
 
             //注册通知广播
@@ -36705,7 +38572,9 @@ public class GT {
                 super(context);
             }
 
-
+            public DataBindingNotification(Context context, Bundle bundle) {
+                super(context, bundle);
+            }
         }
 
         /**
@@ -37522,12 +39391,11 @@ public class GT {
                     ViewGroup viewGroup = (ViewGroup) view;
                     viewBean.setView(viewGroup);
                     viewBean.settClass(viewGroup.getClass());
-                    if (viewGroup.getId() != -1) {
+                    if (viewGroup.getId() > 1079) {
                         viewBean.setViewId(viewGroup.getId());
                         String idName = context.getResources().getResourceEntryName(viewGroup.getId());
                         viewBean.setViewName(idName);
                     }
-//                logt("views:" + view + ":" + view.getId());
                     viewBeanList.put(viewBean.getViewName(), viewBean);
                     for (int index = 0; index < viewGroup.getChildCount(); index++) {
                         analysisLayout(context, viewGroup.getChildAt(index));//回调解析
@@ -38972,8 +40840,7 @@ public class GT {
                 this.context = context;
                 // 读取配置
                 TypedArray array = context.obtainStyledAttributes(attrs, com.gsls.gt.R.styleable.GTImageView);
-                TypedArray typedArray = context.obtainStyledAttributes(attrs, androidx.appcompat.R.styleable.AppCompatImageView);
-                int resourceId = typedArray.getResourceId(androidx.appcompat.R.styleable.AppCompatImageView_android_src, -1);
+                int resourceId = array.getResourceId(R.styleable.GTImageView_src, -1);
                 resources = context.getResources();
                 if (resourceId > 0) {
                     instance.execute(() -> {
@@ -39803,6 +41670,491 @@ public class GT {
             }
 
         }
+
+        /**
+         * 摩天轮
+         */
+        public static class CircleMenuLayout extends ViewGroup {
+            private int mRadius;
+            /**
+             * 该容器内child item的默认尺寸
+             */
+            private static final float RADIO_DEFAULT_CHILD_DIMENSION = 1 / 4f;
+            /**
+             * 菜单的中心child的默认尺寸
+             */
+            private float RADIO_DEFAULT_CENTERITEM_DIMENSION = 1 / 3f;
+            /**
+             * 该容器的内边距,无视padding属性，如需边距请用该变量
+             */
+            private static final float RADIO_PADDING_LAYOUT = 1 / 12f;
+
+            /**
+             * 当每秒移动角度达到该值时，认为是快速移动
+             */
+            private static final int FLINGABLE_VALUE = 300;
+
+            /**
+             * 如果移动角度达到该值，则屏蔽点击
+             */
+            private static final int NOCLICK_VALUE = 3;
+
+            /**
+             * 当每秒移动角度达到该值时，认为是快速移动
+             */
+            private int mFlingableValue = FLINGABLE_VALUE;
+            /**
+             * 该容器的内边距,无视padding属性，如需边距请用该变量
+             */
+            private float mPadding;
+            /**
+             * 布局时的开始角度
+             */
+            private double mStartAngle = 0;
+
+            /**
+             * 检测按下到抬起时旋转的角度
+             */
+            private float mTmpAngle;
+            /**
+             * 检测按下到抬起时使用的时间
+             */
+            private long mDownTime;
+
+            /**
+             * 判断是否正在自动滚动
+             */
+            private boolean isFling;
+
+            //旋转速度
+            private final int DEFAULT_ROTATIONAL_SPEED = 10;//默认旋转速度
+            private int mRotationalSpeed = DEFAULT_ROTATIONAL_SPEED;//旋转速度
+
+            public void setRotationalSpeed(int rotationalSpeed) {
+                this.mRotationalSpeed = rotationalSpeed;
+            }
+
+            private int id_circle_menu_item_center;
+
+            /**
+             * 是否自动旋转摩天轮
+             */
+            private boolean mRotate = false;//默认自动旋转
+
+            /**
+             * 开始旋转
+             */
+            public void startRotate() {
+                mRotate = true;
+            }
+
+            /**
+             * 暂停旋转
+             */
+            public void pauseRotate() {
+                mRotate = false;
+            }
+
+            /**
+             * 停止旋转
+             */
+            public void stopRotate() {
+                mRotate = false;
+                removeCallbacks(mFlingRunnable);
+                isFling = false;
+            }
+
+            public CircleMenuLayout(Context context, AttributeSet attrs) {
+                super(context, attrs);
+                // 无视padding
+                setPadding(0, 0, 0, 0);
+                initAttrs(context, attrs);
+            }
+
+            private void initAttrs(Context context, AttributeSet attrs) {
+                TypedArray typedArray = context.obtainStyledAttributes(attrs, R.styleable.CircleMenuLayout);
+                mRotate = typedArray.getBoolean(R.styleable.CircleMenuLayout_rotate, false);
+                mRotationalSpeed = typedArray.getInteger(R.styleable.CircleMenuLayout_rotationalSpeed, DEFAULT_ROTATIONAL_SPEED);
+            }
+
+            /**
+             * 设置布局的宽高，并策略menu item宽高
+             */
+            @Override
+            protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+                int resWidth = 0;
+                int resHeight = 0;
+
+                /**
+                 * 根据传入的参数，分别获取测量模式和测量值
+                 */
+                int width = MeasureSpec.getSize(widthMeasureSpec);
+                int widthMode = MeasureSpec.getMode(widthMeasureSpec);
+
+                int height = MeasureSpec.getSize(heightMeasureSpec);
+                int heightMode = MeasureSpec.getMode(heightMeasureSpec);
+
+                /**
+                 * 如果宽或者高的测量模式非精确值
+                 */
+                if (widthMode != MeasureSpec.EXACTLY
+                        || heightMode != MeasureSpec.EXACTLY) {
+                    // 主要设置为背景图的高度
+                    resWidth = getSuggestedMinimumWidth();
+                    // 如果未设置背景图片，则设置为屏幕宽高的默认值
+                    resWidth = resWidth == 0 ? getDefaultWidth() : resWidth;
+
+                    resHeight = getSuggestedMinimumHeight();
+                    // 如果未设置背景图片，则设置为屏幕宽高的默认值
+                    resHeight = resHeight == 0 ? getDefaultWidth() : resHeight;
+                } else {
+                    // 如果都设置为精确值，则直接取小值；
+                    resWidth = resHeight = Math.min(width, height);
+                }
+
+                setMeasuredDimension(resWidth, resHeight);
+
+                // 获得半径
+                mRadius = Math.max(getMeasuredWidth(), getMeasuredHeight());
+
+                // menu item数量
+                final int count = getChildCount();
+                // menu item尺寸
+                int childSize = (int) (mRadius * RADIO_DEFAULT_CHILD_DIMENSION);
+                // menu item测量模式
+                int childMode = MeasureSpec.EXACTLY;
+
+                // 迭代测量
+                for (int i = 0; i < count; i++) {
+                    final View child = getChildAt(i);
+
+                    if (child.getVisibility() == GONE) {
+                        continue;
+                    }
+
+                    // 计算menu item的尺寸；以及和设置好的模式，去对item进行测量
+                    int makeMeasureSpec = -1;
+
+                    if (child.getId() == id_circle_menu_item_center) {
+                        makeMeasureSpec = MeasureSpec.makeMeasureSpec(
+                                (int) (mRadius * RADIO_DEFAULT_CENTERITEM_DIMENSION),
+                                childMode);
+                    } else {
+                        makeMeasureSpec = MeasureSpec.makeMeasureSpec(childSize,
+                                childMode);
+                    }
+                    child.measure(makeMeasureSpec, makeMeasureSpec);
+                }
+
+                mPadding = RADIO_PADDING_LAYOUT * mRadius;
+
+            }
+
+            /**
+             * MenuItem的点击事件接口
+             *
+             * @author zhy
+             */
+            public interface OnMenuItemClickListener {
+                void itemClick(View view, int pos);
+
+                void itemCenterClick(View view);
+            }
+
+            /**
+             * MenuItem的点击事件接口
+             */
+            private OnMenuItemClickListener mOnMenuItemClickListener;
+
+            /**
+             * 设置MenuItem的点击事件接口
+             *
+             * @param mOnMenuItemClickListener
+             */
+            public void setOnMenuItemClickListener(
+                    OnMenuItemClickListener mOnMenuItemClickListener) {
+                this.mOnMenuItemClickListener = mOnMenuItemClickListener;
+            }
+
+            /**
+             * 设置menu item的位置
+             */
+            @Override
+            protected void onLayout(boolean changed, int l, int t, int r, int b) {
+                int layoutRadius = mRadius;
+
+                // Laying out the child views
+                final int childCount = getChildCount();
+
+                int left, top;
+                // menu item 的尺寸
+                int cWidth = (int) (layoutRadius * RADIO_DEFAULT_CHILD_DIMENSION);
+
+                // 根据menu item的个数，计算角度
+                float angleDelay = (float) 360 / (getChildCount() - 1);
+
+                // 遍历去设置menuitem的位置
+                for (int i = 0; i < childCount; i++) {
+                    final View child = getChildAt(i);
+
+                    if (child.getId() == id_circle_menu_item_center)
+                        continue;
+
+                    if (child.getVisibility() == GONE) {
+                        continue;
+                    }
+
+                    mStartAngle %= 360;
+
+                    // 计算，中心点到menu item中心的距离
+                    float tmp = layoutRadius / 2f - cWidth / 2 - mPadding;
+
+                    // tmp cosa 即menu item中心点的横坐标
+                    left = layoutRadius
+                            / 2
+                            + (int) Math.round(tmp
+                            * Math.cos(Math.toRadians(mStartAngle)) - 1 / 2f
+                            * cWidth);
+                    // tmp sina 即menu item的纵坐标
+                    top = layoutRadius
+                            / 2
+                            + (int) Math.round(tmp
+                            * Math.sin(Math.toRadians(mStartAngle)) - 1 / 2f
+                            * cWidth);
+
+                    child.layout(left, top, left + cWidth, top + cWidth);
+                    // 叠加尺寸
+                    mStartAngle += angleDelay;
+                }
+
+                // 找到中心的view，如果存在设置onclick事件
+                View cView = findViewById(id_circle_menu_item_center);
+                if (cView != null) {
+                    cView.setOnClickListener(v -> {
+                        if (mOnMenuItemClickListener != null) {
+                            mOnMenuItemClickListener.itemCenterClick(v);
+                        }
+                    });
+                    // 设置center item位置
+                    int cl = layoutRadius / 2 - cView.getMeasuredWidth() / 2;
+                    int cr = cl + cView.getMeasuredWidth();
+                    cView.layout(cl, cl, cr, cr);
+                }
+
+            }
+
+            /**
+             * 记录上一次的x，y坐标
+             */
+            private float mLastX;
+            private float mLastY;
+
+            /**
+             * 自动滚动的Runnable
+             */
+            private AutoFlingRunnable mFlingRunnable;
+
+            @Override
+            public boolean dispatchTouchEvent(MotionEvent event) {
+                float x = event.getX();
+                float y = event.getY();
+                switch (event.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+
+                        mLastX = x;
+                        mLastY = y;
+                        mDownTime = System.currentTimeMillis();
+                        mTmpAngle = 0;
+
+                        // 如果当前已经在快速滚动
+                        if (isFling) {
+                            // 移除快速滚动的回调
+                            removeCallbacks(mFlingRunnable);
+                            isFling = false;
+                            return super.dispatchTouchEvent(event);
+                        }
+
+                        break;
+                    case MotionEvent.ACTION_MOVE:
+                        //获得开始的角度
+                        float start = getAngle(mLastX, mLastY);
+                        //获得当前的角度
+                        float end = getAngle(x, y);
+                        // 如果是一、四象限，则直接end-start，角度值都是正值
+                        if (getQuadrant(x, y) == 1 || getQuadrant(x, y) == 4) {
+                            mStartAngle += end - start;
+                            mTmpAngle += end - start;
+                        } else {// 二、三象限，色角度值是负值
+                            mStartAngle += start - end;
+                            mTmpAngle += start - end;
+                        }
+                        // 重新布局
+                        requestLayout();
+
+                        mLastX = x;
+                        mLastY = y;
+
+                        break;
+                    case MotionEvent.ACTION_UP:
+                        // 计算，每秒移动的角度
+                        float anglePerSecond = mTmpAngle * 1000 / (System.currentTimeMillis() - mDownTime);
+                        // 如果达到该值认为是快速移动
+                        if (Math.abs(anglePerSecond) > mFlingableValue && !isFling) {
+                            // post一个任务，去自动滚动，并进行旋转速率自动衰减
+                            post(mFlingRunnable = new AutoFlingRunnable(anglePerSecond, true));
+                        } else {//如果没有达到快速旋转，那就按默认的旋转速率来旋转
+                            if (mRotate) {
+                                post(mFlingRunnable = new AutoFlingRunnable(mRotationalSpeed, false));
+                            }
+                        }
+                        // 如果当前旋转角度超过NOCLICK_VALUE屏蔽点击
+                        if (Math.abs(mTmpAngle) > NOCLICK_VALUE) return true;
+                }
+                return super.dispatchTouchEvent(event);
+            }
+
+            /**
+             * 主要为了action_down时，返回true
+             */
+            @Override
+            public boolean onTouchEvent(MotionEvent event) {
+                return true;
+            }
+
+            /**
+             * 根据触摸的位置，计算角度
+             *
+             * @param xTouch
+             * @param yTouch
+             * @return
+             */
+            private float getAngle(float xTouch, float yTouch) {
+                double x = xTouch - (mRadius / 2d);
+                double y = yTouch - (mRadius / 2d);
+                return (float) (Math.asin(y / Math.hypot(x, y)) * 180 / Math.PI);
+            }
+
+            /**
+             * 根据当前位置计算象限
+             *
+             * @param x
+             * @param y
+             * @return
+             */
+            private int getQuadrant(float x, float y) {
+                int tmpX = (int) (x - mRadius / 2);
+                int tmpY = (int) (y - mRadius / 2);
+                if (tmpX >= 0) {
+                    return tmpY >= 0 ? 4 : 1;
+                } else {
+                    return tmpY >= 0 ? 3 : 2;
+                }
+            }
+
+            /**
+             * 用于初始化加载动态布局的
+             *
+             * @author zhy
+             */
+            public interface OnInitLayoutListener<T> {
+                void onLoadLayout(View view, T item, int index);
+            }
+
+            /**
+             * 动态设置摩天轮布局
+             *
+             * @param id_circle_menu_item_center 摩天轮中心ID
+             * @param layout                     摩天轮 item单个布局
+             * @param cpList                     摩天轮数据
+             * @param onInitLayoutListener       布局和实体类的回调
+             * @param <T>
+             */
+            public <T> void setItemLayout(int id_circle_menu_item_center, int layout, List<T> cpList, OnInitLayoutListener<T> onInitLayoutListener) {
+                this.id_circle_menu_item_center = id_circle_menu_item_center;
+                if (cpList == null || cpList.isEmpty()) return;
+                LayoutInflater mInflater = LayoutInflater.from(getContext());
+                for (int index = 0; index < cpList.size(); index++) {
+                    View view = mInflater.inflate(layout, this, false);
+                    onInitLayoutListener.onLoadLayout(view, cpList.get(index), index);
+                    addView(view);// 添加view到容器中
+                }
+                if (mRotate) {
+                    post(mFlingRunnable = new AutoFlingRunnable(mRotationalSpeed, false));
+                }
+            }
+
+            /**
+             * 如果每秒旋转角度到达该值，则认为是自动滚动
+             *
+             * @param mFlingableValue
+             */
+            public void setFlingableValue(int mFlingableValue) {
+                this.mFlingableValue = mFlingableValue;
+            }
+
+            /**
+             * 设置内边距的比例
+             *
+             * @param mPadding
+             */
+            public void setPadding(float mPadding) {
+                this.mPadding = mPadding;
+            }
+
+            /**
+             * 获得默认该layout的尺寸
+             *
+             * @return
+             */
+            private int getDefaultWidth() {
+                WindowManager wm = (WindowManager) getContext().getSystemService(
+                        Context.WINDOW_SERVICE);
+                DisplayMetrics outMetrics = new DisplayMetrics();
+                wm.getDefaultDisplay().getMetrics(outMetrics);
+                return Math.min(outMetrics.widthPixels, outMetrics.heightPixels);
+            }
+
+            /**
+             * 自动滚动的任务
+             *
+             * @author zhy
+             */
+            private class AutoFlingRunnable implements Runnable {
+
+                private float angelPerSecond;//衰减速率值
+                private boolean isDamping;//是否旋转速度自动衰减
+
+                public AutoFlingRunnable(float velocity, boolean isDamping) {
+                    this.angelPerSecond = velocity;
+                    this.isDamping = isDamping;
+                }
+
+                public void run() {
+                    //外部控制暂停摩天轮的旋转
+                    isFling = true;
+
+                    // 如果小于20,则停止
+                    if ((int) Math.abs(angelPerSecond) <= mRotationalSpeed) {
+                        angelPerSecond = mRotationalSpeed;
+                        isDamping = false;
+                        if (!mRotate) return;
+                    }
+
+                    // 不断改变mStartAngle，让其滚动，/30为了避免滚动太快
+                    mStartAngle += (angelPerSecond / 30);
+                    if (isDamping) {
+                        // 逐渐减小这个值
+                        angelPerSecond /= 1.0366F;
+                    }
+
+                    postDelayed(this, 10);
+                    // 重新布局
+                    requestLayout();
+                }
+            }
+
+        }
+
 
     }
 
@@ -43780,19 +46132,89 @@ public class GT {
                 if (LOG.GT_LOG_TF) {
                     GT.errt("e:" + e);
                 }
-//                e.printStackTrace();
             }
             try {
                 if (clazz == null) return null;
                 obj = clazz.newInstance();
             } catch (IllegalAccessException e) {
                 GT.errt("e:" + e);
-//                e.printStackTrace();
             } catch (InstantiationException e) {
                 GT.errt("e:" + e);
-//                e.printStackTrace();
             }
             return obj;
+        }
+
+
+        /**
+         * 解析 class 反射 Object ，带参数的构造方法
+         *
+         * @param obj        反射类 class
+         * @param valueTypes 构造参数类型
+         * @param objs       构造参数
+         * @param <T>
+         * @return
+         */
+        public static <T> Object classToObject(Object obj, Class<?>[] valueTypes, Object[] objs) {
+            String data = String.valueOf(obj);
+            if (data.contains("java.util.List")) {
+                return new ArrayList<Object>();
+            }
+            String[] strs = obj.toString().split(" ");
+            String str = "";
+            if (strs.length == 2) {
+                str = strs[1];
+            } else {
+                str = obj.toString();
+            }
+            Class<?> clazz = null;
+            try {
+                clazz = Class.forName(str);
+            } catch (ClassNotFoundException e) {
+                if (LOG.GT_LOG_TF) {
+                    GT.errt("e:" + e);
+                }
+            }
+            try {
+                if (clazz == null) return null;
+                // 获取指定参数类型的构造方法
+                Constructor<?> constructor = clazz.getConstructor(valueTypes);
+                // 使用构造方法创建对象，并传入参数
+                obj = constructor.newInstance(objs);
+            } catch (NoSuchMethodException e) {
+            } catch (InvocationTargetException e) {
+                throw new RuntimeException(e);
+            } catch (IllegalAccessException e) {
+                throw new RuntimeException(e);
+            } catch (InstantiationException e) {
+                throw new RuntimeException(e);
+            }
+            return obj;
+        }
+
+        /**
+         * 解析 class 反射 Object ，带参数的构造方法
+         *
+         * @param clazz      反射类 class
+         * @param valueTypes 构造参数类型
+         * @param objs       构造参数
+         * @param <T>
+         * @return
+         */
+        public static <T> Object classToObject(Class<T> clazz, Class<?>[] valueTypes, Object[] objs) {
+            try {
+                // 获取指定参数类型的构造方法
+                Constructor<?> constructor = clazz.getConstructor(valueTypes);
+                // 使用构造方法创建对象，并传入参数
+                return constructor.newInstance(objs);
+            } catch (NoSuchMethodException e) {
+            } catch (InvocationTargetException e) {
+                throw new RuntimeException(e);
+            } catch (IllegalAccessException e) {
+                throw new RuntimeException(e);
+            } catch (InstantiationException e) {
+                throw new RuntimeException(e);
+            }
+            return null;
         }
 
         /**
@@ -43869,7 +46291,7 @@ public class GT {
         public static <T> T getGenericityObject(Object thisObj) {
             Class<?> classStr = AnnotationAssist.getGenericityClass(thisObj);
             //根据 class 反射出实体类
-            return (T) new AnnotationAssist().classToObject(classStr);
+            return (T) AnnotationAssist.classToObject(classStr);
         }
 
         /**
@@ -43912,18 +46334,11 @@ public class GT {
          */
         public static <T> T setReflectMethodValue(Object setObj, String setMethodName, Class<T> returnType, Class<?> setValueTypeClass, Object... setValue) {
             if (setObj == null) return (T) "false";
-//            logt("进入反射:" + setObj);
-//            logt("被调用的方法名:" + setMethodName);
-//            logt("设置值的类型:" + setValueTypeClass);
-
             Method m = null;
             try {
                 m = setObj.getClass().getMethod(setMethodName, setValueTypeClass);
                 m.setAccessible(true);
-//                logt("被设置操作的类:" + setObj);
-//                logt("设置的值:" + setValue);
                 T invoke = (T) m.invoke(setObj, setValue);//调用方法
-//                logt("该方法返回值的类型:" + returnType);
                 if (returnType != null) {
                     return invoke;
                 } else {
@@ -44090,6 +46505,30 @@ public class GT {
         }
 
         /**
+         * 设置反射给变量值
+         *
+         * @param obj 反射的类
+         * @param map 赋值的变量名,值
+         * @return 返回反射后的对象
+         */
+        public static <T> T setReflectVariateValue(T obj, Map<String, Object> map) {
+            Class aClass = obj.getClass();
+            try {
+                for (String key : map.keySet()) {
+                    Object value = map.get(key);
+                    Field name = aClass.getDeclaredField(key);
+                    name.setAccessible(true);
+                    name.set(obj, value);
+                }
+                return obj;
+            } catch (NoSuchFieldException | IllegalAccessException e) {
+                GT.err("e:" + e);
+                e.printStackTrace();
+            }
+            return obj;
+        }
+
+        /**
          * 反射该类所有的变量值 (可接受类型 class、String(类包名)、实体类)
          *
          * @param classz
@@ -44138,6 +46577,29 @@ public class GT {
                 e.printStackTrace();
                 return null;
             }
+        }
+
+        /**
+         * 字符串转Class
+         *
+         * @param "com.gsls.gt.Person"、Person.class
+         * @param T
+         * @return
+         */
+        public static <T> T ObjToObj(Object obj) {
+            try {
+                if (obj instanceof String) {
+                    obj = AnnotationAssist.stringToClass(obj.toString());
+                }
+
+                if (obj instanceof Class<?>) {
+                    Class<?> objClass = (Class<?>) obj;
+                    return (T) AnnotationAssist.classToObject(objClass);
+                }
+            } catch (Exception e) {
+
+            }
+            return (T) obj;
         }
 
         /**
@@ -46116,7 +48578,7 @@ public class GT {
                     GT.log("无障碍服务——连接中");
                 mService = this;
                 RUN_STATE = true;
-
+                GT.EventBus.registers(this);
 
             }
 
@@ -46187,6 +48649,7 @@ public class GT {
                 }
                 mService = null;
                 RUN_STATE = false;
+                GT.EventBus.unregisters(this);
             }
 
             /**
@@ -46205,11 +48668,85 @@ public class GT {
             }
 
 
-            protected void MyGesture() {//仿滑动
+            //仿滑动- 从左往右滑动
+            protected void MyGesture() {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                     Path path = new Path();
                     path.moveTo(1000, 1000);//滑动起点
                     path.lineTo(2000, 1000);//滑动终点
+                    GestureDescription.Builder builder = new GestureDescription.Builder();
+                    GestureDescription description = builder.addStroke(new GestureDescription.StrokeDescription(path, 100L, 100L)).build();
+                    //100L 第一个是开始的时间，第二个是持续时间
+                    dispatchGesture(description, new AccessibilityServiceUtils.MyCallBack(), null);
+                }
+            }
+
+            /**
+             * 万能滑动
+             *
+             * @param x   X轴滑动起点
+             * @param tox X轴滑动重终点
+             * @param y   y轴滑动起点
+             * @param toy y轴滑动重终点
+             */
+            protected void slidingUniversal(float x, float tox, float y, float toy) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    Path path = new Path();
+                    path.moveTo(x, y);//滑动起点
+                    path.lineTo(tox, toy);//滑动终点
+                    GestureDescription.Builder builder = new GestureDescription.Builder();
+                    GestureDescription description = builder.addStroke(new GestureDescription.StrokeDescription(path, 100L, 100L)).build();
+                    //100L 第一个是开始的时间，第二个是持续时间
+                    dispatchGesture(description, new AccessibilityServiceUtils.MyCallBack(), null);
+                }
+            }
+
+
+            //从左滑动
+            protected void slideLeft() {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    Path path = new Path();
+                    path.moveTo(1000, 500);//滑动起点
+                    path.lineTo(500, 500);//滑动终点
+                    GestureDescription.Builder builder = new GestureDescription.Builder();
+                    GestureDescription description = builder.addStroke(new GestureDescription.StrokeDescription(path, 100L, 100L)).build();
+                    //100L 第一个是开始的时间，第二个是持续时间
+                    dispatchGesture(description, new AccessibilityServiceUtils.MyCallBack(), null);
+                }
+            }
+
+            //向右滑动
+            protected void slideRight() {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    Path path = new Path();
+                    path.moveTo(500, 500);//滑动起点
+                    path.lineTo(1000, 500);//滑动终点
+                    GestureDescription.Builder builder = new GestureDescription.Builder();
+                    GestureDescription description = builder.addStroke(new GestureDescription.StrokeDescription(path, 100L, 100L)).build();
+                    //100L 第一个是开始的时间，第二个是持续时间
+                    dispatchGesture(description, new AccessibilityServiceUtils.MyCallBack(), null);
+                }
+            }
+
+            //向上滑动
+            protected void slideUp() {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    Path path = new Path();
+                    path.moveTo(500, 1300);//滑动起点
+                    path.lineTo(500, 300);//滑动终点
+                    GestureDescription.Builder builder = new GestureDescription.Builder();
+                    GestureDescription description = builder.addStroke(new GestureDescription.StrokeDescription(path, 100L, 100L)).build();
+                    //100L 第一个是开始的时间，第二个是持续时间
+                    dispatchGesture(description, new AccessibilityServiceUtils.MyCallBack(), null);
+                }
+            }
+
+            //向下滑动
+            protected void slideDown() {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    Path path = new Path();
+                    path.moveTo(500, 300);//滑动起点
+                    path.lineTo(500, 1300);//滑动终点
                     GestureDescription.Builder builder = new GestureDescription.Builder();
                     GestureDescription description = builder.addStroke(new GestureDescription.StrokeDescription(path, 100L, 100L)).build();
                     //100L 第一个是开始的时间，第二个是持续时间

@@ -76,7 +76,6 @@ public class FileUtils {
 
     public static String query(String filePath) {
 
-        //TODO bug问题
         int lastIndexOf = filePath.lastIndexOf("\\") + 1;
         String queryPath = filePath.substring(0, lastIndexOf);
         String fileName = filePath.substring(lastIndexOf);
@@ -414,7 +413,7 @@ public class FileUtils {
             DataBindingUtils.log("error empty directory");
             return null;
         }
-        List<String> s = new ArrayList<String>();
+        List<String> s = new ArrayList<>();
         for (int i = 0; i < files.length; i++) {
             s.add(files[i].getAbsolutePath());
         }

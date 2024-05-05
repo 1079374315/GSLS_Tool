@@ -16,16 +16,15 @@ public @interface GT_DataBinding {
     String setBindingType(); //设置绑定类型
 
     //提供选择的绑定类型
-    String Activity = "Activity";
-    String Fragment = "Fragment";
-    String DialogFragment = "DialogFragment";
-    String FloatingWindow = "FloatingWindow";
-    String PopupWindow = "PopupWindow";
-    String Adapter = "Adapter";
-    String View = "View";
+    String Activity = "ClassType.ACTIVITY";
+    String Fragment = "ClassType.FRAGMENT";
+    String DialogFragment = "ClassType.DIALOG_FRAGMENT_X";
+    String FloatingWindow = "ClassType.FLOATING_WINDOW";
+    String PopupWindow = "ClassType.POPUP_WINDOW";
+    String Adapter = "ClassType.ADAPTER";
+    String View = "ClassType.VIEW";
 
-    String WebView = "WebView";
-
-    String Notification = "Notification";
+    String WebView = "ClassType.WEB_VIEW";
+    String Notification = "ClassType.NOTIFICATION";
 
 }
