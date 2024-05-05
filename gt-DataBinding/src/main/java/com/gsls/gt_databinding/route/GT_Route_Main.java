@@ -32,7 +32,7 @@ import javax.tools.JavaFileObject;
 public class GT_Route_Main extends AbstractProcessor {
 
     private final List<BindingBean> bindingBeanList = new ArrayList<>();
-    private final Map<String, ClassType> bindingmap = new HashMap<>();
+    private final Map<String, String> bindingmap = new HashMap<>();
 
     /**
      * 必须要的
@@ -162,25 +162,25 @@ public class GT_Route_Main extends AbstractProcessor {
 
             //判断对象类型
             if (elementUtils != null) {
-                TypeMirror activityYM = elementUtils.getTypeElement(ClassType.ACTIVITY.getClassName()).asType();
-                TypeMirror viewYM = elementUtils.getTypeElement(ClassType.VIEW.getClassName()).asType();
-                TypeMirror fragmentYM = elementUtils.getTypeElement(ClassType.FRAGMENT.getClassName()).asType();
-                TypeMirror fragmentYM_X = elementUtils.getTypeElement(ClassType.FRAGMENT_X.getClassName()).asType();
-                TypeMirror dialogYM = elementUtils.getTypeElement(ClassType.DIALOG_FRAGMENT.getClassName()).asType();
-                TypeMirror dialogYM_X = elementUtils.getTypeElement(ClassType.DIALOG_FRAGMENT_X.getClassName()).asType();
-                TypeMirror viewModelYM_X = elementUtils.getTypeElement(ClassType.VIEW_MODEL.getClassName()).asType();
+                TypeMirror activityYM = elementUtils.getTypeElement(ClassType.ACTIVITY).asType();
+                TypeMirror viewYM = elementUtils.getTypeElement(ClassType.VIEW).asType();
+                TypeMirror fragmentYM = elementUtils.getTypeElement(ClassType.FRAGMENT).asType();
+                TypeMirror fragmentYM_X = elementUtils.getTypeElement(ClassType.FRAGMENT_X).asType();
+                TypeMirror dialogYM = elementUtils.getTypeElement(ClassType.DIALOG_FRAGMENT).asType();
+                TypeMirror dialogYM_X = elementUtils.getTypeElement(ClassType.DIALOG_FRAGMENT_X).asType();
+                TypeMirror viewModelYM_X = elementUtils.getTypeElement(ClassType.VIEW_MODEL).asType();
 
-                TypeMirror providerYM = elementUtils.getTypeElement(ClassType.PROVIDER.getClassName()).asType();
-                TypeMirror interceptorYM = elementUtils.getTypeElement(ClassType.INTERCEPTOR.getClassName()).asType();
-                TypeMirror baseViewYM = elementUtils.getTypeElement(ClassType.BASE_VIEW.getClassName()).asType();
-                TypeMirror floatingWindowYM = elementUtils.getTypeElement(ClassType.FLOATING_WINDOW.getClassName()).asType();
-                TypeMirror popupWindowYM = elementUtils.getTypeElement(ClassType.POPUP_WINDOW.getClassName()).asType();
-                TypeMirror notificationYM = elementUtils.getTypeElement(ClassType.NOTIFICATION.getClassName()).asType();
-                TypeMirror webViewYM = elementUtils.getTypeElement(ClassType.WEB_VIEW.getClassName()).asType();
-                TypeMirror adapterYM = elementUtils.getTypeElement(ClassType.ADAPTER.getClassName()).asType();
+                TypeMirror providerYM = elementUtils.getTypeElement(ClassType.PROVIDER).asType();
+                TypeMirror interceptorYM = elementUtils.getTypeElement(ClassType.INTERCEPTOR).asType();
+                TypeMirror baseViewYM = elementUtils.getTypeElement(ClassType.BASE_VIEW).asType();
+                TypeMirror floatingWindowYM = elementUtils.getTypeElement(ClassType.FLOATING_WINDOW).asType();
+                TypeMirror popupWindowYM = elementUtils.getTypeElement(ClassType.POPUP_WINDOW).asType();
+                TypeMirror notificationYM = elementUtils.getTypeElement(ClassType.NOTIFICATION).asType();
+                TypeMirror webViewYM = elementUtils.getTypeElement(ClassType.WEB_VIEW).asType();
+                TypeMirror adapterYM = elementUtils.getTypeElement(ClassType.ADAPTER).asType();
 
-                TypeMirror serviceYM = elementUtils.getTypeElement(ClassType.SERVICE.getClassName()).asType();
-//                TypeMirror content_providerYM = elementUtils.getTypeElement(ClassType.CONTENT_PROVIDER.getClassName()).asType();
+                TypeMirror serviceYM = elementUtils.getTypeElement(ClassType.SERVICE).asType();
+//                TypeMirror content_providerYM = elementUtils.getTypeElement(ClassType.CONTENT_PROVIDER).asType();
 
                 Types types = processingEnv.getTypeUtils();
                 TypeMirror typeMirror = element.asType();
@@ -188,8 +188,8 @@ public class GT_Route_Main extends AbstractProcessor {
                 DataBindingUtils.log("typeMirror:" + typeMirror);
                 DataBindingUtils.log("popupWindowYM:" + popupWindowYM);
 
-                if (bindingmap.keySet().contains(bindingBean.getClassName())) {
-                    bindingBean.setClassType(bindingmap.get(bindingBean.getClassName()));
+                if (bindingmap.keySet().contains(bindingBean)) {
+                    bindingBean.setClassType(bindingmap.get(bindingBean));
                 } else {
                     if (types.isSubtype(typeMirror, activityYM)) {
                         bindingBean.setClassType(ClassType.ACTIVITY);
@@ -365,67 +365,67 @@ public class GT_Route_Main extends AbstractProcessor {
 
 
             for (BindingBean bean : bindingBeanList) {
-                String classType = "ClassType." + bean.getClassType().toString();
-                DataBindingUtils.log("classType:" + classType + " : " + "bean:" + bean.getClassName());
+                String classType = "ClassType." + bean.getClassType();
+                DataBindingUtils.log("classType:" + classType + " : " + "bean:" + bean);
                 switch (bean.getClassType()) {
-                    case ACTIVITY:
+                    case ClassType.ACTIVITY:
                         classType = "ClassType.ACTIVITY";
                         break;
-                    case VIEW:
+                    case ClassType.VIEW:
                         classType = "ClassType.VIEW";
                         break;
-                    case DIALOG_FRAGMENT:
+                    case ClassType.DIALOG_FRAGMENT:
                         classType = "ClassType.DIALOG_FRAGMENT";
                         break;
-                    case DIALOG_FRAGMENT_X:
+                    case ClassType.DIALOG_FRAGMENT_X:
                         classType = "ClassType.DIALOG_FRAGMENT_X";
                         break;
-                    case FRAGMENT:
+                    case ClassType.FRAGMENT:
                         classType = "ClassType.FRAGMENT";
                         break;
-                    case FRAGMENT_X:
+                    case ClassType.FRAGMENT_X:
                         classType = "ClassType.FRAGMENT_X";
                         break;
-                    case VIEW_MODEL:
+                    case ClassType.VIEW_MODEL:
                         classType = "ClassType.VIEW_MODEL";
                         break;
 
-                    case BASE_VIEW:
+                    case ClassType.BASE_VIEW:
                         DataBindingUtils.log("run BASE_VIEW:" + bean.hashCode());
                         classType = "ClassType.BASE_VIEW";
                         break;
-                    case INTERCEPTOR:
+                    case ClassType.INTERCEPTOR:
                         DataBindingUtils.log("run INTERCEPTOR setInterceptors:" + bean.hashCode());
                         classType = "ClassType.INTERCEPTOR";
                         bean.setInterceptors(new String[]{bean.getAnnotateValue().toString()});
                         break;
-                    case PROVIDER:
+                    case ClassType.PROVIDER:
                         classType = "ClassType.PROVIDER";
                         break;
-                    case FLOATING_WINDOW:
+                    case ClassType.FLOATING_WINDOW:
                         classType = "ClassType.FLOATING_WINDOW";
                         break;
-                    case POPUP_WINDOW:
+                    case ClassType.POPUP_WINDOW:
                         classType = "ClassType.POPUP_WINDOW";
                         break;
-                    case NOTIFICATION:
+                    case ClassType.NOTIFICATION:
                         classType = "ClassType.NOTIFICATION";
                         break;
-                    case WEB_VIEW:
+                    case ClassType.WEB_VIEW:
                         classType = "ClassType.WEB_VIEW";
                         break;
-                    case ADAPTER:
+                    case ClassType.ADAPTER:
                         classType = "ClassType.ADAPTER";
                         break;
 
 
-                    case SERVICE:
+                    case ClassType.SERVICE:
                         classType = "ClassType.SERVICE";
                         break;
-                    case CONTENT_PROVIDER:
+                    case ClassType.CONTENT_PROVIDER:
                         classType = "ClassType.CONTENT_PROVIDER";
                         break;
-                    case UNKNOWN:
+                    case ClassType.UNKNOWN:
                         classType = "ClassType.UNKNOWN";
                         break;
                 }
@@ -459,7 +459,7 @@ public class GT_Route_Main extends AbstractProcessor {
                 builder.append("\t\tatlas.put(\"" +
                         bean.getAnnotateValue() + "\", GT_RouteMeta.build(" +
                         classType + ", " +
-                        bean.getClassName() + ".class, \"" +
+                        bean + ".class, \"" +
                         bean.getAnnotateValue() + "\", \"" +
                         bean.getJavaLibraryName() + "\",  \"" +
                         bean.getPackClassPath() + "\",  " +

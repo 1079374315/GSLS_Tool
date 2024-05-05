@@ -3,7 +3,7 @@ package com.gsls.gt_databinding.route;
 import java.util.Arrays;
 
 public class GT_RouteMeta {
-    private ClassType type;             //路由目标类型
+    private String type;             //路由目标类型
     private Class<?> destination;       //路由目标的class
     private String path;                //路由路径
     private String group;               //路由组
@@ -13,11 +13,11 @@ public class GT_RouteMeta {
     public GT_RouteMeta() {
     }
 
-    public static GT_RouteMeta build(ClassType type, Class<?> destination, String path, String group, String packClassPath, String[] interceptors) {
+    public static GT_RouteMeta build(String type, Class<?> destination, String path, String group, String packClassPath, String[] interceptors) {
         return new GT_RouteMeta(type, destination, path, group, packClassPath, interceptors);
     }
 
-    public GT_RouteMeta(ClassType type, Class<?> destination, String path, String group, String packClassPath, String[] interceptors) {
+    public GT_RouteMeta(String type, Class<?> destination, String path, String group, String packClassPath, String[] interceptors) {
         this.type = type;
         this.destination = destination;
         this.path = path;
@@ -35,11 +35,11 @@ public class GT_RouteMeta {
     }
 
 
-    public ClassType getType() {
+    public String getType() {
         return type;
     }
 
-    public GT_RouteMeta setType(ClassType type) {
+    public GT_RouteMeta setType(String type) {
         this.type = type;
         return this;
     }

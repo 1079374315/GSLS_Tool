@@ -29,7 +29,7 @@ public class BindingBean {
     private List<XmlBean> xmlBeanList;//xml布局类型
     private String classCode;//源代码
 
-    private ClassType classType;//对象类型
+    private String classType;//对象类型
 
     private Object annotateValue;//注解信息
 
@@ -69,11 +69,11 @@ public class BindingBean {
         this.annotateValue = annotateValue;
     }
 
-    public ClassType getClassType() {
+    public String getClassType() {
         return classType;
     }
 
-    public void setClassType(ClassType classType) {
+    public void setClassType(String classType) {
         this.classType = classType;
     }
 

@@ -262,6 +262,7 @@ import com.google.zxing.qrcode.QRCodeReader;
 import com.google.zxing.qrcode.QRCodeWriter;
 import com.gsls.gt_databinding.annotation.GT_DaoBuild;
 import com.gsls.gt_databinding.annotation.GT_HttpCallBuild;
+import com.gsls.gt_databinding.route.ClassType;
 import com.gsls.gt_databinding.route.GT_RouteMeta;
 import com.gsls.gt_databinding.route.annotation.GT_ARouterName;
 import com.gsls.gt_databinding.route.annotation.GT_Autowired;
@@ -2263,17 +2264,27 @@ public class GT {
 
                 boolean isAbort;//默认不拦截
                 switch (gt_routeMeta.getType()) {
-                    case ACTIVITY, VIEW,
-                            FRAGMENT, FRAGMENT_X, DIALOG_FRAGMENT, DIALOG_FRAGMENT_X, VIEW_MODEL,
-                            BASE_VIEW, FLOATING_WINDOW, POPUP_WINDOW, NOTIFICATION, WEB_VIEW, ADAPTER,
-                            PROVIDER://需要添加拦截器的
+                    case ClassType.ACTIVITY:
+                    case ClassType.VIEW:
+                    case ClassType.FRAGMENT:
+                    case ClassType.FRAGMENT_X:
+                    case ClassType.DIALOG_FRAGMENT:
+                    case ClassType.DIALOG_FRAGMENT_X:
+                    case ClassType.VIEW_MODEL:
+                    case ClassType.BASE_VIEW:
+                    case ClassType.FLOATING_WINDOW:
+                    case ClassType.POPUP_WINDOW:
+                    case ClassType.NOTIFICATION:
+                    case ClassType.WEB_VIEW:
+                    case ClassType.ADAPTER:
+                    case ClassType.PROVIDER://需要添加拦截器的
                         isAbort = loadInterceptor(context, gt_routeMeta);//加载拦截器
                         if (!isAbort) {
                             switch (gt_routeMeta.getType()) {
-                                case ACTIVITY:
+                                case ClassType.ACTIVITY:
                                     setActivity(context, gt_routeMeta);//处理 路由逻辑
                                     break;
-                                case VIEW:
+                                case ClassType.VIEW:
                                     View view;
                                     view = setView(gt_routeMeta);//处理 路由逻辑
                                     if (view != null) {
@@ -2281,35 +2292,37 @@ public class GT {
                                         return (T) view;
                                     }
                                     break;
-                                case FRAGMENT, FRAGMENT_X:
+                                case ClassType.FRAGMENT:
+                                case ClassType.FRAGMENT_X:
                                     Fragment fragment;
                                     fragment = setFragment(gt_routeMeta);//处理 路由逻辑
                                     if (fragment != null) {
                                         aRouterBean = null;
                                         return (T) fragment;
                                     }
-                                case DIALOG_FRAGMENT, DIALOG_FRAGMENT_X:
+                                case ClassType.DIALOG_FRAGMENT:
+                                case ClassType.DIALOG_FRAGMENT_X:
                                     DialogFragment dialogFragment;
                                     dialogFragment = setDialogFragment(gt_routeMeta);//处理 路由逻辑
                                     if (dialogFragment != null) {
                                         aRouterBean = null;
                                         return (T) dialogFragment;
                                     }
-                                case BASE_VIEW:
+                                case ClassType.BASE_VIEW:
                                     GT.GT_View.BaseView baseView;
                                     baseView = setBaseView(gt_routeMeta);//处理 路由逻辑
                                     if (baseView != null) {
                                         aRouterBean = null;
                                         return (T) baseView;
                                     }
-                                case FLOATING_WINDOW://悬浮窗
+                                case ClassType.FLOATING_WINDOW://悬浮窗
                                     GT.GT_FloatingWindow.BaseFloatingWindow floatingWindow;
                                     floatingWindow = setFloatingWindow(gt_routeMeta);//处理 路由逻辑
                                     if (floatingWindow != null) {
                                         aRouterBean = null;
                                         return (T) floatingWindow;
                                     }
-                                case POPUP_WINDOW://悬浮窗
+                                case ClassType.POPUP_WINDOW://悬浮窗
                                     GT.GT_PopupWindow.BasePopupWindow popupWindow;
                                     popupWindow = setPopupWindow(gt_routeMeta);//处理 路由逻辑
                                     if (popupWindow != null) {
@@ -2317,7 +2330,7 @@ public class GT {
                                         return (T) popupWindow;
                                     }
 
-                                case NOTIFICATION://悬浮窗
+                                case ClassType.NOTIFICATION://悬浮窗
                                     GT.GT_Notification.BaseNotification notification;
                                     notification = setNotification(gt_routeMeta);//处理 路由逻辑
                                     if (notification != null) {
@@ -2325,7 +2338,7 @@ public class GT {
                                         return (T) notification;
                                     }
 
-                                case WEB_VIEW://悬浮窗
+                                case ClassType.WEB_VIEW://悬浮窗
                                     GT.GT_WebView.BaseWebView webView;
                                     webView = setWebView(gt_routeMeta);//处理 路由逻辑
                                     if (webView != null) {
@@ -2333,7 +2346,7 @@ public class GT {
                                         return (T) webView;
                                     }
 
-                                case ADAPTER://适配器
+                                case ClassType.ADAPTER://适配器
                                     RecyclerView.Adapter<RecyclerView.ViewHolder> adapter;
                                     adapter = setAdapter(gt_routeMeta);//处理 路由逻辑
                                     if (adapter != null) {
@@ -2341,7 +2354,7 @@ public class GT {
                                         return (T) adapter;
                                     }
 
-                                case VIEW_MODEL://viewModel
+                                case ClassType.VIEW_MODEL://viewModel
                                     ViewModel viewModel;
                                     viewModel = setViewModel(gt_routeMeta);//处理 路由逻辑
                                     if (viewModel != null) {
@@ -2349,7 +2362,7 @@ public class GT {
                                         return (T) viewModel;
                                     }
 
-                                case PROVIDER://接口方法、传值、传参
+                                case ClassType.PROVIDER://接口方法、传值、传参
                                     Object obj;
                                     obj = setProvider(context, gt_routeMeta);//处理 接口方法 路由逻辑
                                     if (obj != null) {
@@ -2360,16 +2373,16 @@ public class GT {
                         }
                         aRouterBean = null;//1
                         return null;
-                    case INTERCEPTOR://直接跳转拦截器
+                    case ClassType.INTERCEPTOR://直接跳转拦截器
                         startInterceptor(context, gt_routeMeta);//加载拦截器
                         aRouterBean = null;//1
                         return null;
                     //待实现
-                    case SERVICE:
+                    case ClassType.SERVICE:
                         break;
-                    case CONTENT_PROVIDER:
+                    case ClassType.CONTENT_PROVIDER:
                         break;
-                    case UNKNOWN:
+                    case ClassType.UNKNOWN:
                         break;
                 }
             } catch (Exception e) {
@@ -2711,7 +2724,8 @@ public class GT {
 
             //传递参数
             Intent intent = null;
-            if (context instanceof Activity activity) {
+            if (context instanceof Activity) {
+                Activity activity = (Activity) context;
                 intent = activity.getIntent();
             }
 
@@ -21556,7 +21570,7 @@ public class GT {
 
         }
 
-        public class DateHelper {
+        public static class DateHelper {
 
             public static final long ONE_MINUTE = 60000L;
             public static final long ONE_HOUR = 3600000L;
@@ -23371,7 +23385,7 @@ public class GT {
                 @Override
                 public void onDownloadSuccess(File file) {
                     super.onDownloadSuccess(file);
-                    ShareUtils.shareFile(context, file, GT.ShareUtils.TYPE_IMAGE, sendPack, isAcceptor, AUTHORITY, new OneListener<>() {
+                    ShareUtils.shareFile(context, file, GT.ShareUtils.TYPE_IMAGE, sendPack, isAcceptor, AUTHORITY, new OneListener<String>() {
                         @Override
                         public void onOneListener(String obj) {
                             super.onOneListener(obj);
@@ -38972,7 +38986,7 @@ public class GT {
          */
         public static void startNotification(FragmentActivity activity, NotificationCompat.Builder builder, int... notifyids) {
             if (activity != null) {
-                GT.AppAuthorityManagement.notification(activity, new OneListener<>() {
+                GT.AppAuthorityManagement.notification(activity, new OneListener<Boolean>() {
                     @Override
                     public void onOneListener(Boolean obj) {
                         super.onOneListener(obj);
