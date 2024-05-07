@@ -19,7 +19,7 @@ public class DataBindingUtils {
     private static TypeSpec logTypeSpec;
     private static JavaFile.Builder builder;
     public static final AndroidBean androidBean = new AndroidBean();
-    private static final boolean isLog = true;//是否日志
+    private static final boolean isLog = false;//是否日志
     public static final List<String> filtrationArray = new ArrayList<>();//默认过滤文件名单
 
     //初始化

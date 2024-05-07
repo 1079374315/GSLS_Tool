@@ -394,8 +394,8 @@ import dalvik.system.PathClassLoader;
  * GSLS_TOOL
  * <p>
  * <p>
- * 更新时间:2024.5.5
- * 更新内容 v1.4.5.3 版本：
+ * 更新时间:2024.5.7
+ * 更新内容 v1.4.5.5 版本：
  * CSDN 博客/官网教程:https://blog.csdn.net/qq_39799899
  * GitHub https://github.com/1079374315/GT
  * 更新内容如下：
@@ -2170,33 +2170,6 @@ public class GT {
             if (aRouterBean == null) return this;
             aRouterBean.claIntercepts = claIntercepts;
             return this;
-        }
-
-        /**
-         * @param cla 指定返回类型q
-         * @param <T>
-         * @return
-         */
-        public <T> T navigation(Class<T> cla) {
-            //如果是需要通过 cla 依赖注入
-            if (aRouterBean == null || aRouterBean.path == null) {
-                if (GT.ARouter.IProvider.class.isAssignableFrom(cla)) {
-                    for (String key : aRouterMap.keySet()) {
-                        GT_RouteMeta gtRouteMeta = aRouterMap.get(key);
-                        if (gtRouteMeta == null) continue;
-                        if (cla.isAssignableFrom(gtRouteMeta.getDestination())) {
-                            T value = (T) GT.AnnotationAssist.classToObject(gtRouteMeta.getDestination());
-                            Context context = softReference.get();
-                            if (context != null) {
-                                GT.AnnotationAssist.setReflectMethodValue(value, "init", null, Context.class, context);
-                            }
-                            return value;
-                        }
-                    }
-                }
-            }
-            //否则就执行 路由基本逻辑
-            return navigation();
         }
 
         /**

@@ -1,8 +1,9 @@
-package com.gsls.gt_databinding.route;
+package com.gsls.gt_databinding;
 
 import com.google.auto.service.AutoService;
 import com.gsls.gt_databinding.annotation.GT_DataBinding;
 import com.gsls.gt_databinding.bean.BindingBean;
+import com.gsls.gt_databinding.route.ClassType;
 import com.gsls.gt_databinding.route.annotation.GT_Route;
 import com.gsls.gt_databinding.utils.DataBindingUtils;
 import com.gsls.gt_databinding.utils.FileUtils;
@@ -188,8 +189,8 @@ public class GT_Route_Main extends AbstractProcessor {
                 DataBindingUtils.log("typeMirror:" + typeMirror);
                 DataBindingUtils.log("popupWindowYM:" + popupWindowYM);
 
-                if (bindingmap.keySet().contains(bindingBean)) {
-                    bindingBean.setClassType(bindingmap.get(bindingBean));
+                if (bindingmap.containsKey(bindingBean.getClassName())) {
+                    bindingBean.setClassType(bindingmap.get(bindingBean.getClassName()));
                 } else {
                     if (types.isSubtype(typeMirror, activityYM)) {
                         bindingBean.setClassType(ClassType.ACTIVITY);
@@ -203,12 +204,9 @@ public class GT_Route_Main extends AbstractProcessor {
                         bindingBean.setClassType(ClassType.FRAGMENT);
                     } else if (types.isSubtype(typeMirror, fragmentYM_X)) {
                         bindingBean.setClassType(ClassType.FRAGMENT_X);
-                    }  else if (types.isSubtype(typeMirror, viewModelYM_X)) {
+                    } else if (types.isSubtype(typeMirror, viewModelYM_X)) {
                         bindingBean.setClassType(ClassType.VIEW_MODEL);
-                    }
-
-
-                    else if (types.isSubtype(typeMirror, interceptorYM)) {
+                    } else if (types.isSubtype(typeMirror, interceptorYM)) {
                         bindingBean.setClassType(ClassType.INTERCEPTOR);
                     } else if (types.isSubtype(typeMirror, providerYM)) {
                         bindingBean.setClassType(ClassType.PROVIDER);
@@ -224,10 +222,7 @@ public class GT_Route_Main extends AbstractProcessor {
                         bindingBean.setClassType(ClassType.WEB_VIEW);
                     } else if (types.isSubtype(typeMirror, adapterYM)) {
                         bindingBean.setClassType(ClassType.ADAPTER);
-                    }
-
-
-                    else if (types.isSubtype(typeMirror, serviceYM)) {
+                    } else if (types.isSubtype(typeMirror, serviceYM)) {
                         bindingBean.setClassType(ClassType.SERVICE);
                     } else {
                         bindingBean.setClassType(ClassType.UNKNOWN);
@@ -365,8 +360,8 @@ public class GT_Route_Main extends AbstractProcessor {
 
 
             for (BindingBean bean : bindingBeanList) {
-                String classType = "ClassType." + bean.getClassType();
-                DataBindingUtils.log("classType:" + classType + " : " + "bean:" + bean);
+                String classType = "ClassType." + bean.getClassType().toString();
+                DataBindingUtils.log("classType:" + classType + " : " + "bean:" + bean.getClassName());
                 switch (bean.getClassType()) {
                     case ClassType.ACTIVITY:
                         classType = "ClassType.ACTIVITY";
@@ -459,7 +454,7 @@ public class GT_Route_Main extends AbstractProcessor {
                 builder.append("\t\tatlas.put(\"" +
                         bean.getAnnotateValue() + "\", GT_RouteMeta.build(" +
                         classType + ", " +
-                        bean + ".class, \"" +
+                        bean.getClassName() + ".class, \"" +
                         bean.getAnnotateValue() + "\", \"" +
                         bean.getJavaLibraryName() + "\",  \"" +
                         bean.getPackClassPath() + "\",  " +
