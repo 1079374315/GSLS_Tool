@@ -11,17 +11,11 @@ public class AndroidBean {
     private String projectName;//项目名
     private String projectPath;//项目路径
     private List<String> javaLibraryNames;//当前项目所有模块名称
+    private List<String> javaLibraryPath;//当前项目所有模块路径
     private List<BindingBean> bindingBeanList;//绑定对象实
 
     public AndroidBean() {
         super();
-    }
-
-    public AndroidBean(String projectName, String projectPath, List<String> javaLibraryNames, List<BindingBean> bindingBeanList) {
-        this.projectName = projectName;
-        this.projectPath = projectPath;
-        this.javaLibraryNames = javaLibraryNames;
-        this.bindingBeanList = bindingBeanList;
     }
 
     public String getProjectName() {
@@ -41,22 +35,55 @@ public class AndroidBean {
     }
 
     public List<String> getJavaLibraryNames() {
+        if (javaLibraryNames == null) {
+            javaLibraryNames = new ArrayList<>();
+        }
         return javaLibraryNames;
+    }
+
+    public List<String> getJavaLibraryPaths() {
+        if (javaLibraryPath == null) {
+            javaLibraryPath = new ArrayList<>();
+        }
+        return javaLibraryPath;
     }
 
     public void setJavaLibraryNames(List<String> javaLibraryNames) {
         this.javaLibraryNames = javaLibraryNames;
     }
 
+    public void setJavaLibraryPaths(List<String> javaLibraryPath) {
+        this.javaLibraryPath = javaLibraryPath;
+    }
+
     public void addJavaLibraryName(String libraryName) {
         if (javaLibraryNames == null) {
             javaLibraryNames = new ArrayList<>();
         }
-        if(javaLibraryNames.contains(libraryName)) return;
+        if (javaLibraryNames.contains(libraryName)) return;
         javaLibraryNames.add(libraryName);
     }
 
+    public void addJavaLibraryPath(String libraryName) {
+        if (javaLibraryPath == null) {
+            javaLibraryPath = new ArrayList<>();
+        }
+        if (javaLibraryPath.contains(libraryName)) return;
+        javaLibraryPath.add(libraryName);
+    }
+
+    public void addJavaLibraryNames(List<String> list) {
+        if (javaLibraryNames == null){
+            javaLibraryNames = list;
+        }else{
+            javaLibraryNames.addAll(list);
+        }
+    }
+
     public List<BindingBean> getBindingBeanList() {
+        if (bindingBeanList == null) {
+            bindingBeanList = new ArrayList<>();
+        }
         return bindingBeanList;
     }
 

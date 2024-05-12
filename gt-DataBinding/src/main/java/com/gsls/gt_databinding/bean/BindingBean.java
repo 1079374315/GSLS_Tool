@@ -25,6 +25,7 @@ public class BindingBean {
     private String classPath;//类路径
     private String layoutAbsolutePath;//布局绝对路径
     private String javaLibraryName;//当前Java 库名
+    private String javaLibraryPath;//当前Java 库名路径
     private String bingingType;//绑定类型
     private List<XmlBean> xmlBeanList;//xml布局类型
     private String classCode;//源代码
@@ -147,6 +148,13 @@ public class BindingBean {
 
     public void setJavaLibraryName(String javaLibraryName) {
         this.javaLibraryName = javaLibraryName;
+    }
+    public String getJavaLibraryPath() {
+        return javaLibraryPath;
+    }
+
+    public void setJavaLibraryPath(String javaLibraryPath) {
+        this.javaLibraryPath = javaLibraryPath;
     }
 
     public String getBingingType() {

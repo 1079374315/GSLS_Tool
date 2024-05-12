@@ -24,8 +24,6 @@ import javax.tools.JavaFileObject;
 
 @AutoService(Processor.class)//编译时运行这个类
 public class GT_HttpCallBuildMain extends AbstractProcessor {
-
-
     /**
      * 必须要的
      *
@@ -38,85 +36,53 @@ public class GT_HttpCallBuildMain extends AbstractProcessor {
     }
 
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
-        DataBindingUtils.log("GSLS_King");
-        DataBindingUtils.log("roundEnv" + roundEnv);
-
         DataBindingUtils.init();
 
         for (Element element : roundEnv.getElementsAnnotatedWith(GT_HttpCallBuild.class)) {
-            DataBindingUtils.log("element:" + element);
-            DataBindingUtils.log("elementGet1:" + element.getEnclosedElements());
-            DataBindingUtils.log("elementGet2:" + element.getSimpleName());
-            DataBindingUtils.log("elementGet3:" + element.getKind());
-            DataBindingUtils.log("elementGet4:" + element.getModifiers());
-            DataBindingUtils.log("elementGet6:" + element.getEnclosingElement());
-
-            GT_HttpCallBuild annotation = element.getAnnotation(GT_HttpCallBuild.class);
-
             BindingBean bindingBean = new BindingBean();
             bindingBean.setPackClassPath(element.toString());
             bindingBean.setClassName(element.getSimpleName().toString());//获取类名
             bindingBean.setPackName(element.getEnclosingElement().toString());//设置包名
             bindingBean.setResourcePackName(DataBindingUtils.pageName(bindingBean.getPackName()));//设置包名
 
-
-            //获取jar包完整路径
-            String path = getClass().getResource("").getPath();
-            DataBindingUtils.log("path1:" + path);
-
             //获取当前项目名称
-            String projectName = System.getProperty("user.dir");
-            DataBindingUtils.log("projectName:" + projectName);
-            DataBindingUtils.androidBean.setProjectPath(projectName);
+            DataBindingUtils.androidBean.setProjectPath(System.getProperty("user.dir"));
 
-            //获取项目中所有模块
-            List<String> filesAllName = FileUtils.getFilesAllName(DataBindingUtils.androidBean.getProjectPath());
-            DataBindingUtils.log("filesAllName:" + filesAllName);
-
-
-            assert filesAllName != null;
-            for (String filePath : filesAllName) {
-                String[] split = filePath.split("\\\\");
-                String fileName = split[split.length - 1];
-                if (FileUtils.fileIsDirectory(filePath) && DataBindingUtils.filtrationArray.contains(fileName)) {
-                    DataBindingUtils.log("FileDir:" + filePath);
-                    split = filePath.split("\\\\");
-                    DataBindingUtils.androidBean.addJavaLibraryName(split[split.length - 1]);
+            //初始化 项目名称 和项目路径
+            if(!DataBindingUtils.filtrationArray.isEmpty()){
+                for(String library : DataBindingUtils.filtrationArray){
+                    String libraryName = library;
+                    String libraryPath = library;
+                    if(library.contains(":")){
+                        libraryName = library.replaceAll(":", "\\$");
+                        libraryPath = library.replaceAll(":", "\\\\");
+                    }
+                    DataBindingUtils.androidBean.addJavaLibraryName(libraryName);
+                    DataBindingUtils.androidBean.addJavaLibraryPath(libraryPath);
                 }
             }
-            DataBindingUtils.log("bindingBean1:" + bindingBean);
 
-
-            for (String libraryName : DataBindingUtils.androidBean.getJavaLibraryNames()) {
-                String classPath = DataBindingUtils.androidBean.getProjectPath() + "\\" + libraryName + "\\src\\main\\java\\" + bindingBean.getPackClassPath().replaceAll("\\.", "\\\\") + ".java";
-                String classPath2 = DataBindingUtils.androidBean.getProjectPath() + "\\" + libraryName + "\\src\\main\\java\\" + bindingBean.getPackClassPath().replaceAll("\\.", "\\\\") + ".kt";
-
-                //Java
-                DataBindingUtils.log("classPath:" + classPath);
-                //Kotlin
-                DataBindingUtils.log("classPath2:" + classPath2);
+            for (int libraryNameIndex = 0; libraryNameIndex < DataBindingUtils.androidBean.getJavaLibraryPaths().size(); libraryNameIndex++) {
+                String libraryName = DataBindingUtils.androidBean.getJavaLibraryNames().get(libraryNameIndex);
+                String libraryPath = DataBindingUtils.androidBean.getJavaLibraryPaths().get(libraryNameIndex);
+                String classPath = DataBindingUtils.androidBean.getProjectPath() + "\\" + libraryPath + "\\src\\main\\java\\" + bindingBean.getPackClassPath().replaceAll("\\.", "\\\\") + ".java";
+                String classPath2 = DataBindingUtils.androidBean.getProjectPath() + "\\" + libraryPath + "\\src\\main\\java\\" + bindingBean.getPackClassPath().replaceAll("\\.", "\\\\") + ".kt";
 
                 //Java
                 if (FileUtils.fileExist(classPath)) {
-                    DataBindingUtils.log("Yes1:" + classPath);
                     bindingBean.setJavaLibraryName(libraryName);
                     bindingBean.setClassPath(classPath);
                     String query = FileUtils.query(bindingBean.getClassPath());
-                    DataBindingUtils.log("query1:" + query);
                     bindingBean.setClassCode(query);//设置源码
-                    DataBindingUtils.log("query11:" + query);
                     break;
                 }
 
                 //Kotlin
                 if (FileUtils.fileExist(classPath2)) {
-                    DataBindingUtils.log("Yes2:" + classPath2);
                     bindingBean.setJavaLibraryName(libraryName);
                     bindingBean.setClassPath(classPath2);
                     String query = FileUtils.query(bindingBean.getClassPath());
-                    DataBindingUtils.log("query2:" + query);
                     bindingBean.setClassCode(query);//设置包名
-                    DataBindingUtils.log("query22:" + query);
                     break;
                 }
 
@@ -150,18 +116,13 @@ public class GT_HttpCallBuildMain extends AbstractProcessor {
             //开始解析代码
             int indexOf = classCode.indexOf("@" + GT_HttpCallBuild.class.getSimpleName());
             classCode = classCode.substring(indexOf);
-            DataBindingUtils.log("classCode2:" + classCode);
-            DataBindingUtils.log("Pack:" + bindingBean.getPackClassPath());
-
             String code = analysisHttpCallJavaCode(classCode, bindingBean.getPackClassPath());
-            DataBindingUtils.log("DATA:" + code);
 
             if(code.contains("@GT.HttpCall.Query(")){
                 builder.append("\n\t//[@GT_HttpCallBuild] + [@GT.HttpCall.Query] These two annotations do not exist together");
                 //解析的 ClassCode
                 builder.append("\n\tpublic static final String CODE = " + null + ";\n");
             }else{
-                builder.append("\n\t//Parsing parameters for all methods of the interface");
                 //解析的 ClassCode
                 builder.append("\n\tpublic static final String CODE = \n\t\t\t\t" + "\"" + code + "\"" + ";\n");
             }
@@ -174,8 +135,6 @@ public class GT_HttpCallBuildMain extends AbstractProcessor {
 
             builder.append("\n}\n"); // close class
 
-            DataBindingUtils.log("bindingBean:" + builder.toString());
-
             //生成最终添加好的代码
             try {
                 JavaFileObject source = processingEnv.getFiler().createSourceFile(bindingBean.getPackName() + "." + bindingBean.getClassName() + "Binding");
@@ -184,10 +143,7 @@ public class GT_HttpCallBuildMain extends AbstractProcessor {
                 writer.flush();
                 writer.close();
             } catch (IOException e) {
-                DataBindingUtils.log("Automatic code generation failed:" + e);
             }
-
-//            DataBindingUtils.log("bindingBean:" + bindingBean.toString());
 
         }
 
@@ -245,9 +201,7 @@ public class GT_HttpCallBuildMain extends AbstractProcessor {
 
         }
 
-        DataBindingUtils.log("returnValue:" + returnValue);
-        if(returnValue.replaceAll("\\s*","").length() == 0){
-            DataBindingUtils.log("返回了:" + returnValue);
+        if(returnValue.replaceAll("\\s*", "").isEmpty()){
             return returnValue;
         }
         returnValue = returnValue.substring(0, returnValue.length() - 1);

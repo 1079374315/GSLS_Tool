@@ -394,8 +394,8 @@ import dalvik.system.PathClassLoader;
  * GSLS_TOOL
  * <p>
  * <p>
- * 更新时间:2024.5.7
- * 更新内容 v1.4.5.5 版本：
+ * 更新时间:2024.5.12
+ * 更新内容 v1.4.5.7 版本：
  * CSDN 博客/官网教程:https://blog.csdn.net/qq_39799899
  * GitHub https://github.com/1079374315/GT
  * 更新内容如下：
@@ -403,6 +403,7 @@ import dalvik.system.PathClassLoader;
  * 2.优化 Android混合开发中 WebView 上传图片的问题，并增加优化了  拍照、相册选着图片、相册选择视频、拍摄视频、本地文件上传 功能。
  * 3.更新了 GT动画封装库的次数逻辑
  * 4.增加 路由框架 GT.ARouter，教程请参考：https://blog.csdn.net/qq_39799899
+ * 5.降低GT库 JDK版本、降低KT版本、适配gt-DataBinding项目结构
  *
  * <p>
  * <p>

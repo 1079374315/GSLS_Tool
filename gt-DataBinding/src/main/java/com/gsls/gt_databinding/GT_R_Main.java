@@ -27,12 +27,6 @@ import javax.tools.JavaFileObject;
 @AutoService(Processor.class)//编译时运行这个类
 public class GT_R_Main extends AbstractProcessor {
 
-
-    /**
-     * 必须要的
-     *
-     * @return
-     */
     public Set<String> getSupportedAnnotationTypes() {
         Set<String> types = new HashSet<>();
         types.add(GT_R_Build.class.getCanonicalName());
@@ -40,67 +34,43 @@ public class GT_R_Main extends AbstractProcessor {
     }
 
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
-//        DataBindingUtils.log("GSLS_King");
-//        DataBindingUtils.log("roundEnv" + roundEnv);
-
         DataBindingUtils.init();
-
         for (Element element : roundEnv.getElementsAnnotatedWith(GT_R_Build.class)) {
-//            DataBindingUtils.log("element:" + element);
-//            DataBindingUtils.log("elementGet1:" + element.getEnclosedElements());
-//            DataBindingUtils.log("elementGet2:" + element.getSimpleName());
-//            DataBindingUtils.log("elementGet3:" + element.getKind());
-//            DataBindingUtils.log("elementGet4:" + element.getModifiers());
-//            DataBindingUtils.log("elementGet6:" + element.getEnclosingElement());
-
             GT_R_Build annotation = element.getAnnotation(GT_R_Build.class);
-
             BindingBean bindingBean = new BindingBean();
             bindingBean.setPackClassPath(element.toString());
             bindingBean.setClassName(element.getSimpleName().toString());//获取类名
             bindingBean.setPackName(element.getEnclosingElement().toString());//设置包名
             bindingBean.setResourcePackName(DataBindingUtils.pageName(bindingBean.getPackName()));//设置包名
 
-            //获取jar包完整路径
-            String path = getClass().getResource("").getPath();
-//            DataBindingUtils.log("path1:" + path);
-
             //获取当前项目名称
-            String projectName = System.getProperty("user.dir");
-//            DataBindingUtils.log("projectName:" + projectName);
-            DataBindingUtils.androidBean.setProjectPath(projectName);
+            DataBindingUtils.androidBean.setProjectPath(System.getProperty("user.dir"));
 
-            //获取项目中所有模块
-            List<String> filesAllName = FileUtils.getFilesAllName(DataBindingUtils.androidBean.getProjectPath());
-//            DataBindingUtils.log("filesAllName:" + filesAllName);
-
-            assert filesAllName != null;
-            for (String filePath : filesAllName) {
-                String[] split = filePath.split("\\\\");
-                String fileName = split[split.length - 1];
-                if (FileUtils.fileIsDirectory(filePath) && DataBindingUtils.filtrationArray.contains(fileName)) {
-//                    DataBindingUtils.log("FileDir:" + filePath);
-                    split = filePath.split("\\\\");
-                    DataBindingUtils.androidBean.addJavaLibraryName(split[split.length - 1]);
+            //初始化 项目名称 和项目路径
+            if(!DataBindingUtils.filtrationArray.isEmpty()){
+                for(String library : DataBindingUtils.filtrationArray){
+                    String libraryName = library;
+                    String libraryPath = library;
+                    if(library.contains(":")){
+                        libraryName = library.replaceAll(":", "\\$");
+                        libraryPath = library.replaceAll(":", "\\\\");
+                    }
+                    DataBindingUtils.androidBean.addJavaLibraryName(libraryName);
+                    DataBindingUtils.androidBean.addJavaLibraryPath(libraryPath);
                 }
             }
-//            DataBindingUtils.log("bindingBean1:" + bindingBean);
 
+            for (int libraryNameIndex = 0; libraryNameIndex < DataBindingUtils.androidBean.getJavaLibraryPaths().size(); libraryNameIndex++) {
+                String libraryPath = DataBindingUtils.androidBean.getJavaLibraryPaths().get(libraryNameIndex);
+                String classPath = DataBindingUtils.androidBean.getProjectPath() + "\\" + libraryPath + "\\build\\intermediates\\runtime_symbol_list";
 
-            for (String libraryName : DataBindingUtils.androidBean.getJavaLibraryNames()) {
-                String classPath = DataBindingUtils.androidBean.getProjectPath() + "\\" + libraryName + "\\build\\intermediates\\runtime_symbol_list";
-
-                //Java
-//                DataBindingUtils.log("classPath:" + classPath);
                 //Java
                 if (FileUtils.fileExist(classPath)) {
-//                    DataBindingUtils.log("Yes1:" + classPath);
                     if(FileUtils.fileIsDirectory(classPath)){
                         List<String> R_List = FileUtils.getFilesAllName(classPath);
-//                        DataBindingUtils.log("R_List:" + R_List);
-                        if(R_List != null && R_List.size() > 0){
+                        if(R_List != null && !R_List.isEmpty()){
                             String type = annotation.type();//R文件绑定类型
-                            if(type == null || type.length() == 0){//默认第一个
+                            if(type == null || type.isEmpty()){//默认第一个
                                 classPath =  R_List.get(0) + "\\processDebugResources\\R.txt";
                             }else{//自定了 R文件 build类型
                                 for (String rPath : R_List) {
@@ -110,10 +80,8 @@ public class GT_R_Main extends AbstractProcessor {
                                     }
                                 }
                             }
-//                            DataBindingUtils.log("classPath:" + classPath);
                             bindingBean.setClassPath(classPath);
                             String query = FileUtils.query(bindingBean.getClassPath());
-//                            DataBindingUtils.log("query:" + query);
                             bindingBean.setClassCode(query);
                         }
                     }
@@ -133,9 +101,8 @@ public class GT_R_Main extends AbstractProcessor {
                     " * GT-DataBinding class, inherited\n" +
                     " */");
 
-
             String className = annotation.value();
-            if(className == null || className.length() == 0){
+            if(className == null || className.isEmpty()){
                 className = GT_R_Build.R;
             }
 
@@ -147,25 +114,9 @@ public class GT_R_Main extends AbstractProcessor {
              */
             //class 文件代码
             String classCode = bindingBean.getClassCode();
-            //开始解析代码
-//            DataBindingUtils.log("classCode:" + classCode);
-
-         /*   classCode = "int id bounceStart 0x7f080061\r\n" +
-                    "int id btn 0x7f080062\r\n" +
-                    "int anim abc_fade_in 0x7f010000\r\n" +
-                    "int anim abc_fade_out 0x7f010001\r\n" +
-                    "int color m3_ref_palette_dynamic_primary0 0x7f0500aa\r\n" +
-                    "int color m3_ref_palette_dynamic_primary10 0x7f0500ab\r\n" +
-                    "int[] styleable ViewBackgroundHelper { 0x010100d4, 0x7f03004a, 0x7f03004b }\r\n" +
-                    "int styleable ViewTransition_viewTransitionMode 14\r\n";*/
-
             String code = analysisJavaCode(classCode, className);
-//            DataBindingUtils.log("DATA:" + code);
             builder.append(code);
-
             builder.append("\n}\n"); // close class
-
-//            DataBindingUtils.log("bindingBean:" + builder.toString());
 
             //生成最终添加好的代码
             try {
@@ -175,10 +126,7 @@ public class GT_R_Main extends AbstractProcessor {
                 writer.flush();
                 writer.close();
             } catch (IOException e) {
-//                DataBindingUtils.log("Automatic code generation failed:" + e);
             }
-
-//            DataBindingUtils.log("bindingBean:" + bindingBean.toString());
 
         }
 
@@ -224,16 +172,8 @@ public class GT_R_Main extends AbstractProcessor {
             }
 
             String index = "";//暂时不加入 资源索引
-            /*switch (resType){
-                case "id":
-                case "layout":
-                    index = "@GT.Annotations.GT_Res.GT_Index(R." + resType + "." + codeSp[2] + ")";
-                    break;
-            }*/
-//            DataBindingUtils.log("index:" + index);
-
             resCode.append("; " + index);
-            if(recordList.size() == 0) {
+            if(recordList.isEmpty()) {
                 oldType = resType;
                 recordList.add(resType);
             }else if (!recordList.contains(resType)) {
