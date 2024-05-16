@@ -1,6 +1,8 @@
 package com.gsls.gt;
 
 import static android.content.Context.POWER_SERVICE;
+import static android.content.Context.RECEIVER_EXPORTED;
+import static android.content.Context.RECEIVER_NOT_EXPORTED;
 import static android.os.Build.VERSION.SDK_INT;
 import static android.os.Build.VERSION_CODES.KITKAT;
 import static java.lang.annotation.ElementType.PARAMETER;
@@ -394,8 +396,8 @@ import dalvik.system.PathClassLoader;
  * GSLS_TOOL
  * <p>
  * <p>
- * 更新时间:2024.5.12
- * 更新内容 v1.4.5.7 版本：
+ * 更新时间:2024.5.16
+ * 更新内容 v1.4.5.8 版本：
  * CSDN 博客/官网教程:https://blog.csdn.net/qq_39799899
  * GitHub https://github.com/1079374315/GT
  * 更新内容如下：
@@ -404,6 +406,7 @@ import dalvik.system.PathClassLoader;
  * 3.更新了 GT动画封装库的次数逻辑
  * 4.增加 路由框架 GT.ARouter，教程请参考：https://blog.csdn.net/qq_39799899
  * 5.降低GT库 JDK版本、降低KT版本、适配gt-DataBinding项目结构
+ * 6.适配Android14 自定义通知栏 单击事件引起的问题，未涉及 通知栏单击事件的不受影响
  *
  * <p>
  * <p>
@@ -4406,7 +4409,7 @@ public class GT {
             UiReceiver uiReceiver = new UiReceiver(actionData, onReceptionDataListener);
             IntentFilter intentFilter = new IntentFilter();
             intentFilter.addAction(actionData);
-            context.registerReceiver(uiReceiver, intentFilter);
+            context.registerReceiver(uiReceiver, intentFilter, RECEIVER_NOT_EXPORTED);
         }
 
         /**
@@ -4432,7 +4435,7 @@ public class GT {
             UiReceiver uiReceiver = new UiReceiver(broadcastName, onReceptionDataListener);
             IntentFilter intentFilter = new IntentFilter();
             intentFilter.addAction(broadcastName.toString());
-            context.registerReceiver(uiReceiver, intentFilter);
+            context.registerReceiver(uiReceiver, intentFilter, RECEIVER_NOT_EXPORTED);
         }
 
         /**
@@ -4457,7 +4460,7 @@ public class GT {
             UiReceiver uiReceiver = new UiReceiver(broadcastName, onReceptionDataListener);
             IntentFilter intentFilter = new IntentFilter();
             intentFilter.addAction(broadcastName.toString());
-            context.registerReceiver(uiReceiver, intentFilter);
+            context.registerReceiver(uiReceiver, intentFilter, RECEIVER_NOT_EXPORTED);
         }
 
         //接收数据接口
@@ -27361,42 +27364,6 @@ public class GT {
         }
 
         /**
-         * 通知栏权限动态申请
-         * <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-         *
-         * @param context
-         * @param oneListener 权限申请回调
-         */
-        public static void notification(FragmentActivity activity, GT.OneListener<Boolean> oneListener) {
-            //权限动态申请
-            GT.AppAuthorityManagement.Permission.init(activity, new String[]{
-                    Manifest.permission.POST_NOTIFICATIONS
-            }).permissions(new GT.AppAuthorityManagement.Permission.OnPermissionListener() {
-                @Override
-                public void onExplainRequestReason(GT.AppAuthorityManagement.Permission.PermissionDescription onPDListener) {
-                    onPDListener.setAcceptAdvice(true);//核心，设置拒绝授权
-                }
-
-                @Override
-                public boolean onForwardToSettings() {
-                    //特殊权限特殊处理，如：需要进入 系统设置 中或 应用信息中的代码可自定义填写
-                    return true;//默认是false 一定有改过来设置为 true
-                }
-
-                @Override
-                public void request(boolean allGranted, String[] grantedList, String[] deniedList, String message) {
-                    if (allGranted) {
-                        //全部授权
-                        oneListener.onOneListener(allGranted);
-                    } else {
-                        //未全部授权
-                        oneListener.onOneListener(allGranted);
-                    }
-                }
-            });
-        }
-
-        /**
          * 通知栏权限是否开启
          * 需要静态xml注册的权限: <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
          *
@@ -27404,11 +27371,39 @@ public class GT {
          * @return true:开启  false:未开启
          */
         public static boolean areNotificationsEnabled(Context context) {
-            NotificationManager mNotificationManager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+            // 检查应用是否有通知权限
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                return mNotificationManager.areNotificationsEnabled();// 检查通知权限是否被用户授予
+                NotificationManager notificationManager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+                if (notificationManager != null) {
+                    return notificationManager.areNotificationsEnabled();
+                }
             }
-            return true; // 在Android O之前，通知权限默认是开启的，可以直接返回true
+            return false;
+        }
+
+        /**
+         * 开始请求通知栏权限
+         * 需要静态xml注册的权限: <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+         *
+         * @param context
+         * @return
+         */
+        public static void requestNotificationsPermission(Activity activity) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                // 通知权限在Android 8.0及以上版本通过Channel进行管理
+                if (NotificationManagerCompat.from(activity).areNotificationsEnabled()) {
+                    // 用户已经授权了通知
+                } else {
+                    // 引导用户去设置页面手动开启通知权限
+                    Intent intent = new Intent();
+                    intent.setAction("android.settings.APP_NOTIFICATION_SETTINGS");
+                    // 对于 Android 12 及以上版本，需要使用新的 intent action
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                        intent.putExtra("android.provider.extra.APP_PACKAGE", activity.getPackageName());
+                    }
+                    activity.startActivity(intent);
+                }
+            }
         }
 
         /**
@@ -38430,7 +38425,7 @@ public class GT {
                     filter.addAction(getClass().getName() + ":" + clickViews[i]);
                 }
                 //注册广播
-                context.registerReceiver(mBroadcastReceiver, filter);
+                context.registerReceiver(mBroadcastReceiver, filter, RECEIVER_EXPORTED);
             }
 
 
@@ -38960,18 +38955,14 @@ public class GT {
          */
         public static void startNotification(FragmentActivity activity, NotificationCompat.Builder builder, int... notifyids) {
             if (activity != null) {
-                GT.AppAuthorityManagement.notification(activity, new OneListener<Boolean>() {
-                    @Override
-                    public void onOneListener(Boolean obj) {
-                        super.onOneListener(obj);
-                        if (obj) {
-                            if (notifyids.length > 0) {
-                                NOTIFYID = notifyids[0];
-                            }
-                            notificationManagerCompat.notify(NOTIFYID, builder.build());
-                        }
+                if(!GT.AppAuthorityManagement.areNotificationsEnabled(activity)){
+                    GT.AppAuthorityManagement.requestNotificationsPermission(activity);
+                }else{
+                    if (notifyids.length > 0) {
+                        NOTIFYID = notifyids[0];
                     }
-                });
+                    notificationManagerCompat.notify(NOTIFYID, builder.build());
+                }
             } else {
                 if (notifyids.length > 0) {
                     NOTIFYID = notifyids[0];
@@ -42740,7 +42731,7 @@ public class GT {
                 filter.addAction(Intent.ACTION_SCREEN_ON);            //屏幕亮起时开启的广播
                 filter.addAction(Intent.ACTION_SCREEN_OFF);            //屏幕关闭时开启的广播
                 filter.addAction(Intent.ACTION_USER_PRESENT);        //屏幕解锁时开启的广播
-                context2.registerReceiver(mScreenReceiver, filter);    //发送广播
+                context2.registerReceiver(mScreenReceiver, filter, RECEIVER_EXPORTED);    //发送广播
 
             }
 
@@ -42802,7 +42793,7 @@ public class GT {
                 headsetPlugReceiver = new HeadsetPlugReceiver();
                 IntentFilter intentFilter = new IntentFilter();
                 intentFilter.addAction("android.intent.action.HEADSET_PLUG");
-                activity.registerReceiver(headsetPlugReceiver, intentFilter);
+                activity.registerReceiver(headsetPlugReceiver, intentFilter, RECEIVER_EXPORTED);
             }
 
             /**
