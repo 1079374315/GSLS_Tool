@@ -396,8 +396,8 @@ import dalvik.system.PathClassLoader;
  * GSLS_TOOL
  * <p>
  * <p>
- * 更新时间:2024.5.16
- * 更新内容 v1.4.5.8 版本：
+ * 更新时间:2024.5.18
+ * 更新内容 v1.4.5.9 版本：
  * CSDN 博客/官网教程:https://blog.csdn.net/qq_39799899
  * GitHub https://github.com/1079374315/GT
  * 更新内容如下：
@@ -34691,7 +34691,7 @@ public class GT {
             private boolean isEventPenetration = false;          //是否事件穿透
             private static boolean isShow = true;                //是否显示
             private String cacheKey;//缓存标识
-            final static int TYPE_SELF_ADAPTION = -1;    //自适应
+            public final static int TYPE_SELF_ADAPTION = -1;    //自适应
             public final static int TYPE_DEFAULT = -1079;    //创建屏幕的类型,默认是使用用户设置的Xml宽高
             public final static int TYPE_PORTRAIT_SCREEN = 0;    //竖屏
             public final static int TYPE_LANDSCAPE = 1;         //横屏
