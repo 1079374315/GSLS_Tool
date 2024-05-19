@@ -12,7 +12,7 @@ public interface ClassType {
 
     //GT库特有的
     String PROVIDER = "com.gsls.gt.GT.ARouter.IProvider";
-    String INTERCEPTOR = "com.gsls.gt.GT.ARouter.IInterceptor";
+    String INTERCEPTOR = "com.gsls.gt.GT.ARouter.Interceptor";
     String BASE_VIEW = "com.gsls.gt.GT.GT_View.BaseView";
     String FLOATING_WINDOW = "com.gsls.gt.GT.GT_FloatingWindow.BaseFloatingWindow";
     String POPUP_WINDOW = "com.gsls.gt.GT.GT_PopupWindow.BasePopupWindow";
