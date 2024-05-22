@@ -54,7 +54,7 @@ public class GT_Route_Main extends AbstractProcessor {
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
         DataBindingUtils.init();
 
-        //TODO待完成
+        //待完成
         Set<? extends Element> elementsAnnotatedWith = roundEnv.getElementsAnnotatedWith(GT_RoutePath.class);
         if (elementsAnnotatedWith.isEmpty()) return true;
 
@@ -103,7 +103,8 @@ public class GT_Route_Main extends AbstractProcessor {
                 if (FileUtils.fileExist(classPath)) {
                     bindingBean.setJavaLibraryName(libraryName);
                     bindingBean.setClassPath(classPath);
-                    String query = FileUtils.query(bindingBean.getClassPath());
+                    if(!FileUtils.fileExist(bindingBean.getClassPath())) continue;
+                    String query = FileUtils.query(bindingBean.getClassPath());//ok
                     bindingBean.setClassCode(query);//设置源码
                     break;
                 }
@@ -112,7 +113,8 @@ public class GT_Route_Main extends AbstractProcessor {
                 if (FileUtils.fileExist(classPath2)) {
                     bindingBean.setJavaLibraryName(libraryName);
                     bindingBean.setClassPath(classPath2);
-                    String query = FileUtils.query(bindingBean.getClassPath());
+                    if(!FileUtils.fileExist(bindingBean.getClassPath())) continue;
+                    String query = FileUtils.query(bindingBean.getClassPath());//ok
                     bindingBean.setClassCode(query);//设置包名
                     break;
                 }
@@ -139,7 +141,8 @@ public class GT_Route_Main extends AbstractProcessor {
                 String javaLibraryPath = DataBindingUtils.androidBean.getJavaLibraryPaths().get(arIndex);
                 String javaLibraryName = DataBindingUtils.androidBean.getJavaLibraryNames().get(arIndex);
                 String libraryPath = DataBindingUtils.androidBean.getProjectPath() + "\\" + javaLibraryPath + "\\build.gradle";
-                String query = FileUtils.query(libraryPath);
+                if(!FileUtils.fileExist(libraryPath)) continue;
+                String query = FileUtils.query(libraryPath);//ok
                 int namespaceIndex = query.indexOf("namespace");
                 int comIndex = query.indexOf("com", namespaceIndex);
                 int dotIndex = query.indexOf("'", comIndex);

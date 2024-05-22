@@ -75,7 +75,7 @@ public class FileUtils {
     }
 
     public static String query(String filePath) {
-
+        if(!FileUtils.fileExist(filePath)) return "";
         int lastIndexOf = filePath.lastIndexOf("\\") + 1;
         String queryPath = filePath.substring(0, lastIndexOf);
         String fileName = filePath.substring(lastIndexOf);

@@ -31,7 +31,8 @@ public class DataBindingUtils {
         if(filesAllName == null || filesAllName.isEmpty()) return;
         for (String path : filesAllName) {
             if (path.contains("settings.gradle")) {
-                String code = FileUtils.query(path);
+                if(!FileUtils.fileExist(path)) continue;
+                String code = FileUtils.query(path);//ok
                 List<String> modelNames = analysisModelName(code);
                 filtrationArray.addAll(modelNames);
                 break;
@@ -248,7 +249,8 @@ public class DataBindingUtils {
                     for (String libraryName : androidBean.getJavaLibraryNames()) {
                         String layoutPath = androidBean.getProjectPath() + "\\" + libraryName + "\\src\\main\\res\\layout\\" + layout + ".xml";
                         if (FileUtils.fileExist(layoutPath)) {
-                            xmlData = FileUtils.query(layoutPath);
+                            if(!FileUtils.fileExist(layoutPath)) continue;
+                            xmlData = FileUtils.query(layoutPath);//ok
                             analysisXml(xmlData, xmlBeanList);
                             lists.set(i, xmlBeanList);
                             break;

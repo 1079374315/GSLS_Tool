@@ -88,7 +88,8 @@ public class GT_DataBindingMain extends AbstractProcessor {
                         bindingBean.setJavaLibraryName(libraryName);
                         bindingBean.setJavaLibraryPath(libraryPath);
                         bindingBean.setClassPath(classPath);
-                        String query = FileUtils.query(bindingBean.getClassPath());
+                        if(!FileUtils.fileExist(bindingBean.getClassPath())) continue;
+                        String query = FileUtils.query(bindingBean.getClassPath());//ok
                         bindingBean.setClassCode(query);//设置源码
                         int R_Index = query.indexOf(".R;");
                         if (R_Index > -1) {
@@ -106,7 +107,8 @@ public class GT_DataBindingMain extends AbstractProcessor {
                         bindingBean.setJavaLibraryName(libraryName);
                         bindingBean.setJavaLibraryPath(libraryPath);
                         bindingBean.setClassPath(classPath2);
-                        String query = FileUtils.query(bindingBean.getClassPath());
+                        if(!FileUtils.fileExist(bindingBean.getClassPath())) continue;
+                        String query = FileUtils.query(bindingBean.getClassPath());//ok
                         bindingBean.setClassCode(query);//设置源码
                         int R_Index = query.indexOf(".R");
                         if (R_Index > -1) {

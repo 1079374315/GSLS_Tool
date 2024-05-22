@@ -636,18 +636,3 @@ fun View.getViewMap(): MutableMap<String, Int> {
 }
 
 fun View.getViewList(): MutableList<View> = showAllViewChild(0, false)
-
-
-
-//延时加载
-class Later<T>(private val block: () -> T) {
-    var value: Any? = null
-    operator fun getValue(any: Any?, prop: KProperty<*>): T {
-        if (value == null) {
-            value = block()
-        }
-        return value as T
-    }
-}
-
-fun <T> load(block: () -> T) = Later(block)

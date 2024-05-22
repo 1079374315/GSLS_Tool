@@ -81,7 +81,8 @@ public class GT_R_Main extends AbstractProcessor {
                                 }
                             }
                             bindingBean.setClassPath(classPath);
-                            String query = FileUtils.query(bindingBean.getClassPath());
+                            if(!FileUtils.fileExist(bindingBean.getClassPath())) continue;
+                            String query = FileUtils.query(bindingBean.getClassPath());//ok
                             bindingBean.setClassCode(query);
                         }
                     }

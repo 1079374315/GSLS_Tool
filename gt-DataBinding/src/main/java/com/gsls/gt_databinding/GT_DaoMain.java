@@ -73,7 +73,8 @@ public class GT_DaoMain extends AbstractProcessor {
                 if (FileUtils.fileExist(classPath)) {
                     bindingBean.setJavaLibraryName(libraryName);
                     bindingBean.setClassPath(classPath);
-                    String query = FileUtils.query(bindingBean.getClassPath());
+                    if(!FileUtils.fileExist(bindingBean.getClassPath())) continue;
+                    String query = FileUtils.query(bindingBean.getClassPath());//ok
                     bindingBean.setClassCode(query);//设置源码
                     break;
                 }
@@ -82,7 +83,8 @@ public class GT_DaoMain extends AbstractProcessor {
                 if (FileUtils.fileExist(classPath2)) {
                     bindingBean.setJavaLibraryName(libraryName);
                     bindingBean.setClassPath(classPath2);
-                    String query = FileUtils.query(bindingBean.getClassPath());
+                    if(!FileUtils.fileExist(bindingBean.getClassPath())) continue;
+                    String query = FileUtils.query(bindingBean.getClassPath());//ok
                     bindingBean.setClassCode(query);//设置包名
                     break;
                 }
