@@ -396,8 +396,8 @@ import dalvik.system.PathClassLoader;
  * GSLS_TOOL
  * <p>
  * <p>
- * 更新时间:2024.5.22
- * 更新内容 v1.4.6.1 版本：
+ * 更新时间:2024.5.25
+ * 更新内容 v1.4.6.2 版本：
  * CSDN 博客/官网教程:https://blog.csdn.net/qq_39799899
  * GitHub https://github.com/1079374315/GT
  * 更新内容如下：
@@ -2176,9 +2176,13 @@ public class GT {
             return this;
         }
 
+
+        public void start(GT.ARouter.InterceptorCallback interceptorCallback) {
+            navigation(interceptorCallback);
+        }
+
         /**
          * 启动拦截器
-         *
          * @param interceptorCallback 拦截器监听
          * @param <T>
          * @return
@@ -2189,9 +2193,13 @@ public class GT {
             return navigation();
         }
 
+
+        public void start(Activity activity, GT.ARouter.InterceptorCallback... interceptorCallback) {
+            navigation(activity, interceptorCallback);
+        }
+
         /**
          * 拦截器方式
-         *
          * @param activity            上下文
          * @param interceptorCallback 拦截器监听
          * @param <T>
@@ -2206,12 +2214,19 @@ public class GT {
             return navigation();
         }
 
+        public void start(Activity activity) {
+            navigation(activity);
+        }
+
         public <T> T navigation(Activity activity) {
             softReferenceActivity = new SoftReference(activity);
             //否则就执行 路由基本逻辑
             return navigation();
         }
 
+        public void start() {
+            navigation();
+        }
 
         public <T> T navigation() {
             if (aRouterBean == null) return null;
@@ -38955,9 +38970,9 @@ public class GT {
          */
         public static void startNotification(FragmentActivity activity, NotificationCompat.Builder builder, int... notifyids) {
             if (activity != null) {
-                if(!GT.AppAuthorityManagement.areNotificationsEnabled(activity)){
+                if (!GT.AppAuthorityManagement.areNotificationsEnabled(activity)) {
                     GT.AppAuthorityManagement.requestNotificationsPermission(activity);
-                }else{
+                } else {
                     if (notifyids.length > 0) {
                         NOTIFYID = notifyids[0];
                     }
