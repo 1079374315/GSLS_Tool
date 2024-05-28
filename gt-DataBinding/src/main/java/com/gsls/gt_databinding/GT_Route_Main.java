@@ -141,11 +141,18 @@ public class GT_Route_Main extends AbstractProcessor {
                 String javaLibraryPath = DataBindingUtils.androidBean.getJavaLibraryPaths().get(arIndex);
                 String javaLibraryName = DataBindingUtils.androidBean.getJavaLibraryNames().get(arIndex);
                 String libraryPath = DataBindingUtils.androidBean.getProjectPath() + "\\" + javaLibraryPath + "\\build.gradle";
-                if(!FileUtils.fileExist(libraryPath)) continue;
+                if(!FileUtils.fileExist(libraryPath)) {
+                    libraryPath = DataBindingUtils.androidBean.getProjectPath() + "\\" + javaLibraryPath + "\\build.gradle.kts";
+                    if(!FileUtils.fileExist(libraryPath)) continue;
+                }
                 String query = FileUtils.query(libraryPath);//ok
                 int namespaceIndex = query.indexOf("namespace");
                 int comIndex = query.indexOf("com", namespaceIndex);
                 int dotIndex = query.indexOf("'", comIndex);
+                if(dotIndex == -1) {
+                    dotIndex = query.indexOf("\"", comIndex);
+                }
+
                 if (namespaceIndex != -1 && dotIndex != -1 && namespaceIndex < dotIndex) {
                     String modelPackName = query.substring(comIndex, dotIndex);
                     String className = modelPackName + ".ARouter$$" + javaLibraryName;//com.example.myapplication.ARouter$$app

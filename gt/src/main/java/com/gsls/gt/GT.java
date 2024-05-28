@@ -396,8 +396,8 @@ import dalvik.system.PathClassLoader;
  * GSLS_TOOL
  * <p>
  * <p>
- * 更新时间:2024.5.25
- * 更新内容 v1.4.6.2 版本：
+ * 更新时间:2024.5.28
+ * 更新内容 v1.4.6.3 版本：
  * CSDN 博客/官网教程:https://blog.csdn.net/qq_39799899
  * GitHub https://github.com/1079374315/GT
  * 更新内容如下：
@@ -407,6 +407,8 @@ import dalvik.system.PathClassLoader;
  * 4.增加 路由框架 GT.ARouter，教程请参考：https://blog.csdn.net/qq_39799899
  * 5.降低GT库 JDK版本、降低KT版本、适配gt-DataBinding项目结构
  * 6.适配Android14 自定义通知栏 单击事件引起的问题，未涉及 通知栏单击事件的不受影响
+ * 7.适配AS kts依赖
+ * 8.新增单击间隔限制: GT.ApplicationUtils.clickIntervalTimes
  *
  * <p>
  * <p>
@@ -23309,6 +23311,24 @@ public class GT {
             }
         }
 
+        public static void clickIntervalTimes(View view, View.OnClickListener onClickListener, int... intervalTimes){
+            final long[] lastClickTime = {0};
+            int intervalTime = 1000; // 间隔时间为1秒
+            if(intervalTimes != null && intervalTimes.length > 0 && intervalTimes[0] >= 0){
+                intervalTime = intervalTimes[0];
+            }
+            long finalIntervalTime = intervalTime;
+            view.setOnClickListener(v -> {
+                long currentTime = System.currentTimeMillis();
+                if (currentTime - lastClickTime[0] < finalIntervalTime) {
+                    // 间隔时间小于1秒，不执行点击操作
+                    return;
+                }
+                // 执行点击操作
+                lastClickTime[0] = currentTime;
+                onClickListener.onClick(v);
+            });
+        }
 
     }
 

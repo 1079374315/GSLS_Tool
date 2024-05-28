@@ -19,7 +19,7 @@ public class DataBindingUtils {
     private static TypeSpec logTypeSpec;
     private static JavaFile.Builder builder;
     public static final AndroidBean androidBean = new AndroidBean();
-    private static final boolean isLog = true;//是否日志
+    private static final boolean isLog = false;//是否日志
     public static final List<String> filtrationArray = new ArrayList<>();//默认过滤文件名单
 
     private static final List<String> routeName = new ArrayList<>();
@@ -48,14 +48,22 @@ public class DataBindingUtils {
      */
     private static List<String> analysisModelName(String data) {
         List<String> list = new ArrayList<>();
+        if(!data.contains("include")) return list;
+        int index1 = data.indexOf("include");
+        data = data.substring(index1, data.length());
         while (data.contains("include")) {
             int indexOf = data.indexOf("include");
             if (indexOf == -1) break;
             int indexOf2 = data.indexOf(":", indexOf) + 1;
             int indexOf3 = data.indexOf("'", indexOf2);
+            if(indexOf3 == -1) {
+                indexOf3 = data.indexOf("\"", indexOf2);
+            }
             if (indexOf3 == -1 || indexOf2 >= indexOf3) break;
             String modeName = data.substring(indexOf2, indexOf3);
-            if (!list.contains(modeName) && !modeName.equals("gt") && !modeName.equals("gt-DataBinding")) list.add(modeName);
+            if (!list.contains(modeName) && !modeName.equals("gt") && !modeName.equals("gt-DataBinding")) {
+                list.add(modeName);
+            }
             data = data.substring(indexOf3);
         }
         return list;
@@ -94,36 +102,12 @@ public class DataBindingUtils {
     }
 
     /**
-     * 解析 settings.gradle 文件进行获取项目所有模块名称
-     *
-     * @param data
-     */
-    public static void analysisGradle(String data) {
-        try {
-            int indexStart = data.indexOf("include ':") + "include ':".length();
-            int indexClose = data.indexOf("'", indexStart);
-            if (indexClose == -1) return;
-            String moduleName = data.substring(indexStart, indexClose);
-//            android_bean_list.get
-//            javaLibraryNames.add(moduleName);
-            data = data.substring(indexClose);
-            analysisGradle(data);
-        } catch (Exception e) {
-            // 解析完成
-        }
-    }
-
-    /**
      * 解析xml
      *
      * @param xmlData
      */
     public static void analysisXml(String xmlData, List<XmlBean> xmlBeanList) {
         try {
-
-//            int idIndex = xmlData.indexOf("android:id=\"@+id/");
-//            int layoutIndex = xmlData.indexOf("layout=\"@layout/");
-
             //去掉xml布局中 被注释的代码
             if (xmlData.contains("<!--")) {
                 String start = xmlData.substring(0, xmlData.indexOf("<!--"));

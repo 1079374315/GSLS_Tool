@@ -148,32 +148,7 @@ public class GT_R_Main extends AbstractProcessor {
             if (codeSp.length < 4)
                 continue;
             String resType = codeSp[1];
-            StringBuilder resCode = new StringBuilder();
-            for (int i = 0; i < codeSp.length; i++) {
-                switch (i) {
-                    case 0: {
-                        String string = codeSp[i];
-                        if (string.equals("int"))
-                            resCode.append("public static final " + codeSp[i] + " ");
-                        else
-                            resCode.append("public final " + codeSp[i] + " ");
-                        break;
-                    }
-                    case 1:
-                        continue;// 跳过资源类型
-                    case 2: {
-                        resCode.append(codeSp[i] + " = ");
-                        break;
-                    }
-                    default: {
-                        resCode.append(codeSp[i] + "");
-                        break;
-                    }
-                }
-            }
-
-            String index = "";//暂时不加入 资源索引
-            resCode.append("; " + index);
+            StringBuilder resCode = getStringBuilder(codeSp);
             if(recordList.isEmpty()) {
                 oldType = resType;
                 recordList.add(resType);
@@ -198,6 +173,36 @@ public class GT_R_Main extends AbstractProcessor {
             resSB.append("\t}");
         }
         return resSB.toString();
+    }
+
+    private static StringBuilder getStringBuilder(String[] codeSp) {
+        StringBuilder resCode = new StringBuilder();
+        for (int i = 0; i < codeSp.length; i++) {
+            switch (i) {
+                case 0: {
+                    String string = codeSp[i];
+                    if (string.equals("int"))
+                        resCode.append("public static final " + codeSp[i] + " ");
+                    else
+                        resCode.append("public final " + codeSp[i] + " ");
+                    break;
+                }
+                case 1:
+                    continue;// 跳过资源类型
+                case 2: {
+                    resCode.append(codeSp[i] + " = ");
+                    break;
+                }
+                default: {
+                    resCode.append(codeSp[i] + "");
+                    break;
+                }
+            }
+        }
+
+        String index = "";//暂时不加入 资源索引
+        resCode.append("; " + index);
+        return resCode;
     }
 
 

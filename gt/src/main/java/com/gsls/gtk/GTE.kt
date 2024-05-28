@@ -41,8 +41,8 @@ import kotlin.reflect.KProperty
 //********************************** 日志 扩展 ***********************************
 
 //打印调用者信息
-fun String.logc() {
-    GT.logCallback(4, this, "GT_")
+fun String.logc(number: Int = 4) {
+    GT.logCallback(number, this, "GT_")
 }
 
 
@@ -379,11 +379,10 @@ fun <T> String.querySP(dataType: Class<T>): T? {
 
 fun <T> String.querySP(): Any? {
     if (sp != null) {
-        return  sp!!.query(this)
+        return sp!!.query(this)
     }
     return null
 }
-
 
 
 fun String.updataSP(key: Any): GT_SharedPreferences? {
@@ -595,17 +594,18 @@ fun Any.toStrings(): String {
 
 //显示所有View父类节点
 fun View.showAllViewParent(index: Int, isLog: Boolean = true) {
-    if(isLog)"view:$this".logt()
-    if(index == 0) mutableListOf.clear()
-    if(!mutableListOf.contains(this)) mutableListOf.add(this)
+    if (isLog) "view:$this".logt()
+    if (index == 0) mutableListOf.clear()
+    if (!mutableListOf.contains(this)) mutableListOf.add(this)
     parent?.let {
         val view = it as View
-        if(!mutableListOf.contains(view)) mutableListOf.add(view)
+        if (!mutableListOf.contains(view)) mutableListOf.add(view)
         view.showAllViewParent(1, isLog)
     }
 }
 
 private val mutableListOf = mutableListOf<View>()
+
 //显示所有View子类节点
 fun View.showAllViewChild(index: Int, isLog: Boolean = true): MutableList<View> {
     if (isLog) "view:$this".logt()
@@ -636,3 +636,8 @@ fun View.getViewMap(): MutableMap<String, Int> {
 }
 
 fun View.getViewList(): MutableList<View> = showAllViewChild(0, false)
+
+//设置单击间隔时间
+fun View.clickIntervalTimes(intervalTimes: Int = 1000, onClickListener: View.OnClickListener) {
+    GT.ApplicationUtils.clickIntervalTimes(this, onClickListener, intervalTimes)
+}

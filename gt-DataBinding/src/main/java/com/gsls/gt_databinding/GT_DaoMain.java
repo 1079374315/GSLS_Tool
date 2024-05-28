@@ -205,7 +205,7 @@ public class GT_DaoMain extends AbstractProcessor {
             } else {
                 String[] split = parameters.split(" ");
                 String type = split[0];
-                if (type.length() == 0) {
+                if (type.isEmpty()) {
                     type = "null";
                 } else {
                     value = split[1] + "] \"+";
