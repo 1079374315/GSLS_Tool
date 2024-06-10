@@ -396,8 +396,8 @@ import dalvik.system.PathClassLoader;
  * GSLS_TOOL
  * <p>
  * <p>
- * 更新时间:2024.5.28
- * 更新内容 v1.4.6.3 版本：
+ * 更新时间:2024.6.10
+ * 更新内容 v1.4.6.4 版本：
  * CSDN 博客/官网教程:https://blog.csdn.net/qq_39799899
  * GitHub https://github.com/1079374315/GT
  * 更新内容如下：
@@ -407,8 +407,11 @@ import dalvik.system.PathClassLoader;
  * 4.增加 路由框架 GT.ARouter，教程请参考：https://blog.csdn.net/qq_39799899
  * 5.降低GT库 JDK版本、降低KT版本、适配gt-DataBinding项目结构
  * 6.适配Android14 自定义通知栏 单击事件引起的问题，未涉及 通知栏单击事件的不受影响
- * 7.适配AS kts依赖
- * 8.新增单击间隔限制: GT.ApplicationUtils.clickIntervalTimes
+ * 7.优化 串口引入的问题
+ * 8.解决最新AS在使用R2的情况下出现的问题(需要先注释掉R2注解，先编译完成后再使用)
+ * 9.适配AS kts依赖
+ * 10.新增单击间隔限制: GT.ApplicationUtils.clickIntervalTimes
+ * 11.优化 路由框架 GT.ARouter适配问题
  *
  * <p>
  * <p>

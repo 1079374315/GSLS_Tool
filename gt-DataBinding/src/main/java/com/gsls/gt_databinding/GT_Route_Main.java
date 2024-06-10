@@ -140,17 +140,24 @@ public class GT_Route_Main extends AbstractProcessor {
             for (int arIndex = 0; arIndex < DataBindingUtils.androidBean.getJavaLibraryPaths().size(); arIndex++) {
                 String javaLibraryPath = DataBindingUtils.androidBean.getJavaLibraryPaths().get(arIndex);
                 String javaLibraryName = DataBindingUtils.androidBean.getJavaLibraryNames().get(arIndex);
+
+                boolean isKT = false;
+
                 String libraryPath = DataBindingUtils.androidBean.getProjectPath() + "\\" + javaLibraryPath + "\\build.gradle";
                 if(!FileUtils.fileExist(libraryPath)) {
                     libraryPath = DataBindingUtils.androidBean.getProjectPath() + "\\" + javaLibraryPath + "\\build.gradle.kts";
                     if(!FileUtils.fileExist(libraryPath)) continue;
+                    isKT = true;
                 }
+
                 String query = FileUtils.query(libraryPath);//ok
                 int namespaceIndex = query.indexOf("namespace");
                 int comIndex = query.indexOf("com", namespaceIndex);
-                int dotIndex = query.indexOf("'", comIndex);
-                if(dotIndex == -1) {
+                int dotIndex = 0;
+                if(isKT){
                     dotIndex = query.indexOf("\"", comIndex);
+                }else{
+                    dotIndex = query.indexOf("'", comIndex);
                 }
 
                 if (namespaceIndex != -1 && dotIndex != -1 && namespaceIndex < dotIndex) {
