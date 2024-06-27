@@ -9,7 +9,6 @@ import com.gsls.gt_databinding.utils.FileUtils;
 import java.io.IOException;
 import java.io.Writer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -60,13 +59,32 @@ public class GT_R_Main extends AbstractProcessor {
                 }
             }
 
+            //根据 资源包名最后路径 获取当前模块名称
+            String modelName = "";
+            String resourcePackName = bindingBean.getResourcePackName();
+            if(resourcePackName.contains("\\.")){
+                String[] split = resourcePackName.split("\\.");
+                if(split.length > 0){
+                    modelName = split[split.length - 1];
+                }
+            }
+
+            //如果用户设置了模块名称，那就用用户的
+            String userModelName = annotation.modelName();
+            if(userModelName != null && !userModelName.isEmpty()){
+                modelName = userModelName;
+            }
+
             for (int libraryNameIndex = 0; libraryNameIndex < DataBindingUtils.androidBean.getJavaLibraryPaths().size(); libraryNameIndex++) {
                 String libraryPath = DataBindingUtils.androidBean.getJavaLibraryPaths().get(libraryNameIndex);
                 String classPath = DataBindingUtils.androidBean.getProjectPath() + "\\" + libraryPath + "\\build\\intermediates\\runtime_symbol_list";
+                if(!classPath.contains(modelName)) continue;//过滤掉 不是当前模块的 R 文件
 
                 //Java
                 if (FileUtils.fileExist(classPath)) {
                     if(FileUtils.fileIsDirectory(classPath)){
+
+                        //这里是为了 debug 和 release 处理
                         List<String> R_List = FileUtils.getFilesAllName(classPath);
                         if(R_List != null && !R_List.isEmpty()){
                             String type = annotation.type();//R文件绑定类型
@@ -92,7 +110,7 @@ public class GT_R_Main extends AbstractProcessor {
 
             //生成包名
             StringBuilder builder = new StringBuilder();
-            builder.append("package " + bindingBean.getPackName() + ";\n\n");
+            builder.append("package " + bindingBean.getResourcePackName() + ";\n\n");
             builder.append("import com.gsls.gt.GT;\n");
             builder.append("\n");//导入的包与逻辑代码换行
 
@@ -115,13 +133,13 @@ public class GT_R_Main extends AbstractProcessor {
              */
             //class 文件代码
             String classCode = bindingBean.getClassCode();
-            String code = analysisJavaCode(classCode, className);
+            String code = analysisJavaCode(classCode);
             builder.append(code);
             builder.append("\n}\n"); // close class
 
             //生成最终添加好的代码
             try {
-                JavaFileObject source = processingEnv.getFiler().createSourceFile(bindingBean.getPackName() + "." + className);
+                JavaFileObject source = processingEnv.getFiler().createSourceFile(bindingBean.getResourcePackName() + "." + className);
                 Writer writer = source.openWriter();
                 writer.write(builder.toString());
                 writer.flush();
@@ -135,7 +153,7 @@ public class GT_R_Main extends AbstractProcessor {
         return true;
     }
 
-    private static String analysisJavaCode(String classCode,String name) {
+    private static String analysisJavaCode(String classCode) {
         if(classCode == null) return "";
         Map<String, List<String>> resMap = new HashMap<String, List<String>>();
         //第一次解析
@@ -166,7 +184,7 @@ public class GT_R_Main extends AbstractProcessor {
         StringBuilder resSB = new StringBuilder();
         for(String type :resMap.keySet()) {
             List<String> list = resMap.get(type);
-            resSB.append("\r\n\tclass " + type + " {\n");
+            resSB.append("\r\n\tpublic class " + type + " {\n");
             for(String code : list) {
                 resSB.append("\t\t" + code + "\r\n");
             }

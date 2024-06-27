@@ -410,7 +410,6 @@ public class FileUtils {
         File file = new File(path);
         File[] files = file.listFiles();
         if (files == null) {
-            DataBindingUtils.log("error empty directory");
             return null;
         }
         List<String> s = new ArrayList<>();

@@ -74,13 +74,12 @@ public class GT_Route_Path extends AbstractProcessor {
                 case "ClassType.DIALOG_FRAGMENT_X":
                     bindingmap.put(className, ClassType.DIALOG_FRAGMENT_X);
                     break;
-                case "ClassType.FRAGMENT_X":
+                case "ClassType.FRAGMENT":
                     bindingmap.put(className, ClassType.FRAGMENT_X);
                     break;
                 case "ClassType.VIEW_MODEL":
                     bindingmap.put(className, ClassType.VIEW_MODEL);
                     break;
-
 
                 case "ClassType.BASE_VIEW":
                     bindingmap.put(className, ClassType.BASE_VIEW);

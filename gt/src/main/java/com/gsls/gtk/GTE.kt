@@ -20,8 +20,12 @@ import androidx.annotation.LayoutRes
 import androidx.annotation.StringRes
 import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import com.gsls.gt.GT
 import com.gsls.gt.GT.GT_SharedPreferences
+import com.gsls.gt.GT.GT_View.BaseView
 import com.gsls.gt.GT.Glide
 import com.gsls.gt.GT.LOG
 import com.gsls.gt.GT.LOG.getClassName
@@ -306,37 +310,37 @@ fun GT.GT_WebView.BaseWebView.assetLocales(): Array<String> = GT.Res.assetLocale
 
 
 //assetLocales
-fun assetsGet(context: Context, assetsName: String, onListener: GT.OnListener<String>) =
+fun assetsGet(context: Context, assetsName: String, onListener: GT.OneListener<String>) =
     GT.ApplicationUtils.getAssetsValue(context, assetsName, onListener)
 
-fun Context.assets(assetsName: String, onListener: GT.OnListener<String>) =
+fun Context.assets(assetsName: String, onListener: GT.OneListener<String>) =
     GT.ApplicationUtils.getAssetsValue(this, assetsName, onListener)
 
-fun Activity.assets(assetsName: String, onListener: GT.OnListener<String>) =
+fun Activity.assets(assetsName: String, onListener: GT.OneListener<String>) =
     GT.ApplicationUtils.getAssetsValue(this, assetsName, onListener)
 
-fun Fragment.assets(assetsName: String, onListener: GT.OnListener<String>) =
+fun Fragment.assets(assetsName: String, onListener: GT.OneListener<String>) =
     GT.ApplicationUtils.getAssetsValue(requireContext(), assetsName, onListener)
 
-fun DialogFragment.assets(assetsName: String, onListener: GT.OnListener<String>) =
+fun DialogFragment.assets(assetsName: String, onListener: GT.OneListener<String>) =
     GT.ApplicationUtils.getAssetsValue(requireContext(), assetsName, onListener)
 
 fun GT.GT_FloatingWindow.BaseFloatingWindow.assets(
     assetsName: String,
-    onListener: GT.OnListener<String>
+    onListener: GT.OneListener<String>
 ) =
     GT.ApplicationUtils.getAssetsValue(context, assetsName, onListener)
 
 fun GT.GT_PopupWindow.BasePopupWindow.assets(
     assetsName: String,
-    onListener: GT.OnListener<String>
+    onListener: GT.OneListener<String>
 ) =
     GT.ApplicationUtils.getAssetsValue(context, assetsName, onListener)
 
-fun GT.GT_View.BaseView.assets(assetsName: String, onListener: GT.OnListener<String>) =
+fun GT.GT_View.BaseView.assets(assetsName: String, onListener: GT.OneListener<String>) =
     GT.ApplicationUtils.getAssetsValue(context, assetsName, onListener)
 
-fun GT.GT_WebView.BaseWebView.assets(assetsName: String, onListener: GT.OnListener<String>) =
+fun GT.GT_WebView.BaseWebView.assets(assetsName: String, onListener: GT.OneListener<String>) =
     GT.ApplicationUtils.getAssetsValue(context, assetsName, onListener)
 
 
@@ -641,3 +645,61 @@ fun View.getViewList(): MutableList<View> = showAllViewChild(0, false)
 fun View.clickIntervalTimes(intervalTimes: Int = 1000, onClickListener: View.OnClickListener) {
     GT.ApplicationUtils.clickIntervalTimes(this, onClickListener, intervalTimes)
 }
+
+//延时加载
+class Later<T>(private val block: () -> T) {
+    var value: Any? = null
+    operator fun getValue(any: Any?, prop: KProperty<*>): T {
+        if (value == null) {
+            value = block()
+        }
+        return value as T
+    }
+}
+
+fun <T> load(block: () -> T) = Later(block)
+
+fun <T : ViewModel> Any.loadViewModel(modelClass: Class<T>): T {
+    return when(this){
+        is Fragment ->{
+            ViewModelProvider(this)[modelClass]
+        }
+        is FragmentActivity ->{
+            ViewModelProvider(this)[modelClass]
+        }
+        is DialogFragment ->{
+            ViewModelProvider(this)[modelClass]
+        }
+        is BaseView ->{
+            ViewModelProvider(this)[modelClass]
+        }
+        is GT.GT_FloatingWindow.BaseFloatingWindow ->{
+            ViewModelProvider(this)[modelClass]
+        }
+        is GT.GT_PopupWindow.BasePopupWindow ->{
+            ViewModelProvider(this)[modelClass]
+        }
+        is GT.GT_Notification.BaseNotification ->{
+            ViewModelProvider(this)[modelClass]
+        }
+        is GT.GT_WebView.BaseWebView ->{
+            ViewModelProvider(this)[modelClass]
+        }
+        else -> ({
+            GT.AnnotationAssist.classToObject(modelClass)
+        }) as T
+    }
+}
+
+fun View.show(){
+    this.visibility = View.VISIBLE
+}
+fun View.gone(){
+    this.visibility = View.GONE
+}
+fun View.hide(){
+    this.visibility = View.INVISIBLE
+}
+
+//触摸事件拦截
+fun View.interceptClick() = GT.ApplicationUtils.interceptClick(this)

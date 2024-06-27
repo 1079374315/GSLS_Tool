@@ -10,7 +10,6 @@ import com.gsls.gt_databinding.utils.FileUtils;
 import java.io.IOException;
 import java.io.Writer;
 import java.net.URL;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -215,20 +214,21 @@ public class GT_DataBindingMain extends AbstractProcessor {
 
                 //导入特定的包
                 switch (bindingBean.getBingingType()) {
-                    case GT_DataBinding.Activity:
+                    case GT_DataBinding.ACTIVITY:
                         break;
-                    case GT_DataBinding.Fragment:
+                    case GT_DataBinding.FRAGMENT:
                         break;
-                    case GT_DataBinding.DialogFragment:
+                    case GT_DataBinding.DIALOG_FRAGMENT:
                         break;
-                    case GT_DataBinding.PopupWindow:
-                    case GT_DataBinding.View:
-                    case GT_DataBinding.Notification:
+                    case GT_DataBinding.POPUP_WINDOW:
+                    case GT_DataBinding.BASE_VIEW:
+                    case GT_DataBinding.VIEW:
+                    case GT_DataBinding.NOTIFICATION:
                         builder.append("import android.content.Context;\n");
                         break;
-                    case GT_DataBinding.FloatingWindow:
+                    case GT_DataBinding.FLOATING_WINDOW:
                         break;
-                    case GT_DataBinding.Adapter:
+                    case GT_DataBinding.ADAPTER:
                         builder.append("import android.content.Context;\n")
                                 //导入****.R
                                 .append("import " + bindingBean.getResourcePackName() + ".R;\n")
@@ -248,29 +248,30 @@ public class GT_DataBindingMain extends AbstractProcessor {
 
                 //根据不同的绑定类型 进行智能继承
                 switch (bindingBean.getBingingType()) {
-                    case GT_DataBinding.Activity:
+                    case GT_DataBinding.ACTIVITY:
                         builder.append("\npublic class " + bindingBean.getClassName() + "Binding<VM> extends GT.GT_Activity.DataBindingActivity {\n\n");
                         break;
-                    case GT_DataBinding.Fragment:
+                    case GT_DataBinding.FRAGMENT:
                         builder.append("\npublic class " + bindingBean.getClassName() + "Binding<VM> extends GT.GT_Fragment.DataBindingFragment {\n\n");
                         break;
-                    case GT_DataBinding.DialogFragment:
+                    case GT_DataBinding.DIALOG_FRAGMENT:
                         builder.append("\npublic class " + bindingBean.getClassName() + "Binding<VM> extends GT.GT_Dialog.DataBindingDialogFragment {\n\n");
                         break;
-                    case GT_DataBinding.FloatingWindow:
+                    case GT_DataBinding.FLOATING_WINDOW:
                         builder.append("\npublic class " + bindingBean.getClassName() + "Binding<VM> extends GT.GT_FloatingWindow.DataBindingFloatingWindow {\n\n");
                         break;
-                    case GT_DataBinding.PopupWindow:
+                    case GT_DataBinding.POPUP_WINDOW:
                         builder.append("\npublic class " + bindingBean.getClassName() + "Binding<VM> extends GT.GT_PopupWindow.DataBindingPopupWindow {\n\n");
                         break;
-                    case GT_DataBinding.Adapter:
+                    case GT_DataBinding.ADAPTER:
                         builder.append("\npublic class " + bindingBean.getClassName() + "Binding<T> extends GT.Adapters.DataBindingAdapter<T, " + bindingBean.getClassName() + "Binding." + bindingBean.getClassName() + "ViewHolder> {\n");
                         break;
-                    case GT_DataBinding.View:
+                    case GT_DataBinding.BASE_VIEW:
+                    case GT_DataBinding.VIEW:
                         builder.append("\npublic class " + bindingBean.getClassName() + "Binding<VM> extends GT.GT_View.DataBindingView {\n\n");
                         break;
 
-                    case GT_DataBinding.Notification:
+                    case GT_DataBinding.NOTIFICATION:
                         builder.append("\npublic class " + bindingBean.getClassName() + "Binding<VM> extends GT.GT_Notification.DataBindingNotification {\n\n");
                         break;
 
@@ -278,7 +279,7 @@ public class GT_DataBindingMain extends AbstractProcessor {
 
 
                 //生成变量名
-                if (!GT_DataBinding.Adapter.equals(bindingBean.getBingingType())) {
+                if (!GT_DataBinding.ADAPTER.equals(bindingBean.getBingingType())) {
                     for (int i = 0; i < xmlBeanList.size(); i++) {
                         XmlBean xmlBean = xmlBeanList.get(i);
                         String viewName = xmlBean.getViewName();
@@ -286,7 +287,7 @@ public class GT_DataBindingMain extends AbstractProcessor {
                     }
                 }
 
-                if (!GT_DataBinding.Adapter.equals(bindingBean.getBingingType())) {
+                if (!GT_DataBinding.ADAPTER.equals(bindingBean.getBingingType())) {
                     builder.append("\tprotected VM viewModel;\n");//添加 ViewModel
                     //生成GT DataBinding 类
                     builder.append("\n\tprivate " + bindingBean.getClassName() + "Binding " + DataBindingUtils.getLowercaseLetter(bindingBean.getClassName()) + "Binding;\n\n");
@@ -295,19 +296,19 @@ public class GT_DataBindingMain extends AbstractProcessor {
 
                 //根据不同的绑定类型 进行类组件的初始化
                 switch (bindingBean.getBingingType()) {
-                    case GT_DataBinding.Activity://通过
+                    case GT_DataBinding.ACTIVITY://通过
                         builder.append("\tprotected void initView(Bundle savedInstanceState) {\n" +
                                 "\t\tsuper.initView(savedInstanceState);\n" +
                                 "\t\t" + DataBindingUtils.getLowercaseLetter(bindingBean.getClassName()) + "Binding = GT.DataBindingUtil.setContentView(this);\n");
                         break;
 
-                    case GT_DataBinding.FloatingWindow://通过
+                    case GT_DataBinding.FLOATING_WINDOW://通过
                         builder.append("\tprotected void initView(View view) {\n" +
                                 "\t\tsuper.initView(view);\n" +
                                 "\t\t" + DataBindingUtils.getLowercaseLetter(bindingBean.getClassName()) + "Binding = GT.DataBindingUtil.setContentView(this, view, context);\n");
                         break;
 
-                    case GT_DataBinding.PopupWindow://通过
+                    case GT_DataBinding.POPUP_WINDOW://通过
                         builder.append("\tpublic " + bindingBean.getClassName() + "Binding() {\n" +
                                 "\t}\n\n");
 
@@ -324,7 +325,7 @@ public class GT_DataBindingMain extends AbstractProcessor {
                                 "\t\t" + DataBindingUtils.getLowercaseLetter(bindingBean.getClassName()) + "Binding = GT.DataBindingUtil.setContentView(this, view, context);\n");
                         break;
 
-                    case GT_DataBinding.Adapter://可以参考
+                    case GT_DataBinding.ADAPTER://可以参考
 
                         builder.append("\n\tpublic " + bindingBean.getClassName() + "Binding() {}" +
                                 "\n\n");
@@ -366,7 +367,8 @@ public class GT_DataBindingMain extends AbstractProcessor {
 
                         break;
 
-                    case GT_DataBinding.View://通过
+                    case GT_DataBinding.BASE_VIEW://通过
+                    case GT_DataBinding.VIEW://通过
 
                         builder.append("\tpublic " + bindingBean.getClassName() + "Binding() {\n" +
                                 "\t}\n\n");
@@ -384,18 +386,18 @@ public class GT_DataBindingMain extends AbstractProcessor {
                                 "\t\t" + DataBindingUtils.getLowercaseLetter(bindingBean.getClassName()) + "Binding = GT.DataBindingUtil.setContentView(this, view, context);\n");
                         break;
 
-                    case GT_DataBinding.Fragment://通过
+                    case GT_DataBinding.FRAGMENT://通过
                         builder.append("\tprotected void initView(View view, Bundle savedInstanceState) {\n" +
                                 "\t\tsuper.initView(view, savedInstanceState);\n" +
                                 "\t\t" + DataBindingUtils.getLowercaseLetter(bindingBean.getClassName()) + "Binding = GT.DataBindingUtil.setContentView(this, view);\n");
                         break;
-                    case GT_DataBinding.DialogFragment://通过
+                    case GT_DataBinding.DIALOG_FRAGMENT://通过
                         builder.append("\tprotected void initView(View view, Bundle savedInstanceState) {\n" +
                                 "\t\tsuper.initView(view, savedInstanceState);\n" +
                                 "\t\t" + DataBindingUtils.getLowercaseLetter(bindingBean.getClassName()) + "Binding = GT.DataBindingUtil.setContentView(this, view, activity);\n");
                         break;
 
-                    case GT_DataBinding.Notification:
+                    case GT_DataBinding.NOTIFICATION:
                         builder.append("\tprotected void initView(Context context) {\n" +
                                 "\t\t super.initView(context);\n" +
                                 "\t\t" + DataBindingUtils.getLowercaseLetter(bindingBean.getClassName()) + "Binding = GT.DataBindingUtil.setContentView(this, null, context);\n");
@@ -404,7 +406,7 @@ public class GT_DataBindingMain extends AbstractProcessor {
 
 
                 //进行组件赋值
-                if (GT_DataBinding.Adapter.equals(bindingBean.getBingingType())) {
+                if (GT_DataBinding.ADAPTER.equals(bindingBean.getBingingType())) {
                     builder.append("\tpublic static class " + bindingBean.getClassName() + "ViewHolder extends BaseHolder {\n\n");
                     for (int i = 0; i < xmlBeanList.size(); i++) {
                         XmlBean xmlBean = xmlBeanList.get(i);
@@ -428,7 +430,7 @@ public class GT_DataBindingMain extends AbstractProcessor {
                         builder.append("\t\t\t" + xmlBeanList.get(i).getIdName() + " = " + DataBindingUtils.getLowercaseLetter(bindingBean.getClassName()) + "Binding." + xmlBeanList.get(i).getIdName() + ";\n");
                     }
 
-                    if (!GT_DataBinding.Adapter.equals(bindingBean.getBingingType())) {
+                    if (!GT_DataBinding.ADAPTER.equals(bindingBean.getBingingType())) {
                         builder.append("\t\t}\n\t\tviewModel = GT.DataBindingUtil.dataBinding(this);\n\t}\n\n");
                     } else {
                         builder.append("\t\t}\n\t}\n\n");
@@ -438,7 +440,7 @@ public class GT_DataBindingMain extends AbstractProcessor {
                 }
 
                 //除去适配器 ，其余的都加上
-                if (!GT_DataBinding.Adapter.equals(bindingBean.getBingingType())) {
+                if (!GT_DataBinding.ADAPTER.equals(bindingBean.getBingingType())) {
                     //get、set
                     builder.append("\tpublic " + bindingBean.getClassName() + "Binding get" + bindingBean.getClassName() + "Binding() {\n" +
                             "\t\treturn " + DataBindingUtils.getLowercaseLetter(bindingBean.getClassName()) + "Binding;\n" +
@@ -458,8 +460,8 @@ public class GT_DataBindingMain extends AbstractProcessor {
 
                 //释放View资源
                 switch (bindingBean.getBingingType()) {
-                    case GT_DataBinding.Fragment:
-                    case GT_DataBinding.DialogFragment:
+                    case GT_DataBinding.FRAGMENT:
+                    case GT_DataBinding.DIALOG_FRAGMENT:
                         builder.append("\n\tpublic void onDestroyView() {\n" +
                                 "\t\tsuper.onDestroyView();\n");
                         for (int i = 0; i < xmlBeanList.size(); i++){
@@ -476,7 +478,7 @@ public class GT_DataBindingMain extends AbstractProcessor {
                 }
 
                 //释放 Activity资源
-                if(bindingBean.getBingingType().equals(GT_DataBinding.Activity) ){
+                if(bindingBean.getBingingType().equals(GT_DataBinding.ACTIVITY) ){
                     builder.append("\n\tprotected void onDestroy() {\n" + "\t\tsuper.onDestroy();\n");
                     for (int i = 0; i < xmlBeanList.size(); i++){
                         builder.append("\t\t\t" + xmlBeanList.get(i).getIdName() + " = null;\n");
@@ -488,9 +490,10 @@ public class GT_DataBindingMain extends AbstractProcessor {
 
                 //释放 资源 View,FloatingWindow,PopupWindow
                 switch (bindingBean.getBingingType()) {
-                    case GT_DataBinding.View:
-                    case GT_DataBinding.FloatingWindow:
-                    case GT_DataBinding.PopupWindow:
+                    case GT_DataBinding.VIEW:
+                    case GT_DataBinding.BASE_VIEW:
+                    case GT_DataBinding.FLOATING_WINDOW:
+                    case GT_DataBinding.POPUP_WINDOW:
                         builder.append("\n\tpublic void finish() {\n" + "\t\tsuper.finish();\n");
                         for (int i = 0; i < xmlBeanList.size(); i++){
                             builder.append("\t\t\t" + xmlBeanList.get(i).getIdName() + " = null;\n");

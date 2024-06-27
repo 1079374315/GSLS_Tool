@@ -396,22 +396,15 @@ import dalvik.system.PathClassLoader;
  * GSLS_TOOL
  * <p>
  * <p>
- * 更新时间:2024.6.10
+ * 更新时间:2024.6.27
  * 更新内容 v1.4.6.4 版本：
  * CSDN 博客/官网教程:https://blog.csdn.net/qq_39799899
  * GitHub https://github.com/1079374315/GT
  * 更新内容如下：
- * 1.优化 WebView SslErrorHandler 事件，上架googleplay 遇见的问题
- * 2.优化 Android混合开发中 WebView 上传图片的问题，并增加优化了  拍照、相册选着图片、相册选择视频、拍摄视频、本地文件上传 功能。
- * 3.更新了 GT动画封装库的次数逻辑
- * 4.增加 路由框架 GT.ARouter，教程请参考：https://blog.csdn.net/qq_39799899
- * 5.降低GT库 JDK版本、降低KT版本、适配gt-DataBinding项目结构
- * 6.适配Android14 自定义通知栏 单击事件引起的问题，未涉及 通知栏单击事件的不受影响
- * 7.优化 串口引入的问题
- * 8.解决最新AS在使用R2的情况下出现的问题(需要先注释掉R2注解，先编译完成后再使用)
- * 9.适配AS kts依赖
- * 10.新增单击间隔限制: GT.ApplicationUtils.clickIntervalTimes
- * 11.优化 路由框架 GT.ARouter适配问题
+ * 1.GT_DataBinding 类 所有注解常量均转为大写 (若有涉及到的需要整体将小写转为大写即可)
+ * 2.适配 多层 深层次子模块下 GT_Route路由框架 (在使用上，不受影响)
+ * 3.适配 多层 深层次子模块下 GT_R_Build R2 框架 (在使用上，不受影响)
+ * 4.GT kt语言，增加View 快捷用法 show、gone、hide、interceptClick(拦截单击事件)
  *
  * <p>
  * <p>
@@ -1131,67 +1124,32 @@ public class GT {
      * @param dialogFragment
      * @跳转其他的 DialogFragment
      */
-    public static void startDialogFragment(AppCompatActivity activity, DialogFragment dialogFragment) {
-        dialogFragment.show(activity.getSupportFragmentManager(), dialogFragment.getClass().toString());// 弹出退出提示
-    }
-
-    public static void startDialogFragment(AppCompatActivity activity, Fragment fragment, DialogFragment dialogFragment) {
-        dialogFragment.setTargetFragment(fragment, 1);
-        dialogFragment.show(activity.getSupportFragmentManager(), dialogFragment.getClass().toString());// 弹出退出提示
-    }
-
-    /**
-     * @param dialogFragment
-     * @跳转其他的 DialogFragment
-     */
-    public static void startDialogFragment(DialogFragment dialogFragment, FragmentManager fragmentManager) {
-        dialogFragment.show(fragmentManager, dialogFragment.getClass().toString());// 弹出退出提示
-    }
-
-    /**
-     * @param dialogFragment
-     * @跳转其他的 DialogFragment
-     */
-    public static void startDialogFragment(Class<?> dialogFragmentClass, FragmentManager fragmentManager) {
-        DialogFragment fragment = null;
-        try {
-            fragment = (DialogFragment) dialogFragmentClass.newInstance();
-        } catch (IllegalAccessException e) {
-            e.printStackTrace();
-        } catch (InstantiationException e) {
-            e.printStackTrace();
+    public static void startDialogFragment(Object dialogFragment, Fragment fragment,  FragmentManager... supportFragmentManagers) {
+        DialogFragment dialog = null;
+        FragmentManager supportFragmentManager = null;
+        if(supportFragmentManagers == null || supportFragmentManagers.length == 0 || supportFragmentManagers[0] == null){
+            return;
+        }else{
+            supportFragmentManager = supportFragmentManagers[0];
         }
-        fragment.show(fragmentManager, fragment.getClass().toString());// 弹出退出提示
-    }
 
-    public static void startDialogFragment(Fragment fragment, FragmentManager supportFragmentManager, DialogFragment dialogFragment) {
-        dialogFragment.setTargetFragment(fragment, 1);
-        dialogFragment.show(supportFragmentManager, dialogFragment.getClass().toString());// 弹出退出提示
-    }
-
-    public static void startDialogFragment(AppCompatActivity activity, Class<?> dialogFragmentClass) {
-        DialogFragment fragment = null;
-        try {
-            fragment = (DialogFragment) dialogFragmentClass.newInstance();
-        } catch (IllegalAccessException e) {
-            e.printStackTrace();
-        } catch (InstantiationException e) {
-            e.printStackTrace();
+        if(dialogFragment instanceof String){
+            if(dialogFragment.toString().contains("\\.")){
+                dialog = (DialogFragment) AnnotationAssist.classToObject(dialogFragment);
+            }else{
+                dialog = GT.ARouter.getInstance().build(dialogFragment.toString()).navigation();
+            }
+        }else if(dialogFragment instanceof Class){
+            dialog = (DialogFragment) AnnotationAssist.classToObject(dialogFragment);
+        }else if(dialogFragment instanceof DialogFragment){
+            dialog = (DialogFragment) dialogFragment;
         }
-        fragment.show(activity.getSupportFragmentManager(), fragment.getClass().toString());// 弹出退出提示
-    }
 
-    public static void startDialogFragment(AppCompatActivity activity, Fragment fragment, Class<?> dialogFragmentClass) {
-        DialogFragment dialogFragment = null;
-        try {
-            dialogFragment = (DialogFragment) dialogFragmentClass.newInstance();
-            dialogFragment.setTargetFragment(fragment, 1);
-        } catch (IllegalAccessException e) {
-            e.printStackTrace();
-        } catch (InstantiationException e) {
-            e.printStackTrace();
+        if(fragment != null && dialog != null){
+            dialog.setTargetFragment(fragment, 1);
         }
-        dialogFragment.show(activity.getSupportFragmentManager(), fragment.getClass().toString());// 弹出退出提示
+
+        dialog.show(supportFragmentManager, dialog.getClass().toString());
     }
 
     public static GT_View.BaseView startView(ViewGroup viewGroup, GT_View.BaseView view) {
@@ -1212,7 +1170,8 @@ public class GT {
      *
      * @param toFragment
      */
-    public static void startFloatingWindow(Context context, Class<?> toFragment, Bundle... bundles) {
+    public static void startFloatingWindow(Context context, Object floatingWindow, Bundle... bundles) {
+        if(floatingWindow == null || floatingWindow.toString().length() == 0) return;
         if (Build.VERSION.SDK_INT >= 23) {
             if (!Settings.canDrawOverlays(context)) {
                 Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + context.getPackageName()));
@@ -1221,22 +1180,31 @@ public class GT {
                 return;
             }
         }
+        Class<?> floatingWindowClass = null;
+        if(floatingWindow instanceof String){
+            if(floatingWindow.toString().contains("\\.")){
+                floatingWindowClass = AnnotationAssist.stringToClass(floatingWindowClass.toString());
+            }else{
+                GT.GT_FloatingWindow.BaseFloatingWindow floating = GT.ARouter.getInstance()
+                        .build(floatingWindowClass.toString())
+                        .navigation();
+                bundles[0] = floating.getArguments();
+                floatingWindowClass = floating.getClass();
+                floating = null;
+            }
+        }else if(floatingWindow instanceof Class){
+            floatingWindowClass = (Class<?>) floatingWindow;
+        }else if(floatingWindow instanceof GT_FloatingWindow.BaseFloatingWindow){
+            GT.GT_FloatingWindow.BaseFloatingWindow floating2 = (GT_FloatingWindow.BaseFloatingWindow) floatingWindow;
+            bundles[0] = floating2.getArguments();
+            floatingWindowClass = floating2.getClass();
+            floating2 = null;
+        }
 
-        Intent intent = new Intent(context, toFragment);
+        Intent intent = new Intent(context, floatingWindowClass);
         if (bundles != null && bundles.length != 0 && bundles[0] != null)
             intent.putExtras(bundles[0]);
         context.startService(intent);
-    }
-
-
-    /**
-     * 启动悬浮窗
-     *
-     * @param toFragment
-     */
-    public static void startFloatingWindow(Context context, GT_FloatingWindow.BaseFloatingWindow floatingWindow) {
-        startFloatingWindow(context, floatingWindow.getClass(), floatingWindow.getArguments());
-        floatingWindow = null;
     }
 
     //============================================= 日志功能 =========================================
@@ -1822,6 +1790,15 @@ public class GT {
         private static SoftReference<Activity> softReferenceActivity;//内部引用 activity
         private static SoftReference<GT.ARouter.InterceptorCallback> softReferenceNavigationCallback;//内部引用 NavigationCallback
         private ARouterBean aRouterBean;
+
+        public void showRouterMap(){
+            if(!isDebugARouter)  return;
+            Map<String, GT_RouteMeta> stringGTRouteMetaMap = aRouterMap;
+            for(String key: stringGTRouteMetaMap.keySet()){
+                GT_RouteMeta gtRouteMeta = stringGTRouteMetaMap.get(key);
+                GT.log("gtRouteMeta:" + gtRouteMeta);
+            }
+        }
 
         private class ARouterBean {
 
@@ -2467,8 +2444,8 @@ public class GT {
                 aRouterBean.constructorKey = null;
                 aRouterBean.constructorValue = null;
             } else {//没有传递 Bundle 参数
-                if (isContext != null && isContext.length > 0 && isContext[0] != null && isContext[0]) {
-                    obj = GT.AnnotationAssist.classToObject(gt_routeMeta.getPackClassPath(), new Class[]{Context.class}, new Object[]{softReference.get()});
+                if (softReferenceActivity != null && softReferenceActivity.get() != null) {
+                    obj = GT.AnnotationAssist.classToObject(gt_routeMeta.getPackClassPath(), new Class[]{Context.class}, new Object[]{softReferenceActivity.get()});
                 } else {
                     obj = GT.AnnotationAssist.classToObject(gt_routeMeta.getPackClassPath());
                 }
@@ -2521,7 +2498,7 @@ public class GT {
 
         private View setView(GT_RouteMeta gt_routeMeta) {
             try {
-                Object obj = creationObject(gt_routeMeta, true);
+                Object obj = creationObject(gt_routeMeta);
                 if (obj instanceof View) {
                     return (View) obj;
                 }
@@ -2535,7 +2512,7 @@ public class GT {
         private GT.GT_PopupWindow.BasePopupWindow setPopupWindow(GT_RouteMeta gt_routeMeta) {
             GT.GT_PopupWindow.BasePopupWindow popupWindow = null;
             try {
-                Object obj = creationObject(gt_routeMeta, true);
+                Object obj = creationObject(gt_routeMeta);
                 if (obj instanceof GT.GT_PopupWindow.BasePopupWindow) {
                     popupWindow = (GT.GT_PopupWindow.BasePopupWindow) obj;
                     Bundle bundle = new Bundle();
@@ -2553,7 +2530,7 @@ public class GT {
         private GT.GT_WebView.BaseWebView setWebView(GT_RouteMeta gt_routeMeta) {
             GT.GT_WebView.BaseWebView webView = null;
             try {
-                Object obj = creationObject(gt_routeMeta, true);
+                Object obj = creationObject(gt_routeMeta);
                 if (obj instanceof GT.GT_WebView.BaseWebView) {
                     webView = (GT.GT_WebView.BaseWebView) obj;
                     Bundle bundle = new Bundle();
@@ -2570,7 +2547,7 @@ public class GT {
         private RecyclerView.Adapter<RecyclerView.ViewHolder> setAdapter(GT_RouteMeta gt_routeMeta) {
             RecyclerView.Adapter<RecyclerView.ViewHolder> adapter = null;
             try {
-                Object obj = creationObject(gt_routeMeta, true);
+                Object obj = creationObject(gt_routeMeta);
                 if (obj instanceof GT.Adapters.BaseAdapter) {
                     adapter = (RecyclerView.Adapter<RecyclerView.ViewHolder>) obj;
                 }
@@ -2585,7 +2562,7 @@ public class GT {
         private ViewModel setViewModel(GT_RouteMeta gt_routeMeta) {
             ViewModel viewModel = null;
             try {
-                Object obj = creationObject(gt_routeMeta, true);
+                Object obj = creationObject(gt_routeMeta);
                 if (obj instanceof ViewModel) {
                     viewModel = (ViewModel) obj;
                 }
@@ -2599,7 +2576,7 @@ public class GT {
         private GT.GT_Notification.BaseNotification setNotification(GT_RouteMeta gt_routeMeta) {
             GT.GT_Notification.BaseNotification notification = null;
             try {
-                Object obj = creationObject(gt_routeMeta, true);
+                Object obj = creationObject(gt_routeMeta);
                 if (obj instanceof GT.GT_Notification.BaseNotification) {
                     notification = (GT.GT_Notification.BaseNotification) obj;
                     Bundle bundle = new Bundle();
@@ -11945,13 +11922,19 @@ public class GT {
          * 获取设备的唯一标识， 需要 “android.permission.READ_Phone_STATE”权限
          */
         public static String getIMEI(Context context) {
-            TelephonyManager tm = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
-            String deviceId = tm.getDeviceId();
-            if (deviceId == null) {
-                return "UnKnown";
-            } else {
-                return deviceId;
+            try{
+                TelephonyManager tm = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
+                String deviceId = tm.getDeviceId();
+                if (deviceId == null) {
+                    return "UnKnown";
+                } else {
+                    return deviceId;
+                }
+            }catch (Exception e){
+
+
             }
+            return "UnKnown";
         }
 
         /**
@@ -12398,8 +12381,12 @@ public class GT {
          */
         public static int getInt(int min, int max) {
             int value = random.nextInt(max);
-            if (value < min) {
-                return getInt(min, max);
+            try{
+                if (value < min) {
+                    return getInt(min, max);
+                }
+            }catch (Exception e){
+                return min;
             }
             return value;
         }
@@ -17368,7 +17355,27 @@ public class GT {
 
             @Override
             public String toString() {
-                return "GlideBean{" + "imgObjet=" + imgObjet + ", resource=" + resource + ", placeholder=" + placeholder + ", error=" + error + ", isCaches=" + isCaches + ", isThumbnail=" + isThumbnail + ", isGIF=" + isGIF + ", width=" + width + ", height=" + height + ", isAnimation=" + isAnimation + ", compressionRatio=" + compressionRatio + ", blurRadius=" + blurRadius + ", roundCorner=" + roundCorner + ", roundCorner_topLeft=" + roundCorner_topLeft + ", roundCorner_topRight=" + roundCorner_topRight + ", roundCorner_bottomLeft=" + roundCorner_bottomLeft + ", roundCorner_bottomRight=" + roundCorner_bottomRight + ", isCompression=" + isCompression + '}';
+                return "GlideBean{" +
+                        "imgObjet=" + imgObjet +
+                        ", resource=" + resource +
+                        ", placeholder=" + placeholder +
+                        ", error=" + error +
+                        ", isCaches=" + isCaches +
+                        ", isThumbnail=" + isThumbnail +
+                        ", isGIF=" + isGIF +
+                        ", gifSpeed=" + gifSpeed +
+                        ", width=" + width +
+                        ", height=" + height +
+                        ", isAnimation=" + isAnimation +
+                        ", compressionRatio=" + compressionRatio +
+                        ", blurRadius=" + blurRadius +
+                        ", roundCorner=" + roundCorner +
+                        ", roundCorner_topLeft=" + roundCorner_topLeft +
+                        ", roundCorner_topRight=" + roundCorner_topRight +
+                        ", roundCorner_bottomLeft=" + roundCorner_bottomLeft +
+                        ", roundCorner_bottomRight=" + roundCorner_bottomRight +
+                        ", isCompression=" + isCompression +
+                        '}';
             }
         }
 
@@ -17409,7 +17416,7 @@ public class GT {
             return glide;
         }
 
-        private GlideBean glideBean2;
+        private GlideBean glideBean2;//TODO 这种需要改掉
 
         /**
          * 设置加载图片的页面
@@ -18241,17 +18248,22 @@ public class GT {
                                 });
                             }
                             //释放资源
-                            glideBean.imgObjet = null;
-                            glideBean.resource = null;
-                            glideBean.placeholder = null;
-                            glideBean.error = null;
-                            glideBean = null;
+                            if(glideBean != null){
+                                GT.ImageViewTools.close(glideBean.imgObjet, false);
+                                GT.ImageViewTools.close(glideBean.resource, false);
+                                GT.ImageViewTools.close(glideBean.placeholder, false);
+                                GT.ImageViewTools.close(glideBean.error, false);
+                                glideBean = null;
+                            }
 
-                            glideBean2.imgObjet = null;
-                            glideBean2.resource = null;
-                            glideBean2.placeholder = null;
-                            glideBean2.error = null;
-                            glideBean2 = null;
+                            if(glideBean2 != null){
+                                GT.ImageViewTools.close(glideBean2.imgObjet, false);
+                                GT.ImageViewTools.close(glideBean2.resource, false);
+                                GT.ImageViewTools.close(glideBean2.placeholder, false);
+                                GT.ImageViewTools.close(glideBean2.error, false);
+                                glideBean2 = null;
+                            }
+
                         }
 
                     }
@@ -18262,9 +18274,9 @@ public class GT {
                 }
             } finally {
                 //是否总资源
-                glideBean2.imgObjet = null;
-                glideBean2.placeholder = null;
-                glideBean2.error = null;
+                GT.ImageViewTools.close(glideBean2.imgObjet, false);
+                GT.ImageViewTools.close(glideBean2.placeholder, false);
+                GT.ImageViewTools.close(glideBean2.error, false);
             }
             return glide;
         }
@@ -21639,6 +21651,9 @@ public class GT {
 
     }
 
+
+
+
     /**
      * @AppUtils 应用程序的小工具集合
      */
@@ -21934,6 +21949,15 @@ public class GT {
             } catch (android.content.ActivityNotFoundException e) {
                 return false;
             }
+        }
+
+        public static void interceptClick(View view){
+            view.setOnTouchListener(new View.OnTouchListener() {
+                @Override
+                public boolean onTouch(View v, MotionEvent event) {
+                    return true;
+                }
+            });
         }
 
         private static long exitTime = 0;
@@ -23088,18 +23112,22 @@ public class GT {
             List<AppBean> appBeanList = new ArrayList<>();
             PackageManager packageManager = context.getPackageManager();
             List<PackageInfo> list = packageManager.getInstalledPackages(PackageManager.GET_PERMISSIONS);
-            for (PackageInfo packageInfo : list) {
+            for (int index = 0; index< list.size(); index++) {
+                PackageInfo packageInfo = list.get(index);
                 ApplicationInfo applicationInfo = packageInfo.applicationInfo;
                 AppBean appBean = new AppBean(
-                        packageInfo.packageName,//包名
+                        index,
                         String.valueOf(applicationInfo.loadLabel(packageManager)),//应用名称
+                        packageInfo.packageName,//包名
                         applicationInfo.loadIcon(packageManager),//app图标
-                        null,//触发的方法
+                        -1,
                         packageInfo.versionName,//版本名称
-                        packageInfo.versionCode//版本号
+                        packageInfo.versionCode,//版本号
+                        packageInfo//总数据
                 );
                 if (packageInfo.permissions != null) {
                     for (PermissionInfo p : packageInfo.permissions) {
+                        if(appBean.permissions == null) appBean.permissions = new ArrayList<>();
                         appBean.permissions.add(p.name);
                     }
                 }
@@ -23110,39 +23138,191 @@ public class GT {
 
         public static class AppBean {
 
-            public String packName;
-            public String name;
-            public Object appIcon;
-            public String function;
-            public List<String> permissions = new ArrayList<>();
-            public String versionName;
-            public int versionCode;
+            //公共参数
+            public int appKey = -1;//appKey
+            public String name = "";//app名称
+            public String packName;//app包名
+            public Object appIcon;//app图标
+            public int appIndex = -1;//app位置
+            public String versionName;//app版本名称
+            public int versionCode;//app版本号
+            public PackageInfo packageInfo;//总信息
 
-            public AppBean() {
-                super();
-            }
+            //外部简易单击触发
+            public String function;//app单击方法
+            public String longFunction;//app长按方法
+            public List<String> permissions;//app需要的申请的权限
+            public GT.OnListener<Object> onListener;//外部简便接口
 
-            public AppBean(String packName, String name, Object appIcon, String function, String versionName, int versionCode) {
-                this.packName = packName;
+            //app内部界面
+            public Object appView;
+            public Bitmap bitmap;
+            public AppBean(){}
+
+            //外部简易app
+            public AppBean(
+                            int appKey,
+                            String name,
+                           Object appIcon,
+                           int appIndex,
+                           String function,
+                           String longFunction,
+                           GT.OnListener<Object>... onListeners){
+                this.appKey = appKey;
                 this.name = name;
                 this.appIcon = appIcon;
+                this.appIndex = appIndex;
                 this.function = function;
+                this.longFunction = longFunction;
+                if (onListeners != null && onListeners.length > 0 && onListeners[0] != null) {
+                    this.onListener = onListeners[0];
+                }
+            }
+
+            //外部带界面的app
+            public AppBean(
+                            int appKey,
+                           String name,
+                           Object appIcon,
+                           int appIndex,
+                           Object appView,
+                           String... permissions
+                           ){
+                this.appKey = appKey;
+                this.name = name;
+                this.appIcon = appIcon;
+                this.appIndex = appIndex;
+                if(this.permissions == null){
+                    this.permissions = new ArrayList<>();
+                }
+                this.appView = appView;
+                if(permissions != null && permissions.length > 0 && permissions[0] != null){
+                    for(String permission : permissions){
+                        this.permissions.add(permission);
+                    }
+                }
+            }
+
+            //手机本地的app
+            public AppBean(
+                    int appKey,
+                    String name,
+                    String packName,
+                    Object appIcon,
+                    int appIndex,
+                    String versionName,
+                    int versionCode,
+                    PackageInfo packageInfo
+            ) {
+                this.appKey = appKey;
+                this.name = name;
+                this.packName = packName;
+                this.appIcon = appIcon;
+                this.appIndex = appIndex;
                 this.versionName = versionName;
                 this.versionCode = versionCode;
+                this.packageInfo = packageInfo;
+            }
+
+            //万能初始化
+            public AppBean(
+                    int appKey,
+                    String name,
+                    String packName,
+                    Object appIcon,
+                    int appIndex,
+                    String versionName,
+                    int versionCode,
+                    PackageInfo packageInfo,
+                    String function,
+                    String longFunction,
+                    List<String> permissions,
+                    Object appView,
+                    GT.OnListener<Object>... onListeners
+            ) {
+                this.appKey = appKey;
+                this.name = name;
+                this.packName = packName;
+                this.appIcon = appIcon;
+                this.appIndex = appIndex;
+                this.versionName = versionName;
+                this.versionCode = versionCode;
+                this.packageInfo = packageInfo;
+                this.function = function;
+                this.longFunction = longFunction;
+                this.permissions = permissions;
+                this.appView = appView;
+                if (onListeners != null && onListeners.length > 0 && onListeners[0] != null) {
+                    this.onListener = onListeners[0];
+                }
             }
 
             @Override
             public String toString() {
                 return "AppBean{" +
-                        "packName='" + packName + '\'' +
+                        "appKey=" + appKey +
                         ", name='" + name + '\'' +
+                        ", packName='" + packName + '\'' +
                         ", appIcon=" + appIcon +
-                        ", function='" + function + '\'' +
-                        ", permissions=" + permissions +
+                        ", appIndex=" + appIndex +
                         ", versionName='" + versionName + '\'' +
                         ", versionCode=" + versionCode +
+                        ", packageInfo=" + packageInfo +
+                        ", function='" + function + '\'' +
+                        ", longFunction='" + longFunction + '\'' +
+                        ", permissions=" + permissions +
+                        ", onListener=" + onListener +
+                        ", appView=" + appView +
+                        ", bitmap=" + bitmap +
                         '}';
             }
+
+            //资源释放
+            public void clear(){
+                if(appIcon != null){
+                    if(appIcon instanceof Bitmap){
+                        Bitmap bitmap = (Bitmap) appIcon;
+                        bitmap.recycle();
+                    }else if(appIcon instanceof Drawable){
+                        Drawable drawable = (Drawable) appIcon;
+                        if (drawable instanceof BitmapDrawable) {
+                            BitmapDrawable bitmapDrawable = (BitmapDrawable) drawable;
+                            Bitmap bitmap = bitmapDrawable.getBitmap();
+                            if (bitmap != null) {
+                                bitmap.recycle(); // 释放Bitmap资源
+                            }
+                        }
+                        // 解除Drawable和视图的关联
+                        drawable.setCallback(null);
+                    }
+                    appIcon = null;
+                }
+
+                if(onListener != null){
+                    onListener = null;
+                }
+
+                if(appView != null){
+                    if(appView instanceof View){
+                            View view = (View) appView;
+                            ViewParent parent = view.getParent();
+                            if(parent instanceof ViewGroup){
+                                ViewGroup viewGroup = (ViewGroup) parent;
+                                viewGroup.removeView(view);
+                            }
+                            view = null;
+                    }else if(appView instanceof GT_View.BaseView){
+                        GT_View.BaseView baseView = (GT_View.BaseView) appView;
+                        baseView.finish();
+                    }
+                    appView = null;
+                }
+                if(bitmap != null){
+                    bitmap.recycle();
+                    bitmap = null;
+                }
+            }
+
         }
 
         /**
@@ -23181,7 +23361,7 @@ public class GT {
          * @param assetsName
          * @return
          */
-        public static void getAssetsValue(Context context, String assetsName, OnListener<String> onListener) {
+        public static void getAssetsValue(Context context, String assetsName, OneListener<String> onListener) {
             Thread.getInstance(0).execute(new Runnable() {
                 @Override
                 public void run() {
@@ -23189,7 +23369,7 @@ public class GT {
                         //获取输入流
                         InputStream inputStream = context.getResources().getAssets().open(assetsName);//这里的名字是你的txt 文本文件名称,在App,main文件夹下建一个assets文件夹，放入txt文本。
                         String data = ImageViewTools.inputStreamToString(inputStream);
-                        onListener.onListener(data);
+                        onListener.onOneListener(data);
                     } catch (IOException e1) {
                         e1.printStackTrace();
                     }
@@ -25043,6 +25223,10 @@ public class GT {
                     //加载 Drawable 资源
                     Drawable drawable = (Drawable) resource;
                     imgObjet = ImageViewTools.drawable2Bitmap(drawable);
+                } else if (resource instanceof View) {
+                    //加载 Drawable 资源
+                    View view = (View) resource;
+                    imgObjet = ImageViewTools.viewToBitmap(view);
                 }
 
                 //缓存起来
@@ -25140,6 +25324,17 @@ public class GT {
             Canvas canvas = new Canvas(bitmap);
             drawable.setBounds(0, 0, drawable.getIntrinsicWidth(), drawable.getIntrinsicHeight());
             drawable.draw(canvas);
+            return bitmap;
+        }
+
+        // View转换成Bitmap
+        public static Bitmap viewToBitmap(View view) {
+            // 创建一个和该view相同大小的空的bitmap
+            Bitmap bitmap = Bitmap.createBitmap(view.getWidth(), view.getHeight(), Bitmap.Config.ARGB_8888);
+            // 使用上面的bitmap创建一个canvas
+            Canvas canvas = new Canvas(bitmap);
+            // 将view绘制在canvas上
+            view.draw(canvas);
             return bitmap;
         }
 
@@ -25773,6 +25968,34 @@ public class GT {
             // 将数据填充到Allocation中
             tmpOut.copyTo(outputBitmap);
             return outputBitmap;
+        }
+
+        /**
+         * 释放资源
+         * @param imgObjet
+         */
+        public static void close(Object imgObjet, boolean isRecycle) {
+            if(imgObjet == null) return;
+            if(!isRecycle){
+                imgObjet = null;
+                return;
+            }
+            if(imgObjet instanceof Bitmap){
+                Bitmap bitmap = (Bitmap) imgObjet;
+                bitmap.recycle();
+            }else if(imgObjet instanceof Drawable){
+                Drawable drawable = (Drawable) imgObjet;
+                if (drawable instanceof BitmapDrawable) {
+                    BitmapDrawable bitmapDrawable = (BitmapDrawable) drawable;
+                    Bitmap bitmap = bitmapDrawable.getBitmap();
+                    if (bitmap != null) {
+                        bitmap.recycle(); // 释放Bitmap资源
+                    }
+                }
+                // 解除Drawable和视图的关联
+                drawable.setCallback(null);
+            }
+            imgObjet = null;
         }
 
         //圆角
@@ -27426,20 +27649,21 @@ public class GT {
          * @param context
          * @return
          */
-        public static void requestNotificationsPermission(Activity activity) {
+        public static void requestNotificationsPermission(Context context) {
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                 // 通知权限在Android 8.0及以上版本通过Channel进行管理
-                if (NotificationManagerCompat.from(activity).areNotificationsEnabled()) {
+                if (NotificationManagerCompat.from(context).areNotificationsEnabled()) {
                     // 用户已经授权了通知
                 } else {
                     // 引导用户去设置页面手动开启通知权限
                     Intent intent = new Intent();
                     intent.setAction("android.settings.APP_NOTIFICATION_SETTINGS");
+                    intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                     // 对于 Android 12 及以上版本，需要使用新的 intent action
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                        intent.putExtra("android.provider.extra.APP_PACKAGE", activity.getPackageName());
+                        intent.putExtra("android.provider.extra.APP_PACKAGE", context.getPackageName());
                     }
-                    activity.startActivity(intent);
+                    context.startActivity(intent);
                 }
             }
         }
@@ -29385,7 +29609,7 @@ public class GT {
                 cutIndex = -1;
             }
 
-            protected GT_Fragment gt_fragment;
+            public GT_Fragment gt_fragment;
 
             /**
              * 初始化 加载布局
@@ -29514,36 +29738,10 @@ public class GT {
              * @param dialogFragment
              * @跳转其他的 DialogFragment
              */
-            public void startDialogFragment(DialogFragment dialogFragment) {
-                dialogFragment.show(getSupportFragmentManager(), dialogFragment.getClass().toString());// 弹出退出提示
+            public void startDialogFragment(Object dialogFragment) {
+                GT.startDialogFragment(dialogFragment , null, getSupportFragmentManager());
             }
-
-            /**
-             * @param dialogFragment
-             * @跳转其他的 DialogFragment
-             */
-            public void startDialogFragment(Class<?> dialogFragmentClass) {
-
-                DialogFragment fragment = null;
-
-                try {
-                    fragment = (DialogFragment) dialogFragmentClass.newInstance();
-                } catch (IllegalAccessException e) {
-                    e.printStackTrace();
-                } catch (InstantiationException e) {
-                    e.printStackTrace();
-                }
-
-                fragment.show(getSupportFragmentManager(), fragment.getClass().toString());// 弹出退出提示
-            }
-
-            /**
-             * @param supportFragmentManager
-             * @param dialogFragment         跳转其他的
-             */
-            public void startDialogFragment(FragmentManager supportFragmentManager, DialogFragment dialogFragment) {
-                dialogFragment.show(supportFragmentManager, dialogFragment.getClass().toString());// 弹出退出提示
-            }
+            
 
             /**
              * 启动一个Fragment
@@ -29567,24 +29765,13 @@ public class GT {
                 return GT_Fragment.gt_fragment.startFragmentHome(fragmentObj, fragmentId);
             }
 
-
             /**
              * 启动悬浮窗
              *
              * @param toFragment
              */
-            public void startFloatingWindow(Class<?> toFragment, Bundle... bundles) {
+            public void startFloatingWindow(Object toFragment, Bundle... bundles) {
                 GT.startFloatingWindow(this, toFragment, bundles);
-            }
-
-            /**
-             * 启动悬浮窗
-             *
-             * @param toFragment
-             */
-            public void startFloatingWindow(Context context, GT_FloatingWindow.BaseFloatingWindow floatingWindow) {
-                startFloatingWindow(floatingWindow.getClass(), floatingWindow.getArguments());
-                floatingWindow = null;
             }
 
             public GT_Fragment getGT_Fragment() {
@@ -31581,7 +31768,19 @@ public class GT {
             Class<?> fragmentClass = null;
 
             if (fragmentObj instanceof String) {
-                fragmentClass = AnnotationAssist.stringToClass(fragmentObj.toString());
+                //在这里判断是 class 还是 路由地址
+                if(((String) fragmentObj).contains("\\.")){
+                    fragmentClass = AnnotationAssist.stringToClass(fragmentObj.toString());
+                }else{
+                    try{
+                        fragment = GT.ARouter.getInstance()
+                                .build(fragmentObj.toString())
+                                .navigation();
+                        fragmentClass = fragment.getClass();
+                    }catch (Exception e){
+
+                    }
+                }
             } else if (fragmentObj instanceof Class<?>) {
                 fragmentClass = (Class<?>) fragmentObj;
             } else if (fragmentObj instanceof Fragment) {
@@ -32142,7 +32341,7 @@ public class GT {
                 return null;
             }
 
-            protected boolean isRecoverBundle() {
+            public boolean isRecoverBundle() {
                 return false;
             }
 
@@ -32242,7 +32441,7 @@ public class GT {
              * @param <T>
              * @return
              */
-            protected <T> T getFragmentID(int layoutId, T t) {
+            public <T> T getFragmentID(int layoutId, T t) {
                 FragmentManager fragmentManager = getFragmentManager();
                 if (fragmentManager == null) return null;
                 try {
@@ -32261,7 +32460,7 @@ public class GT {
              * @param <T>
              * @return
              */
-            protected <T> T getFragmentTag(String tag, T t) {
+            public <T> T getFragmentTag(String tag, T t) {
                 FragmentManager fragmentManager = getFragmentManager();
                 if (fragmentManager == null) return null;
                 try {
@@ -32374,7 +32573,7 @@ public class GT {
              *
              * @param viewGroup
              */
-            protected void setViewBackListener(View viewLayout) {
+            public void setViewBackListener(View viewLayout) {
 
                 ViewGroup viewGroup = null;
 
@@ -32424,7 +32623,7 @@ public class GT {
              *
              * @param viewLayout
              */
-            protected boolean setEditTextRequestFocus(View viewLayout) {
+            public boolean setEditTextRequestFocus(View viewLayout) {
                 ViewGroup viewGroup = null;
                 //如果是Edit类型的那就监听返回事件
                 if (viewLayout instanceof EditText) {
@@ -32530,38 +32729,10 @@ public class GT {
              * @param dialogFragment
              * @跳转其他的 DialogFragment
              */
-            public void startDialogFragment(DialogFragment dialogFragment) {
-                dialogFragment.setTargetFragment(this, 1);
-                dialogFragment.show(getFragmentManager(), dialogFragment.getClass().toString());// 弹出退出提示
+            public void startDialogFragment(Object dialogFragment) {
+                GT.startDialogFragment(dialogFragment, this, getFragmentManager());
             }
-
-            /**
-             * @param dialogFragment
-             * @跳转其他的 DialogFragment
-             */
-            public void startDialogFragment(Class<?> dialogFragmentClass) {
-                DialogFragment dialogFragment = null;
-                try {
-                    dialogFragment = (DialogFragment) dialogFragmentClass.newInstance();
-                    dialogFragment.setTargetFragment(this, 1);
-                    dialogFragment.show(getFragmentManager(), dialogFragment.getClass().toString());// 弹出退出提示
-                } catch (IllegalAccessException e) {
-                    e.printStackTrace();
-                } catch (java.lang.InstantiationException e) {
-                    e.printStackTrace();
-                }
-
-
-            }
-
-            /**
-             * @param supportFragmentManager
-             * @param dialogFragment         跳转其他的
-             */
-            public void startDialogFragment(FragmentManager supportFragmentManager, DialogFragment dialogFragment) {
-                dialogFragment.setTargetFragment(this, 1);
-                dialogFragment.show(supportFragmentManager, dialogFragment.getClass().toString());// 弹出退出提示
-            }
+            
 
 
             /**
@@ -32586,48 +32757,14 @@ public class GT {
                 return GT_Fragment.gt_fragment.startFragmentHome(fragmentObj, resLayouts);
             }
 
-            /**
-             * 启动悬浮窗
-             *
-             * @param context
-             * @param toFragment
-             */
-            public void startFloatingWindow(Context context, Class<?> toFragment, Bundle... bundles) {
-                GT.startFloatingWindow(context, toFragment, bundles);
-            }
 
             /**
              * 启动悬浮窗
              *
              * @param toFragment
              */
-            public void startFloatingWindow(Context context, GT_FloatingWindow.BaseFloatingWindow floatingWindow) {
-                startFloatingWindow(context, floatingWindow.getClass(), floatingWindow.getArguments());
-                floatingWindow = null;
-            }
-
-            /**
-             * 启动悬浮窗
-             *
-             * @param toFragment
-             */
-            public void startFloatingWindow(Class<?> toFragment, Bundle... bundles) {
-                if (activity == null) {
-                    activity = GT_Fragment.gt_fragment.getActivity();
-                }
-                if (activity != null) {
-                    GT.startFloatingWindow(activity, toFragment, bundles);
-                }
-            }
-
-            /**
-             * 启动悬浮窗
-             *
-             * @param toFragment
-             */
-            public void startFloatingWindow(GT_FloatingWindow.BaseFloatingWindow floatingWindow) {
-                startFloatingWindow(floatingWindow.getClass(), floatingWindow.getArguments());
-                floatingWindow = null;
+            public void startFloatingWindow(Object toFragment, Bundle... bundles) {
+                GT.startFloatingWindow(requireActivity(), toFragment, bundles);
             }
 
 
@@ -33384,7 +33521,7 @@ public class GT {
             }
 
             //设置对话框 显示位置
-            protected int setGravity(int gravity) {
+            public int setGravity(int gravity) {
                 return gravity;
             }
 
@@ -33445,7 +33582,7 @@ public class GT {
             /**
              * 设置弹出对话框时是否隐藏虚拟按键
              */
-            protected void setHideBottomNav() {
+            public void setHideBottomNav() {
                 if (dialog == null) return;
                 if (window == null || window.getDecorView() == null) return;
                 //不加FLAG_NOT_FOCUSABLE，dialog显示时就会显示虚拟按键
@@ -33478,14 +33615,14 @@ public class GT {
             /**
              * 设置隐藏背景
              */
-            protected void setHideBackground() {
+            public void setHideBackground() {
                 getDialog().getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));// 隐藏背景
             }
 
             /**
              * 设置单击外部不隐藏对话框
              */
-            protected void setClickExternalNoHideDialog() {
+            public void setClickExternalNoHideDialog() {
                 // 设置点击外部不会取消当前对话框
                 getDialog().setCanceledOnTouchOutside(false);
             }
@@ -33495,7 +33632,7 @@ public class GT {
              *
              * @param isClickExternalNoHideDialog 设置单击外部不隐藏对话框 true:单击不消失 false:单击消失
              */
-            protected void initDialogFragmentFunction(boolean isClickExternalNoHideDialog) {
+            public void initDialogFragmentFunction(boolean isClickExternalNoHideDialog) {
                 setHideBackground();//设置隐藏背景
                 setHideBottomNav();//设置弹出对话框时是否隐藏虚拟按键
                 if (isClickExternalNoHideDialog)
@@ -33510,7 +33647,7 @@ public class GT {
             public void createView(View view) {
             }
 
-            protected View findViewById(int id) {
+            public View findViewById(int id) {
                 if (view == null) return null;
                 return view.findViewById(id);
             }
@@ -33683,24 +33820,8 @@ public class GT {
              * @param dialogFragment
              * @跳转其他的 DialogFragment
              */
-            public void startDialogFragment(DialogFragment dialogFragment) {
-                dialogFragment.show(getFragmentManager(), dialogFragment.getClass().toString());// 弹出退出提示
-            }
-
-            /**
-             * @param dialogFragment
-             * @跳转其他的 DialogFragment
-             */
-            public void startDialogFragment(Class<?> dialogFragmentClass) {
-                DialogFragment fragment = null;
-                try {
-                    fragment = (DialogFragment) dialogFragmentClass.newInstance();
-                } catch (IllegalAccessException e) {
-                    e.printStackTrace();
-                } catch (java.lang.InstantiationException e) {
-                    e.printStackTrace();
-                }
-                fragment.show(getFragmentManager(), fragment.getClass().toString());// 弹出退出提示
+            public void startDialogFragment(Object dialogFragment) {
+                GT.startDialogFragment(dialogFragment, this, getFragmentManager());
             }
 
             @Nullable
@@ -33723,52 +33844,10 @@ public class GT {
             /**
              * 启动悬浮窗
              *
-             * @param context
              * @param toFragment
              */
-            public void startFloatingWindow(Context context, Class<?> toFragment, Bundle... bundles) {
-                if (context == null) {
-                    context = GT_Fragment.gt_fragment.getActivity();
-                }
-                if (context != null) {
-                    GT.startFloatingWindow(context, toFragment, bundles);
-                }
-
-            }
-
-            /**
-             * 启动悬浮窗
-             *
-             * @param toFragment
-             */
-            public void startFloatingWindow(Context context, GT_FloatingWindow.BaseFloatingWindow floatingWindow) {
-                startFloatingWindow(context, floatingWindow.getClass(), floatingWindow.getArguments());
-                floatingWindow = null;
-            }
-
-            /**
-             * 启动悬浮窗
-             *
-             * @param toFragment
-             */
-            public void startFloatingWindow(Class<?> toFragment, Bundle... bundles) {
-                if (activity == null) {
-                    activity = GT_Fragment.gt_fragment.getActivity();
-                }
-
-                if (activity != null) {
-                    GT.startFloatingWindow(activity, toFragment, bundles);
-                }
-            }
-
-            /**
-             * 启动悬浮窗
-             *
-             * @param toFragment
-             */
-            public void startFloatingWindow(GT_FloatingWindow.BaseFloatingWindow floatingWindow) {
-                startFloatingWindow(floatingWindow.getClass(), floatingWindow.getArguments());
-                floatingWindow = null;
+            public void startFloatingWindow(Object toFragment, Bundle... bundles) {
+                GT.startFloatingWindow(requireActivity(), toFragment, bundles);
             }
 
             //是否解决EditText bug
@@ -33848,7 +33927,7 @@ public class GT {
              *
              * @param viewGroup
              */
-            protected void setViewBackListener(View viewLayout) {
+            public void setViewBackListener(View viewLayout) {
 
                 ViewGroup viewGroup = null;
 
@@ -33896,7 +33975,7 @@ public class GT {
              *
              * @param viewLayout
              */
-            protected boolean setEditTextRequestFocus(View viewLayout) {
+            public boolean setEditTextRequestFocus(View viewLayout) {
                 ViewGroup viewGroup = null;
                 //如果是Edit类型的那就监听返回事件
                 if (viewLayout instanceof EditText) {
@@ -34900,7 +34979,7 @@ public class GT {
              *
              * @param isGet
              */
-            protected void setGetFocus(boolean isGet) {
+            public void setGetFocus(boolean isGet) {
                 if (isGet) {
                     layoutParams.flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL;
                 } else {
@@ -34912,7 +34991,7 @@ public class GT {
             /**
              * 更新View
              */
-            protected void updateView() {
+            public void updateView() {
                 if (windowManager == null || view == null || layoutParams == null) return;
                 windowManager.updateViewLayout(view, layoutParams);
             }
@@ -34920,8 +34999,8 @@ public class GT {
             /**
              * 更新View
              */
-            protected void updateView(int width, int height) {
-                if (windowManager == null || view == null || layoutParams == null) return;
+            public void updateView(int width, int height) {
+                if (windowManager == null || view == null || layoutParams == null || width == 0 || height == 0) return;
                 layoutParams.width = width;
                 layoutParams.height = height;
                 windowManager.updateViewLayout(view, layoutParams);
@@ -34930,12 +35009,12 @@ public class GT {
             /**
              * 更新宽高
              */
-            protected void updateWidthHeight() {
+            public void updateWidthHeight() {
                 width = windowManager.getDefaultDisplay().getWidth();//获取当前屏幕宽度
                 height = windowManager.getDefaultDisplay().getHeight();//获取当前屏幕高度
             }
 
-            protected void show() {
+            public void show() {
                 if (view != null) {
                     if (mLifecycleRegistry != null) {
                         mLifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME);
@@ -34944,7 +35023,7 @@ public class GT {
                 }
             }
 
-            protected void hide() {
+            public void hide() {
                 if (view != null) {
                     if (mLifecycleRegistry != null) {
                         mLifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE);
@@ -35063,83 +35142,59 @@ public class GT {
              * 设置屏幕大小、方向
              */
             private void setScreenSize() {
-                if (TYPE_SCREEN_TYPE != TYPE_DEFAULT) {
-                    //自适应设置窗口大小，方向
-                    switch (TYPE_SCREEN_TYPE) {
-                        case TYPE_PORTRAIT_SCREEN://竖屏
-                            if (width > height) {
-                                layoutParams.width = (int) (width / (2 * screenSizeCoefficient));
-                                layoutParams.height = (int) (height / screenSizeCoefficient);
-                            } else {
-                                layoutParams.width = (int) (width / screenSizeCoefficient);
-                                layoutParams.height = (int) (height / screenSizeCoefficient);
-                            }
-                            break;
+                //自适应设置窗口大小，方向
+                switch (TYPE_SCREEN_TYPE) {
+                    case TYPE_DEFAULT:
+                        //默认是占屏幕一半的大小
+                        layoutParams.width = (int) (width / screenSizeCoefficient);
+                        layoutParams.height = (int) (height / screenSizeCoefficient);
+                        view.measure(0, 0);//设置标准宽高
+                        break;
+                    case TYPE_PORTRAIT_SCREEN://竖屏
+                        if (width > height) {
+                            layoutParams.width = (int) (width / (2 * screenSizeCoefficient));
+                            layoutParams.height = (int) (height / screenSizeCoefficient);
+                        } else {
+                            layoutParams.width = (int) (width / screenSizeCoefficient);
+                            layoutParams.height = (int) (height / screenSizeCoefficient);
+                        }
+                        break;
 
-                        case TYPE_LANDSCAPE://横屏
-                            if (width > height) {
-                                layoutParams.width = (int) (width / screenSizeCoefficient);
-                                layoutParams.height = (int) (height / screenSizeCoefficient);
-                            } else {
-                                layoutParams.width = (int) (width / screenSizeCoefficient);
-                                layoutParams.height = (int) (height / (2 * screenSizeCoefficient));
-                            }
-                            break;
+                    case TYPE_LANDSCAPE://横屏
+                        if (width > height) {
+                            layoutParams.width = (int) (width / screenSizeCoefficient);
+                            layoutParams.height = (int) (height / screenSizeCoefficient);
+                        } else {
+                            layoutParams.width = (int) (width / screenSizeCoefficient);
+                            layoutParams.height = (int) (height / (2 * screenSizeCoefficient));
+                        }
+                        break;
 
-                        case TYPE_SCREEN://自适应半屏
-                            if (width > height) {
-                                layoutParams.width = (int) (width / screenSizeCoefficient);
-                                layoutParams.height = height;
-                            } else {
-                                layoutParams.width = width;
-                                layoutParams.height = (int) (height / screenSizeCoefficient);
-                            }
-                            break;
-
-                        case TYPE_FULL_SCREEN://自适应全屏
-                            layoutParams.width = width;
+                    case TYPE_SCREEN://自适应半屏
+                        if (width > height) {
+                            layoutParams.width = (int) (width / screenSizeCoefficient);
                             layoutParams.height = height;
-                            break;
-
-                        case TYPE_SELF_ADAPTION://自适应
-                            layoutParams.width = (int) (width / screenSizeCoefficient);
+                        } else {
+                            layoutParams.width = width;
                             layoutParams.height = (int) (height / screenSizeCoefficient);
-                            break;
+                        }
+                        break;
 
-                        default://自适应
-                            layoutParams.width = (int) (width / screenSizeCoefficient);
-                            layoutParams.height = (int) (height / screenSizeCoefficient);
-                            break;
-                    }
-                } else {
-                    //默认是占屏幕一半的大小
-                    layoutParams.width = (int) (width / screenSizeCoefficient);
-                    layoutParams.height = (int) (height / screenSizeCoefficient);
-                    view.measure(0, 0);//设置标准宽高
-
-                    int measuredWidth = view.getMeasuredWidth();
-                    int measuredHeight = view.getMeasuredHeight();
-
-                    int w = measuredWidth - (view.getPaddingLeft() + view.getPaddingRight());
-                    int h = measuredHeight - (view.getPaddingTop() + view.getPaddingBottom());
-
-                    //设置界面宽度
-                    if (w == 121 || w == 122 || w == 155 || w == 154) {
+                    case TYPE_FULL_SCREEN://自适应全屏
                         layoutParams.width = width;
-                    } else {
-                        layoutParams.width = view.getMeasuredWidth();
-                    }
-                    //设置界面高度
-                    if (h == 66 || h == 67 || h == 85 || h == 84) {
                         layoutParams.height = height;
-                    } else {
-                        layoutParams.height = view.getMeasuredHeight();
-                    }
+                        break;
 
+                    case TYPE_SELF_ADAPTION://自适应
+                        layoutParams.width = (int) (width / screenSizeCoefficient);
+                        layoutParams.height = (int) (height / screenSizeCoefficient);
+                        break;
 
+                    default://自适应
+                        layoutParams.width = (int) (width / screenSizeCoefficient);
+                        layoutParams.height = (int) (height / screenSizeCoefficient);
+                        break;
                 }
-
-
             }
 
             @Override
@@ -35150,7 +35205,7 @@ public class GT {
             /**
              * 设置可拖动
              */
-            protected void setDrag(boolean tf) {
+            public void setDrag(boolean tf) {
                 if (view != null) {
                     if (tf) {
                         isDrag = true;
@@ -35191,7 +35246,7 @@ public class GT {
              * 注意:次方法不会销毁悬浮窗
              * 是否显示悬浮窗
              */
-            protected void isShow(boolean tf) {
+            public void isShow(boolean tf) {
                 Thread.runAndroid(new Runnable() {
                     @Override
                     public void run() {
@@ -35210,7 +35265,7 @@ public class GT {
              *
              * @param monitoringTime 绑定检测间隔时间 毫秒
              */
-            protected void setBindingApp(long monitoringTime) {
+            public void setBindingApp(long monitoringTime) {
                 if (timer == null) {
                     timer = new Timer();
                     timer.scheduleAtFixedRate(new TimerTask() {
@@ -35238,40 +35293,10 @@ public class GT {
             /**
              * 启动悬浮窗
              *
-             * @param context
              * @param toFragment
              */
-            public void startFloatingWindow(Context context, Class<?> toFragment, Bundle... bundles) {
+            public void startFloatingWindow(Object toFragment, Bundle... bundles) {
                 GT.startFloatingWindow(context, toFragment, bundles);
-            }
-
-            /**
-             * 启动悬浮窗
-             *
-             * @param toFragment
-             */
-            public void startFloatingWindow(Context context, GT_FloatingWindow.BaseFloatingWindow floatingWindow) {
-                startFloatingWindow(context, floatingWindow.getClass(), floatingWindow.getArguments());
-                floatingWindow = null;
-            }
-
-            /**
-             * 启动悬浮窗
-             *
-             * @param toFragment
-             */
-            public void startFloatingWindow(Class<?> toFragment, Bundle... bundles) {
-                GT.startFloatingWindow(this, toFragment, bundles);
-            }
-
-            /**
-             * 启动悬浮窗
-             *
-             * @param toFragment
-             */
-            public void startFloatingWindow(GT_FloatingWindow.BaseFloatingWindow floatingWindow) {
-                startFloatingWindow(floatingWindow.getClass(), floatingWindow.getArguments());
-                floatingWindow = null;
             }
 
             public static void startView(ViewGroup viewGroup, GT_View.BaseView view) {
@@ -35302,7 +35327,7 @@ public class GT {
              *
              * @param intent
              */
-            protected void finish(Intent intent) {
+            public void finish(Intent intent) {
                 if (intent != null) {
                     onDestroy();
                 }
@@ -35481,7 +35506,7 @@ public class GT {
             protected void buildData() {
             }
 
-            protected View findViewById(int id) {
+            public View findViewById(int id) {
                 if (view == null) return null;
                 return view.findViewById(id);
             }
@@ -35852,14 +35877,14 @@ public class GT {
             /**
              * 设置隐藏背景
              */
-            protected void setHideBackground(boolean isShow) {
+            public void setHideBackground(boolean isShow) {
                 view_bg.setVisibility(isShow ? View.VISIBLE : View.GONE);
             }
 
             /**
              * 设置单击外部不隐藏对话框
              */
-            protected void setClickExternalNoHideView(boolean isClickHide) {
+            public void setClickExternalNoHideView(boolean isClickHide) {
                 view_bg.setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View view) {
@@ -36021,7 +36046,7 @@ public class GT {
                 return 0;
             }
 
-            protected View findViewById(int id) {
+            public View findViewById(int id) {
                 if (view == null) return null;
                 return view.findViewById(id);
             }
@@ -36078,7 +36103,7 @@ public class GT {
                 initView(view);
                 getCache(GT_Cache.getCacheData(cacheKey, String.class));//获取缓存数据
                 loadData(view);
-                if (viewGroup != null && viewGroup instanceof ViewGroup) {
+                if (view != null && viewGroup != null && viewGroup instanceof ViewGroup) {
                     viewGroup.addView(view);
                 }
             }
@@ -36099,7 +36124,7 @@ public class GT {
              *
              * @param viewGroup
              */
-            protected void setViewBackListener(View viewLayout) {
+            public void setViewBackListener(View viewLayout) {
 
                 ViewGroup viewGroup = null;
 
@@ -36142,7 +36167,7 @@ public class GT {
 
             }
 
-            public void loadData(View view) {
+            protected void loadData(View view) {
             }
 
             //简单缓存 存储 与 获取
@@ -36192,6 +36217,13 @@ public class GT {
 
             //销毁当前对象
             public void finish() {
+                if(getView() != null){
+                    Object tag = getView().getTag();
+                    if(tag instanceof Integer){
+                        int appKey = (int) tag;
+                        EventBus.getDefault().post(appKey, "baseViewFinish");
+                    }
+                }
                 hide();
                 onDestroy();
             }
@@ -38194,13 +38226,17 @@ public class GT {
                 } else {
                     pendingIntent = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
                 }
+
+
+                // 设置通知类别为 CATEGORY_SERVICE，模拟 setOngoing 效果
+                builder.setCategory(Notification.CATEGORY_SERVICE);
+
+//                builder.setCategory(Notification.CATEGORY_MESSAGE);//设置通知类别
                 builder.setFullScreenIntent(pendingIntent, true);
 
                 if (notifyids.length > 0) {
                     NOTIFYID = notifyids[0];
                 }
-
-                builder.setCategory(Notification.CATEGORY_MESSAGE);//设置通知类别
 
                 if (isLockScreenShow)
                     builder.setVisibility(NotificationCompat.VISIBILITY_PRIVATE); // 屏幕可见性，锁屏时，显示icon和标题，内容隐藏
@@ -46246,10 +46282,10 @@ public class GT {
                 if (clazz == null) return null;
                 return clazz.newInstance();
             } catch (IllegalAccessException e) {
-                GT.errt("e:" + e);
+//                GT.errt("e:" + e);
 //                e.printStackTrace();
             } catch (InstantiationException e) {
-                GT.errt("e:" + e);
+//                GT.errt("e:" + e);
 //                e.printStackTrace();
             }
             return null;

@@ -96,18 +96,18 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
     };
 
     //外置设置的app key = app名称  value = 单击后发布事件的方法
-    private final static List<AppBean> listApp = new ArrayList<>();
+    private final static List<GT.ApplicationUtils.AppBean> listApp = new ArrayList<>();
 
     /**
      * 添加app
      *
      * @param appBean
      */
-    public static void addApp(AppBean appBean) {
+    public static void addApp(GT.ApplicationUtils.AppBean appBean) {
         for (int i = 0; i < listApp.size(); i++) {
-            AppBean appBean1 = listApp.get(i);
+            GT.ApplicationUtils.AppBean appBean1 = listApp.get(i);
             if (appBean1.name.equals(appBean.name)) {
-                return;
+                continue;
             }
         }
         listApp.add(appBean);
@@ -181,7 +181,7 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
     @Override
     public void loadData(Context context, Intent intent, View view) {
         super.loadData(context, intent, view);
-        registerReceiver(utils.mBroadcastReceiver, new IntentFilter(Utils.ACTION));//单击事件 注册广播
+        registerReceiver(utils.mBroadcastReceiver, new IntentFilter(Utils.ACTION), Context.RECEIVER_NOT_EXPORTED);//单击事件 注册广播
         utils.setTitleListener(sv_find); //设置状态栏事件
         animation.translateY_T(0, -getHeight(), 1, 1, false, ll_StatusBar_titleAll);//状态栏默认收起来
         utils.setStatusBarShrinkListener(tv_statusBar_message, true);//设置状态栏内部上滑收缩事件
@@ -202,12 +202,12 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
         fl_main.removeAllViews();//清空所有组件
 
         //初始化GT内部App
-        for (int i = 0; i < GTApp.length; i++) {
+        for (String s : GTApp) {
             View item_app_ico = LayoutInflater.from(this).inflate(R.layout.item_app_ico, null);
             TextView tv_appName = item_app_ico.findViewById(R.id.tv_appName);
             ImageView iv_icon = item_app_ico.findViewById(R.id.iv_icon);
             iv_icon.setImageDrawable(getDrawable(R.mipmap.gt_logo));
-            tv_appName.setText(GTApp[i]);
+            tv_appName.setText(s);
             flowLayout.addView(item_app_ico);//添加APP
             item_app_ico.setOnClickListener(this);
             //将APP存储到容器中
@@ -215,7 +215,7 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
         }
 
         //初始化外部App
-        for (AppBean appBean : listApp) {
+        for (GT.ApplicationUtils.AppBean appBean : listApp) {
             View item_app_ico = LayoutInflater.from(this).inflate(R.layout.item_app_ico, null);
             TextView tv_appName = item_app_ico.findViewById(R.id.tv_appName);
             ImageView iv_icon = item_app_ico.findViewById(R.id.iv_icon);
@@ -274,9 +274,7 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
 
     //小手机事件
     public void onClickView(View view) {
-
         if (view == null) return;
-
         view.setOnClickListener(v -> {
             int id = v.getId();//上面
             //充满全屏
@@ -292,7 +290,7 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
             } else if (id == R.id.cb_expansion) {//切换屏幕大小
                 utils.changeSize();
             } else if (id == R.id.tv_close) {//关机
-                utils.shutdown(false, 100);//关机且设置持续时间
+                utils.shutdown( 100);//关机且设置持续时间
 
                 //状态栏内
             } else if (id == R.id.tv_statusBar_message) {//状态栏内的消息提示
@@ -441,36 +439,15 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
         }
 
         //开关机
-        private void shutdown(boolean startOrClose, int time) {
-            GT.Thread.runJava(new Runnable() {
-                @Override
-                public void run() {
-                    GT.Thread.runAndroid(new Runnable() {
-                        @Override
-                        public void run() {
-                            cl_close.setVisibility(View.VISIBLE);//显示开关机组件
-                            if (startOrClose) {
-                                tv_shutdown.setText("开机");
-                            } else {
-                                tv_shutdown.setText("关机");
+        private void shutdown(int time) {
+            GT.Thread.runJava(() -> {
+                GT.Thread.runAndroid(() -> {
+                    cl_close.setVisibility(View.VISIBLE);//显示开关机组件
+                    tv_shutdown.setText("关机");
+                });
+                GT.Thread.sleep(time);
+                GT.Thread.runAndroid(() -> finish());
 
-                            }
-                        }
-                    });
-                    GT.Thread.sleep(time);
-                    GT.Thread.runAndroid(new Runnable() {
-                        @Override
-                        public void run() {
-                            if (startOrClose) {
-                                cl_close.setVisibility(View.GONE);//隐藏开关机组件
-                            } else {
-                                finish();
-                            }
-
-                        }
-                    });
-
-                }
             });
         }
 
@@ -592,6 +569,45 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
                         topMax = -1;
 //                        GT.log("按下 X:" + oldX + " Y:" + oldY);
                         break;
+                    case MotionEvent.ACTION_MOVE://移动
+                        int nowX = (int) event.getRawX();
+                        int nowY = (int) event.getRawY();
+                        int movedX = (int) (nowX - x);
+                        int movedY = (int) (nowY - y);
+                        x = nowX;
+                        y = nowY;
+//                            GT.log("滑动X:" + movedX + " Y:" + movedY);
+                        if ((x - oldX >= slidingRate || x - oldX <= Math.negateExact(slidingRate)) && (operationType == -1 || operationType == 0) && isDrag()) {
+                            getLayoutParams().x = getLayoutParams().x + movedX;
+                            getLayoutParams().y = getLayoutParams().y + movedY;
+                            updateView();
+                            operationType = 0;//赋值为滑动
+                        } else {
+                            if (y - oldY >= slidingRate && (operationType == -1 || operationType == 1)) {
+                                //下拉状态栏逻辑
+                                if (event.getY() <= ((float) getLayoutParams().height / 2) - ((float) slidingRate / 2)) {//设置下拉限度
+                                    pullY = event.getY() - ((float) getLayoutParams().height / 2);
+                                    animation.translateY_T(pullY, pullY, 10, 1, false, ll_StatusBar_titleAll);
+                                    //下拉渐变色
+                                    alphaBG += (float) (movedY * 0.005);
+                                    if (alphaBG > bgTransparencyValue) {//状态栏背景色显示限制
+                                        alphaBG = bgTransparencyValue;
+                                    }
+                                    view_bg_floating_title.setAlpha(alphaBG);
+                                } else {//拉到顶了
+                                    topMax = ll_StatusBar_titleAll.getY();
+                                    animation.translateY_T(pullY, 0, 0, 1, false, ll_StatusBar_titleAll);
+                                    view_bg_floating_title.setAlpha(bgTransparencyValue);
+                                }
+                                operationType = 1;
+                            } else if (y - oldY <= Math.negateExact(slidingRate) && (operationType == -1 || operationType == 0) && isDrag()) {
+                                getLayoutParams().x = getLayoutParams().x + movedX;
+                                getLayoutParams().y = getLayoutParams().y + movedY;
+                                updateView();
+                                operationType = 0;//赋值为滑动
+                            }
+                        }
+                        break;
                     case MotionEvent.ACTION_UP://抬起
                         x = (int) event.getRawX();
                         y = (int) event.getRawY();
@@ -620,63 +636,12 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
                         }
 
                         break;
-                    case MotionEvent.ACTION_MOVE://移动
-                        int nowX = (int) event.getRawX();
-                        int nowY = (int) event.getRawY();
-                        int movedX = (int) (nowX - x);
-                        int movedY = (int) (nowY - y);
-                        x = nowX;
-                        y = nowY;
-//                            GT.log("滑动X:" + movedX + " Y:" + movedY);
-                        if ((x - oldX >= slidingRate || x - oldX <= Math.negateExact(slidingRate)) && (operationType == -1 || operationType == 0) && isDrag()) {
-                            getLayoutParams().x = getLayoutParams().x + movedX;
-                            getLayoutParams().y = getLayoutParams().y + movedY;
-                            updateView();
-                            operationType = 0;//赋值为滑动
-                        } else {
-                            if (y - oldY >= slidingRate && (operationType == -1 || operationType == 1)) {
-                                //下拉状态栏逻辑
-                                if (event.getY() <= (getLayoutParams().height / 2) - (slidingRate / 2)) {//设置下拉限度
-                                    pullY = event.getY() - (getLayoutParams().height / 2);
-                                    animation.translateY_T(pullY, pullY, 10, 1, false, ll_StatusBar_titleAll);
-                                    //下拉渐变色
-                                    alphaBG += movedY * 0.005;
-                                    if (alphaBG > bgTransparencyValue) {//状态栏背景色显示限制
-                                        alphaBG = bgTransparencyValue;
-                                    }
-                                    view_bg_floating_title.setAlpha(alphaBG);
-                                } else {//拉到顶了
-                                    topMax = ll_StatusBar_titleAll.getY();
-                                    animation.translateY_T(pullY, 0, 0, 1, false, ll_StatusBar_titleAll);
-                                    view_bg_floating_title.setAlpha(bgTransparencyValue);
-                                }
-                                operationType = 1;
-                            } else if (y - oldY <= Math.negateExact(slidingRate) && (operationType == -1 || operationType == 0) && isDrag()) {
-                                getLayoutParams().x = getLayoutParams().x + movedX;
-                                getLayoutParams().y = getLayoutParams().y + movedY;
-                                updateView();
-                                operationType = 0;//赋值为滑动
-                            }
-                        }
-                        break;
                     default:
                         break;
                 }
 //                GT.log("抬起1返回:" + returnType);
                 return returnType;
             });
-        }
-
-        //设置点击无法穿透
-        public View setNotClickPenetrate(View view) {
-            view.setOnTouchListener(new View.OnTouchListener() {
-
-                @Override
-                public boolean onTouch(View v, MotionEvent event) {
-                    return true;
-                }
-            });
-            return view;
         }
 
         //隐藏状态栏背景
@@ -691,7 +656,7 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
                     if (!tf) {
                         float value = bgTransparencyValue;
                         while (true) {
-                            value -= 0.03;
+                            value -= 0.03f;
                             if (value <= 0) break;
                             float finalValue = value;
                             GT.Thread.runAndroid(() -> view_bg_floating_title.setAlpha(finalValue));
@@ -701,7 +666,7 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
                     } else {
                         float value = 0f;
                         while (true) {
-                            value += 0.03;
+                            value += 0.03f;
                             if (value >= bgTransparencyValue) break;
                             float finalValue = value;
                             GT.Thread.runAndroid(() -> view_bg_floating_title.setAlpha(finalValue));
@@ -869,7 +834,7 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
             cl_close.setVisibility(View.VISIBLE);//显示开关机组件
             tv_shutdown.setText("开机");
 
-            GT.Observable.getDefault().execute(new GT.Observable.RunJava<Object>() {
+            GT.Observable.getDefault().execute(new GT.Observable.RunJava<>() {
                 @Override
                 public void run() {
                     cl_close.setVisibility(View.VISIBLE);//显示开关机组件
@@ -880,7 +845,7 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
                         String name = appBean.name;
                         String packageName = appBean.packName;//获取当前遍历的包名
                         if (packageName.contains("google") || packageName.contains("android")) {
-                            continue;//过滤掉系统自带应用
+//                            continue;//过滤掉系统自带应用
                         }
                         View item_app_ico = LayoutInflater.from(context).inflate(R.layout.item_app_ico, null);
                         TextView tv_appName = item_app_ico.findViewById(R.id.tv_appName);
@@ -908,7 +873,7 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
                     }
 
                 }
-            }).execute(new GT.Observable.RunAndroid<Object>() {
+            }).execute(new GT.Observable.RunAndroid<>() {
                 @Override
                 public void run() {
                     cl_close.setVisibility(View.GONE);//隐藏开关机组件
@@ -985,19 +950,15 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
                     if (fl_main.getChildCount() == 0) {
                         //桌面查询事件
                         flowLayout.removeAllViews();//清空所有View
-                        GT.Thread.runJava(new Runnable() {
-                            @Override
-                            public void run() {
-
-                                for (String appName : viewMap.keySet()) {
-                                    GT.Thread.runAndroid(() -> {
-                                        if (keyValue.length() == 0) {
-                                            flowLayout.addView(viewMap.get(appName));
-                                        } else if (appName.toLowerCase().contains(keyValue.toLowerCase())) {
-                                            flowLayout.addView(viewMap.get(appName));
-                                        }
-                                    });
-                                }
+                        GT.Thread.runJava(() -> {
+                            for (String appName : viewMap.keySet()) {
+                                GT.Thread.runAndroid(() -> {
+                                    if (keyValue.isEmpty()) {
+                                        flowLayout.addView(viewMap.get(appName));
+                                    } else if (appName.toLowerCase().contains(keyValue.toLowerCase())) {
+                                        flowLayout.addView(viewMap.get(appName));
+                                    }
+                                });
                             }
                         });
                     } else {
@@ -1431,7 +1392,7 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
                 while (ll_fragmentStack != null) {
                     List<String> stackFragmentNames = GT.GT_Fragment.getGt_fragment().getStackFragmentNames();
 
-                    if (stackFragmentNames == null || stackFragmentNames.size() == 0)
+                    if (stackFragmentNames == null || stackFragmentNames.isEmpty())
                         continue;
 
                     //判断是否需要更新UI
@@ -1444,7 +1405,7 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
                     GT.Thread.runAndroid(() -> {
                         ll_fragmentStack.removeAllViews();//情况所有组件
                         Collections.reverse(stackFragmentNames);
-                        if (stackFragmentNames.size() != 0) {
+                        if (!stackFragmentNames.isEmpty()) {
                             for (String stackFragmentName : stackFragmentNames) {
                                 View item_fragment_stack = LayoutInflater.from(context).inflate(R.layout.item_fragment_stack, null);
                                 TextView tv_showStack = item_fragment_stack.findViewById(R.id.tv_showStack);

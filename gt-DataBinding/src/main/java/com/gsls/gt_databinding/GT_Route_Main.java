@@ -2,7 +2,6 @@ package com.gsls.gt_databinding;
 
 import com.google.auto.service.AutoService;
 import com.gsls.gt_databinding.bean.BindingBean;
-import com.gsls.gt_databinding.route.annotation.GT_Route;
 import com.gsls.gt_databinding.route.annotation.GT_RoutePath;
 import com.gsls.gt_databinding.utils.DataBindingUtils;
 import com.gsls.gt_databinding.utils.FileUtils;
@@ -10,10 +9,8 @@ import com.gsls.gt_databinding.utils.FileUtils;
 import java.io.IOException;
 import java.io.Writer;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import javax.annotation.processing.AbstractProcessor;
@@ -22,7 +19,6 @@ import javax.annotation.processing.Processor;
 import javax.annotation.processing.RoundEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
-import javax.lang.model.util.Elements;
 import javax.tools.JavaFileObject;
 
 
@@ -171,6 +167,7 @@ public class GT_Route_Main extends AbstractProcessor {
 
                 }
             }
+
             String className = "$_$" + bindingBean.getJavaLibraryName();
             //根据不同的绑定类型 进行智能继承
             builder.append("\n@com.gsls.gt_databinding.route.annotation.GT_ARouterName({" + aRouterName + "})");
