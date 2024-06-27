@@ -834,7 +834,7 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
             cl_close.setVisibility(View.VISIBLE);//显示开关机组件
             tv_shutdown.setText("开机");
 
-            GT.Observable.getDefault().execute(new GT.Observable.RunJava<>() {
+            GT.Observable.getDefault().execute(new GT.Observable.RunJava<Object>() {
                 @Override
                 public void run() {
                     cl_close.setVisibility(View.VISIBLE);//显示开关机组件
@@ -873,7 +873,7 @@ public class GT_Floating extends GT.GT_FloatingWindow.BaseFloatingWindow impleme
                     }
 
                 }
-            }).execute(new GT.Observable.RunAndroid<>() {
+            }).execute(new GT.Observable.RunAndroid<Object>() {
                 @Override
                 public void run() {
                     cl_close.setVisibility(View.GONE);//隐藏开关机组件

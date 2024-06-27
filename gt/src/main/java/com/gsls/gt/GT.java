@@ -397,7 +397,7 @@ import dalvik.system.PathClassLoader;
  * <p>
  * <p>
  * 更新时间:2024.6.27
- * 更新内容 v1.4.6.4 版本：
+ * 更新内容 v1.4.6.6 版本：
  * CSDN 博客/官网教程:https://blog.csdn.net/qq_39799899
  * GitHub https://github.com/1079374315/GT
  * 更新内容如下：
