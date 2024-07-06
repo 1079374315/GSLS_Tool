@@ -396,8 +396,8 @@ import dalvik.system.PathClassLoader;
  * GSLS_TOOL
  * <p>
  * <p>
- * 更新时间:2024.6.27
- * 更新内容 v1.4.6.6 版本：
+ * 更新时间:2024.7.6
+ * 更新内容 v1.4.6.7 版本：
  * CSDN 博客/官网教程:https://blog.csdn.net/qq_39799899
  * GitHub https://github.com/1079374315/GT
  * 更新内容如下：
@@ -405,6 +405,7 @@ import dalvik.system.PathClassLoader;
  * 2.适配 多层 深层次子模块下 GT_Route路由框架 (在使用上，不受影响)
  * 3.适配 多层 深层次子模块下 GT_R_Build R2 框架 (在使用上，不受影响)
  * 4.GT kt语言，增加View 快捷用法 show、gone、hide、interceptClick(拦截单击事件)
+ * 5.优化 Base_View 启动默认模式出现的问题
  *
  * <p>
  * <p>
@@ -1124,28 +1125,28 @@ public class GT {
      * @param dialogFragment
      * @跳转其他的 DialogFragment
      */
-    public static void startDialogFragment(Object dialogFragment, Fragment fragment,  FragmentManager... supportFragmentManagers) {
+    public static void startDialogFragment(Object dialogFragment, Fragment fragment, FragmentManager... supportFragmentManagers) {
         DialogFragment dialog = null;
         FragmentManager supportFragmentManager = null;
-        if(supportFragmentManagers == null || supportFragmentManagers.length == 0 || supportFragmentManagers[0] == null){
+        if (supportFragmentManagers == null || supportFragmentManagers.length == 0 || supportFragmentManagers[0] == null) {
             return;
-        }else{
+        } else {
             supportFragmentManager = supportFragmentManagers[0];
         }
 
-        if(dialogFragment instanceof String){
-            if(dialogFragment.toString().contains("\\.")){
+        if (dialogFragment instanceof String) {
+            if (dialogFragment.toString().contains("\\.")) {
                 dialog = (DialogFragment) AnnotationAssist.classToObject(dialogFragment);
-            }else{
+            } else {
                 dialog = GT.ARouter.getInstance().build(dialogFragment.toString()).navigation();
             }
-        }else if(dialogFragment instanceof Class){
+        } else if (dialogFragment instanceof Class) {
             dialog = (DialogFragment) AnnotationAssist.classToObject(dialogFragment);
-        }else if(dialogFragment instanceof DialogFragment){
+        } else if (dialogFragment instanceof DialogFragment) {
             dialog = (DialogFragment) dialogFragment;
         }
 
-        if(fragment != null && dialog != null){
+        if (fragment != null && dialog != null) {
             dialog.setTargetFragment(fragment, 1);
         }
 
@@ -1171,7 +1172,7 @@ public class GT {
      * @param toFragment
      */
     public static void startFloatingWindow(Context context, Object floatingWindow, Bundle... bundles) {
-        if(floatingWindow == null || floatingWindow.toString().length() == 0) return;
+        if (floatingWindow == null || floatingWindow.toString().length() == 0) return;
         if (Build.VERSION.SDK_INT >= 23) {
             if (!Settings.canDrawOverlays(context)) {
                 Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + context.getPackageName()));
@@ -1181,10 +1182,10 @@ public class GT {
             }
         }
         Class<?> floatingWindowClass = null;
-        if(floatingWindow instanceof String){
-            if(floatingWindow.toString().contains("\\.")){
+        if (floatingWindow instanceof String) {
+            if (floatingWindow.toString().contains("\\.")) {
                 floatingWindowClass = AnnotationAssist.stringToClass(floatingWindowClass.toString());
-            }else{
+            } else {
                 GT.GT_FloatingWindow.BaseFloatingWindow floating = GT.ARouter.getInstance()
                         .build(floatingWindowClass.toString())
                         .navigation();
@@ -1192,9 +1193,9 @@ public class GT {
                 floatingWindowClass = floating.getClass();
                 floating = null;
             }
-        }else if(floatingWindow instanceof Class){
+        } else if (floatingWindow instanceof Class) {
             floatingWindowClass = (Class<?>) floatingWindow;
-        }else if(floatingWindow instanceof GT_FloatingWindow.BaseFloatingWindow){
+        } else if (floatingWindow instanceof GT_FloatingWindow.BaseFloatingWindow) {
             GT.GT_FloatingWindow.BaseFloatingWindow floating2 = (GT_FloatingWindow.BaseFloatingWindow) floatingWindow;
             bundles[0] = floating2.getArguments();
             floatingWindowClass = floating2.getClass();
@@ -1791,10 +1792,10 @@ public class GT {
         private static SoftReference<GT.ARouter.InterceptorCallback> softReferenceNavigationCallback;//内部引用 NavigationCallback
         private ARouterBean aRouterBean;
 
-        public void showRouterMap(){
-            if(!isDebugARouter)  return;
+        public void showRouterMap() {
+            if (!isDebugARouter) return;
             Map<String, GT_RouteMeta> stringGTRouteMetaMap = aRouterMap;
-            for(String key: stringGTRouteMetaMap.keySet()){
+            for (String key : stringGTRouteMetaMap.keySet()) {
                 GT_RouteMeta gtRouteMeta = stringGTRouteMetaMap.get(key);
                 GT.log("gtRouteMeta:" + gtRouteMeta);
             }
@@ -2165,6 +2166,7 @@ public class GT {
 
         /**
          * 启动拦截器
+         *
          * @param interceptorCallback 拦截器监听
          * @param <T>
          * @return
@@ -2182,6 +2184,7 @@ public class GT {
 
         /**
          * 拦截器方式
+         *
          * @param activity            上下文
          * @param interceptorCallback 拦截器监听
          * @param <T>
@@ -4346,7 +4349,8 @@ public class GT {
                     intent = (Intent) data;
                 } else {
                     intent = new Intent();
-                    intent.putExtra(broadcastName.toString(), data.toString());
+//                    intent.putExtra(broadcastName.toString(), data.toString());
+                    intent = GT.DataUtils.putIntent(broadcastName.toString(), data);
                 }
                 intent.setAction(broadcastName.toString());
                 context.sendBroadcast(intent);
@@ -4529,13 +4533,13 @@ public class GT {
          * @param obj
          * @return 是否保存成功
          */
-        public static synchronized boolean saveObject(Context context, Object obj) {
+        public static synchronized boolean saveObject(Context context, String Key, Object obj) {
             if (context == null || obj == null) {
                 errs("保存的参数为 null");
                 return false;
             }
             try {
-                File file = new File(context.getFilesDir().getPath() + obj.getClass().getName());
+                File file = new File(context.getFilesDir().getPath() + Key + obj.getClass().getName());
                 ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(file));
                 out.writeObject(obj);//存储Object
                 out.close();//关闭存储流
@@ -4554,13 +4558,13 @@ public class GT {
          * @param cla
          * @return
          */
-        public static synchronized boolean deleteObject(Context context, Class<?> cla) {
+        public static synchronized boolean deleteObject(Context context, String Key, Class<?> cla) {
             if (context == null || cla == null) {
                 errs("删除的参数为 null");
                 return false;
             }
             try {
-                File file = new File(context.getFilesDir().getPath() + cla.getName());
+                File file = new File(context.getFilesDir().getPath() + Key + cla.getName());
                 ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(file));
                 Object obj = new Object();//保证不会空指针
                 try {
@@ -4592,7 +4596,7 @@ public class GT {
          * @param <T>
          * @return
          */
-        public static synchronized <T> T queryObject(Context context, Class<T> cla) {
+        public static synchronized <T> T queryObject(Context context, String Key, Class<T> cla) {
 
             if (context == null || cla == null) {
                 errs("查询的参数为 null");
@@ -4600,7 +4604,7 @@ public class GT {
             }
             T t = null;
             try {
-                File file = new File(context.getFilesDir().getPath() + cla.getName());
+                File file = new File(context.getFilesDir().getPath() + Key + cla.getName());
                 ObjectInputStream in = new ObjectInputStream(new FileInputStream(file));
                 t = (T) in.readObject();
                 in.close();//关闭反序列化数据流
@@ -4619,13 +4623,13 @@ public class GT {
          * @param obj
          * @return
          */
-        public static synchronized boolean updateObject(Context context, Object obj) {
+        public static synchronized boolean updateObject(Context context, String Key, Object obj) {
             if (context == null || obj == null) {
                 errs("修改的参数为 null");
                 return false;
             }
             try {
-                File file = new File(context.getFilesDir().getPath() + obj.getClass().getName());
+                File file = new File(context.getFilesDir().getPath() + Key + obj.getClass().getName());
                 ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(file));
                 out.writeObject(obj);//存储Object
                 out.close();//关闭存储流
@@ -11922,7 +11926,7 @@ public class GT {
          * 获取设备的唯一标识， 需要 “android.permission.READ_Phone_STATE”权限
          */
         public static String getIMEI(Context context) {
-            try{
+            try {
                 TelephonyManager tm = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
                 String deviceId = tm.getDeviceId();
                 if (deviceId == null) {
@@ -11930,7 +11934,7 @@ public class GT {
                 } else {
                     return deviceId;
                 }
-            }catch (Exception e){
+            } catch (Exception e) {
 
 
             }
@@ -12381,11 +12385,11 @@ public class GT {
          */
         public static int getInt(int min, int max) {
             int value = random.nextInt(max);
-            try{
+            try {
                 if (value < min) {
                     return getInt(min, max);
                 }
-            }catch (Exception e){
+            } catch (Exception e) {
                 return min;
             }
             return value;
@@ -13402,6 +13406,72 @@ public class GT {
         //1字节转2个Hex字符
         public static String Byte2Hex(Byte inByte) {
             return String.format("%02x", new Object[]{inByte}).toUpperCase();
+        }
+
+        /**
+         * 保存 Intent 数据
+         *
+         * @param intents
+         * @param key
+         * @param object
+         * @return
+         */
+        public static Intent putIntent(String key, Object object, Intent... intents) {
+            Intent intent = null;
+            if(intents == null || intents.length == 0 || intents[0] == null){
+                intent = new Intent();
+            }
+            if (object instanceof String) {
+                intent.putExtra(key, object.toString());
+            } else if (object instanceof Integer) {
+                intent.putExtra(key, (Integer) object);
+            } else if (object instanceof Long) {
+                intent.putExtra(key, (Long) object);
+            } else if (object instanceof Float) {
+                intent.putExtra(key, (Float) object);
+            } else if (object instanceof Boolean) {
+                intent.putExtra(key, (Boolean) object);
+            } else if (object instanceof Double) {
+                intent.putExtra(key, (Double) object);
+            } else if (object instanceof Short) {
+                intent.putExtra(key, (Short) object);
+            } else if (object instanceof Byte) {
+                intent.putExtra(key, (Byte) object);
+            } else if (object instanceof Serializable) {
+                GT.logt("object:" + object);
+                intent.putExtra(key, (Serializable) object);
+            } else if (object instanceof Parcelable) {
+                intent.putExtra(key, (Parcelable) object);
+            } else if (object instanceof Bundle) {
+                intent.putExtra(key, (Bundle) object);
+            } else if (object instanceof Character) {
+                intent.putExtra(key, (Character) object);
+            } else if (object instanceof String[]) {
+                intent.putExtra(key, (String[]) object);
+            } else if (object instanceof Integer[]) {
+                intent.putExtra(key, (Integer[]) object);
+            } else if (object instanceof Float[]) {
+                intent.putExtra(key, (Float[]) object);
+            } else if (object instanceof Boolean[]) {
+                intent.putExtra(key, (Boolean[]) object);
+            } else if (object instanceof Short[]) {
+                intent.putExtra(key, (Short[]) object);
+            } else if (object instanceof Byte[]) {
+                intent.putExtra(key, (Byte[]) object);
+            } else if (object instanceof Double[]) {
+                intent.putExtra(key, (Double[]) object);
+            } else if (object instanceof Long[]) {
+                intent.putExtra(key, (Long[]) object);
+            } else if (object instanceof Serializable[]) {
+                intent.putExtra(key, (Serializable[]) object);
+            } else if (object instanceof Parcelable[]) {
+                intent.putExtra(key, (Parcelable[]) object);
+            } else if (object instanceof Character[]) {
+                intent.putExtra(key, (Character[]) object);
+            } else {//转入 json 存储
+                intent.putExtra(key, GT.JSON.toJson2(object));
+            }
+            return intent;
         }
 
         //字节数组转转hex字符串
@@ -18248,7 +18318,7 @@ public class GT {
                                 });
                             }
                             //释放资源
-                            if(glideBean != null){
+                            if (glideBean != null) {
                                 GT.ImageViewTools.close(glideBean.imgObjet, false);
                                 GT.ImageViewTools.close(glideBean.resource, false);
                                 GT.ImageViewTools.close(glideBean.placeholder, false);
@@ -18256,7 +18326,7 @@ public class GT {
                                 glideBean = null;
                             }
 
-                            if(glideBean2 != null){
+                            if (glideBean2 != null) {
                                 GT.ImageViewTools.close(glideBean2.imgObjet, false);
                                 GT.ImageViewTools.close(glideBean2.resource, false);
                                 GT.ImageViewTools.close(glideBean2.placeholder, false);
@@ -21652,8 +21722,6 @@ public class GT {
     }
 
 
-
-
     /**
      * @AppUtils 应用程序的小工具集合
      */
@@ -21749,7 +21817,6 @@ public class GT {
             }
             return false;
         }
-
 
         /**
          * 打印 对象属性
@@ -21951,7 +22018,7 @@ public class GT {
             }
         }
 
-        public static void interceptClick(View view){
+        public static void interceptClick(View view) {
             view.setOnTouchListener(new View.OnTouchListener() {
                 @Override
                 public boolean onTouch(View v, MotionEvent event) {
@@ -22838,7 +22905,7 @@ public class GT {
          * @param onListener
          * @param editTexts
          */
-        public static List<EditText> payPasswordEntryAlgorithm(OnListener<String> onListener, boolean isEmptyText, boolean isOneFocus, EditText... editTexts) {
+        public static List<EditText> payPasswordEntryAlgorithm(OneListener<String> onListener, boolean isEmptyText, boolean isOneFocus, EditText... editTexts) {
             List<EditText> editTextList = new ArrayList<>();
             if (editTexts.length == 0) return editTextList;
             if (isOneFocus) {
@@ -22905,7 +22972,7 @@ public class GT {
                                 editText.setText("");
                             }
                         }
-                        onListener.onListener(apppwd);
+                        onListener.onOneListener(apppwd);
                     }
                 });
             }
@@ -23112,7 +23179,7 @@ public class GT {
             List<AppBean> appBeanList = new ArrayList<>();
             PackageManager packageManager = context.getPackageManager();
             List<PackageInfo> list = packageManager.getInstalledPackages(PackageManager.GET_PERMISSIONS);
-            for (int index = 0; index< list.size(); index++) {
+            for (int index = 0; index < list.size(); index++) {
                 PackageInfo packageInfo = list.get(index);
                 ApplicationInfo applicationInfo = packageInfo.applicationInfo;
                 AppBean appBean = new AppBean(
@@ -23127,7 +23194,7 @@ public class GT {
                 );
                 if (packageInfo.permissions != null) {
                     for (PermissionInfo p : packageInfo.permissions) {
-                        if(appBean.permissions == null) appBean.permissions = new ArrayList<>();
+                        if (appBean.permissions == null) appBean.permissions = new ArrayList<>();
                         appBean.permissions.add(p.name);
                     }
                 }
@@ -23136,7 +23203,7 @@ public class GT {
             return appBeanList;
         }
 
-        public static class AppBean {
+        public static class AppBean implements GT.SaveObject.SaveBean {
 
             //公共参数
             public int appKey = -1;//appKey
@@ -23157,17 +23224,19 @@ public class GT {
             //app内部界面
             public Object appView;
             public Bitmap bitmap;
-            public AppBean(){}
+
+            public AppBean() {
+            }
 
             //外部简易app
             public AppBean(
-                            int appKey,
-                            String name,
-                           Object appIcon,
-                           int appIndex,
-                           String function,
-                           String longFunction,
-                           GT.OnListener<Object>... onListeners){
+                    int appKey,
+                    String name,
+                    Object appIcon,
+                    int appIndex,
+                    String function,
+                    String longFunction,
+                    GT.OnListener<Object>... onListeners) {
                 this.appKey = appKey;
                 this.name = name;
                 this.appIcon = appIcon;
@@ -23181,23 +23250,23 @@ public class GT {
 
             //外部带界面的app
             public AppBean(
-                            int appKey,
-                           String name,
-                           Object appIcon,
-                           int appIndex,
-                           Object appView,
-                           String... permissions
-                           ){
+                    int appKey,
+                    String name,
+                    Object appIcon,
+                    int appIndex,
+                    Object appView,
+                    String... permissions
+            ) {
                 this.appKey = appKey;
                 this.name = name;
                 this.appIcon = appIcon;
                 this.appIndex = appIndex;
-                if(this.permissions == null){
+                if (this.permissions == null) {
                     this.permissions = new ArrayList<>();
                 }
                 this.appView = appView;
-                if(permissions != null && permissions.length > 0 && permissions[0] != null){
-                    for(String permission : permissions){
+                if (permissions != null && permissions.length > 0 && permissions[0] != null) {
+                    for (String permission : permissions) {
                         this.permissions.add(permission);
                     }
                 }
@@ -23278,12 +23347,12 @@ public class GT {
             }
 
             //资源释放
-            public void clear(){
-                if(appIcon != null){
-                    if(appIcon instanceof Bitmap){
+            public void clear() {
+                if (appIcon != null) {
+                    if (appIcon instanceof Bitmap) {
                         Bitmap bitmap = (Bitmap) appIcon;
                         bitmap.recycle();
-                    }else if(appIcon instanceof Drawable){
+                    } else if (appIcon instanceof Drawable) {
                         Drawable drawable = (Drawable) appIcon;
                         if (drawable instanceof BitmapDrawable) {
                             BitmapDrawable bitmapDrawable = (BitmapDrawable) drawable;
@@ -23298,26 +23367,26 @@ public class GT {
                     appIcon = null;
                 }
 
-                if(onListener != null){
+                if (onListener != null) {
                     onListener = null;
                 }
 
-                if(appView != null){
-                    if(appView instanceof View){
-                            View view = (View) appView;
-                            ViewParent parent = view.getParent();
-                            if(parent instanceof ViewGroup){
-                                ViewGroup viewGroup = (ViewGroup) parent;
-                                viewGroup.removeView(view);
-                            }
-                            view = null;
-                    }else if(appView instanceof GT_View.BaseView){
+                if (appView != null) {
+                    if (appView instanceof View) {
+                        View view = (View) appView;
+                        ViewParent parent = view.getParent();
+                        if (parent instanceof ViewGroup) {
+                            ViewGroup viewGroup = (ViewGroup) parent;
+                            viewGroup.removeView(view);
+                        }
+                        view = null;
+                    } else if (appView instanceof GT_View.BaseView) {
                         GT_View.BaseView baseView = (GT_View.BaseView) appView;
                         baseView.finish();
                     }
                     appView = null;
                 }
-                if(bitmap != null){
+                if (bitmap != null) {
                     bitmap.recycle();
                     bitmap = null;
                 }
@@ -23494,10 +23563,16 @@ public class GT {
             }
         }
 
-        public static void clickIntervalTimes(View view, View.OnClickListener onClickListener, int... intervalTimes){
+        /**
+         * 单击拦截时间
+         * @param view
+         * @param onClickListener
+         * @param intervalTimes
+         */
+        public static void clickIntervalTimes(View view, View.OnClickListener onClickListener, int... intervalTimes) {
             final long[] lastClickTime = {0};
             int intervalTime = 1000; // 间隔时间为1秒
-            if(intervalTimes != null && intervalTimes.length > 0 && intervalTimes[0] >= 0){
+            if (intervalTimes != null && intervalTimes.length > 0 && intervalTimes[0] >= 0) {
                 intervalTime = intervalTimes[0];
             }
             long finalIntervalTime = intervalTime;
@@ -25972,18 +26047,19 @@ public class GT {
 
         /**
          * 释放资源
+         *
          * @param imgObjet
          */
         public static void close(Object imgObjet, boolean isRecycle) {
-            if(imgObjet == null) return;
-            if(!isRecycle){
+            if (imgObjet == null) return;
+            if (!isRecycle) {
                 imgObjet = null;
                 return;
             }
-            if(imgObjet instanceof Bitmap){
+            if (imgObjet instanceof Bitmap) {
                 Bitmap bitmap = (Bitmap) imgObjet;
                 bitmap.recycle();
-            }else if(imgObjet instanceof Drawable){
+            } else if (imgObjet instanceof Drawable) {
                 Drawable drawable = (Drawable) imgObjet;
                 if (drawable instanceof BitmapDrawable) {
                     BitmapDrawable bitmapDrawable = (BitmapDrawable) drawable;
@@ -29739,9 +29815,9 @@ public class GT {
              * @跳转其他的 DialogFragment
              */
             public void startDialogFragment(Object dialogFragment) {
-                GT.startDialogFragment(dialogFragment , null, getSupportFragmentManager());
+                GT.startDialogFragment(dialogFragment, null, getSupportFragmentManager());
             }
-            
+
 
             /**
              * 启动一个Fragment
@@ -31769,15 +31845,15 @@ public class GT {
 
             if (fragmentObj instanceof String) {
                 //在这里判断是 class 还是 路由地址
-                if(((String) fragmentObj).contains("\\.")){
+                if (((String) fragmentObj).contains("\\.")) {
                     fragmentClass = AnnotationAssist.stringToClass(fragmentObj.toString());
-                }else{
-                    try{
+                } else {
+                    try {
                         fragment = GT.ARouter.getInstance()
                                 .build(fragmentObj.toString())
                                 .navigation();
                         fragmentClass = fragment.getClass();
-                    }catch (Exception e){
+                    } catch (Exception e) {
 
                     }
                 }
@@ -32732,7 +32808,6 @@ public class GT {
             public void startDialogFragment(Object dialogFragment) {
                 GT.startDialogFragment(dialogFragment, this, getFragmentManager());
             }
-            
 
 
             /**
@@ -34810,6 +34885,7 @@ public class GT {
             private String cacheKey;//缓存标识
             public final static int TYPE_SELF_ADAPTION = -1;    //自适应
             public final static int TYPE_DEFAULT = -1079;    //创建屏幕的类型,默认是使用用户设置的Xml宽高
+            public final static int TYPE_XML = -1078;    //创建屏幕的类型,默认是使用用户设置的Xml宽高
             public final static int TYPE_PORTRAIT_SCREEN = 0;    //竖屏
             public final static int TYPE_LANDSCAPE = 1;         //横屏
             public final static int TYPE_SCREEN = 2;            //自适应半屏
@@ -35144,11 +35220,37 @@ public class GT {
             private void setScreenSize() {
                 //自适应设置窗口大小，方向
                 switch (TYPE_SCREEN_TYPE) {
+                    case TYPE_XML:
+                        //默认是占屏幕一半的大小
+                        layoutParams.width = (int) (width / screenSizeCoefficient);
+                        layoutParams.height = (int) (height / screenSizeCoefficient);
+                        view.measure(0, 0);//设置标准宽高
+                        break;
+
                     case TYPE_DEFAULT:
                         //默认是占屏幕一半的大小
                         layoutParams.width = (int) (width / screenSizeCoefficient);
                         layoutParams.height = (int) (height / screenSizeCoefficient);
                         view.measure(0, 0);//设置标准宽高
+
+                        int measuredWidth = view.getMeasuredWidth();
+                        int measuredHeight = view.getMeasuredHeight();
+
+                        int w = measuredWidth - (view.getPaddingLeft() + view.getPaddingRight());
+                        int h = measuredHeight - (view.getPaddingTop() + view.getPaddingBottom());
+
+                        //设置界面宽度
+                        if (w == 121 || w == 122 || w == 155 || w == 154) {
+                            layoutParams.width = width;
+                        } else {
+                            layoutParams.width = view.getMeasuredWidth();
+                        }
+                        //设置界面高度
+                        if (h == 66 || h == 67 || h == 85 || h == 84) {
+                            layoutParams.height = height;
+                        } else {
+                            layoutParams.height = view.getMeasuredHeight();
+                        }
                         break;
                     case TYPE_PORTRAIT_SCREEN://竖屏
                         if (width > height) {
@@ -36104,6 +36206,7 @@ public class GT {
                 getCache(GT_Cache.getCacheData(cacheKey, String.class));//获取缓存数据
                 loadData(view);
                 if (view != null && viewGroup != null && viewGroup instanceof ViewGroup) {
+//                    GT.ApplicationUtils.interceptClick(view);//拦截app界面事件
                     viewGroup.addView(view);
                 }
             }
@@ -36217,9 +36320,9 @@ public class GT {
 
             //销毁当前对象
             public void finish() {
-                if(getView() != null){
+                if (getView() != null) {
                     Object tag = getView().getTag();
-                    if(tag instanceof Integer){
+                    if (tag instanceof Integer) {
                         int appKey = (int) tag;
                         EventBus.getDefault().post(appKey, "baseViewFinish");
                     }

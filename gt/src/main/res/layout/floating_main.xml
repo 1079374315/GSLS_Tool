@@ -1,4 +1,5 @@
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
@@ -59,7 +60,7 @@
         app:layout_constraintStart_toStartOf="@+id/view_bg"
         app:layout_constraintTop_toTopOf="@+id/view_bg">
 
-        <SearchView
+        <android.widget.SearchView
             android:id="@+id/sv_find"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -159,7 +160,7 @@
         android:layout_height="wrap_content"
         android:layout_gravity="center"
         android:padding="10dp"
-        android:src="@drawable/img_fill_16"
+        android:src="@mipmap/img_fill"
         android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="@+id/sv"
         app:layout_constraintStart_toStartOf="@+id/sv" />
@@ -181,7 +182,6 @@
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:background="@drawable/bg_black"
-        android:orientation="vertical"
         android:visibility="gone"
         app:layout_constraintDimensionRatio="h,1:1"
         app:layout_constraintEnd_toEndOf="@+id/view_bg"
@@ -211,20 +211,20 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:max="100"
-                    android:thumb="@drawable/img_diaphaneity_16" />
+                    android:thumb="@mipmap/img_diaphaneity" />
 
                 <SeekBar
                     android:id="@+id/sb_width"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:thumb="@drawable/img_width_16" />
+                    android:thumb="@mipmap/img_width" />
 
                 <SeekBar
                     android:id="@+id/sb_height"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="5dp"
-                    android:thumb="@drawable/img_height_16" />
+                    android:thumb="@mipmap/img_height" />
 
                 <view
                     class="com.gsls.gt.GT$ViewUtils$FlowLayout"
@@ -237,7 +237,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_gravity="center"
-                        android:src="@drawable/img_cut_16" />
+                        android:src="@mipmap/img_cut" />
 
                     <ImageView
                         android:id="@+id/iv_reset"
@@ -245,7 +245,7 @@
                         android:layout_height="wrap_content"
                         android:layout_gravity="center"
                         android:layout_marginTop="10dp"
-                        android:src="@drawable/img_reset_16" />
+                        android:src="@mipmap/img_reset" />
 
                     <ImageView
                         android:id="@+id/iv_fill"
@@ -253,7 +253,7 @@
                         android:layout_height="wrap_content"
                         android:layout_gravity="center"
                         android:layout_marginTop="10dp"
-                        android:src="@drawable/img_fill_16" />
+                        android:src="@mipmap/img_fill" />
 
                 </view>
 

@@ -4,7 +4,7 @@
 
     <!-- 设置一个黑色边框 -->
     <stroke
-        android:width="10px"
+        android:width="1.5dp"
         android:color="#272424" />
     <!-- 设置四个圆角的半径 -->
     <corners
