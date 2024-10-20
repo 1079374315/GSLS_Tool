@@ -1,3 +1,5 @@
+@file:Suppress("UNCHECKED_CAST")
+
 package com.gsls.gtk
 
 import android.app.Activity
@@ -647,6 +649,7 @@ fun View.clickIntervalTimes(intervalTimes: Int = 1000, onClickListener: View.OnC
 }
 
 //延时加载
+@Suppress("UNCHECKED_CAST")
 class Later<T>(private val block: () -> T) {
     var value: Any? = null
     operator fun getValue(any: Any?, prop: KProperty<*>): T {
