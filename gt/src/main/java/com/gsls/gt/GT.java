@@ -37,6 +37,7 @@ import android.content.BroadcastReceiver;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.ComponentName;
+import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -204,8 +205,10 @@ import android.widget.LinearLayout;
 import android.widget.PopupWindow;
 import android.widget.RemoteViews;
 import android.widget.ScrollView;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.widget.VideoView;
 
 import androidx.activity.result.ActivityResult;
 import androidx.activity.result.ActivityResultCallback;
@@ -246,8 +249,12 @@ import androidx.lifecycle.ViewModelStoreOwner;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.recyclerview.widget.StaggeredGridLayoutManager;
+import androidx.viewpager2.adapter.FragmentStateAdapter;
+import androidx.viewpager2.widget.ViewPager2;
 
 import com.friendlyarm.AndroidSDK.HardwareInit;
+import com.google.android.material.tabs.TabLayout;
+import com.google.android.material.tabs.TabLayoutMediator;
 import com.google.gson.Gson;
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.Binarizer;
@@ -396,17 +403,19 @@ import dalvik.system.PathClassLoader;
  * GSLS_TOOL
  * <p>
  * <p>
- * 更新时间:2024.7.6
- * 更新内容 v1.4.6.7 版本：
+ * 更新时间:2024.12.20
+ * 更新内容 v1.4.6.8 版本：
  * CSDN 博客/官网教程:https://blog.csdn.net/qq_39799899
  * GitHub https://github.com/1079374315/GT
  * 更新内容如下：
- * 1.GT_DataBinding 类 所有注解常量均转为大写 (若有涉及到的需要整体将小写转为大写即可)
- * 2.适配 多层 深层次子模块下 GT_Route路由框架 (在使用上，不受影响)
- * 3.适配 多层 深层次子模块下 GT_R_Build R2 框架 (在使用上，不受影响)
- * 4.GT kt语言，增加View 快捷用法 show、gone、hide、interceptClick(拦截单击事件)
- * 5.优化 Base_View 启动默认模式出现的问题
- *
+ * 1.新增 蓝牙工具类
+ * 2.新增 视频播放器 辅助类GT_VideoView
+ * 3.新增 算法类 Algorithm(后面会慢慢收集算法)
+ * 4.优化数据库保存map时的问题，新增 @GT_table 为映射表的标识
+ * 5.适配 Kotlin的 data 类型的数据表映射
+ * 6.解决在启动旧 Fragment 后调用的show 特殊情况下会调用失败的问题
+ * 7.悬浮窗 新增 绑定 Activity 的功能，将悬浮窗设置为 Activity 层级的悬浮窗
+ * 8.
  * <p>
  * <p>
  * 小提示：(用于 AndroidStudio )
@@ -1187,11 +1196,17 @@ public class GT {
                 floatingWindowClass = AnnotationAssist.stringToClass(floatingWindowClass.toString());
             } else {
                 GT.GT_FloatingWindow.BaseFloatingWindow floating = GT.ARouter.getInstance()
-                        .build(floatingWindowClass.toString())
+                        .build(floatingWindow.toString())
                         .navigation();
-                bundles[0] = floating.getArguments();
-                floatingWindowClass = floating.getClass();
-                floating = null;
+                if (floating != null) {
+                    try {
+                        bundles[0] = floating.getArguments();
+                    } catch (Exception e) {
+
+                    }
+                    floatingWindowClass = floating.getClass();
+                    floating = null;
+                }
             }
         } else if (floatingWindow instanceof Class) {
             floatingWindowClass = (Class<?>) floatingWindow;
@@ -1760,6 +1775,9 @@ public class GT {
 
     //============================================= 数据类 =====================================
 
+    /**
+     * 专为 跨模块开发的 路由器，彻底解耦
+     */
     public static class ARouter {
 
         public interface IProvider {
@@ -2725,7 +2743,8 @@ public class GT {
                 String interceptor = interceptors[i];
                 if (claInterceptsList != null && interceptor != null) {
                     if (claInterceptsList.isEmpty()) {
-                        if (interceptorCallback != null) interceptorCallback.onContinue(intent);//返回通过拦截
+                        if (interceptorCallback != null)
+                            interceptorCallback.onContinue(intent);//返回通过拦截
                         break;//全绿色通道
                     } else if (claInterceptsList.contains(interceptor)) continue;//跳过绿色通道拦截器
                 }
@@ -3134,6 +3153,19 @@ public class GT {
          * 注意:在自定义 evenKey 时请不要写入 "_GT_" 字符,该字符为关键字
          *
          * @param <T>       返回类型 (发布事件后可接收到订阅者返回值,但如果订阅者与发布者不在同一线程中或发布的事件中有两个订阅者,将无法在发布事件的线程接收到订阅者的返回值)
+         * @param eventData 发布的事件 默认没有传参
+         * @param eventKeys 指定发送的区域 (如果不填则默认向所有订阅者发布事件)
+         * @return
+         */
+        public static <T> T postNotValues(Object... eventKeys) {
+            return EventBus.getDefault().post(null, eventKeys);
+        }
+
+        /**
+         * 发布事件
+         * 注意:在自定义 evenKey 时请不要写入 "_GT_" 字符,该字符为关键字
+         *
+         * @param <T>       返回类型 (发布事件后可接收到订阅者返回值,但如果订阅者与发布者不在同一线程中或发布的事件中有两个订阅者,将无法在发布事件的线程接收到订阅者的返回值)
          * @param eventData 发布的事件 (参数仅支持一个,若需要传多参数可传递 Bundle,List,Map,实体类Bean等等)
          * @param eventKeys 指定发送的区域 (如果不填则默认向所有订阅者发布事件)
          * @return
@@ -3507,7 +3539,6 @@ public class GT {
                     //获取方法名
                     String eventKey = subscribeAnnotation.eventKey().length() == 0 ? methodName : subscribeAnnotation.eventKey();//订阅者唯一名称,若没有填订阅者名称那就默认使用当前方法名
                     eventKey = aClass + SEPARATOR + eventKey + (parameterTypes.length == 1 ? (SEPARATOR + parameterTypes[0]) : "");
-
                     deleteList.clear();
                     for (String key : eventBusMap.keySet()) {
                         if (!key.equals(eventKey)) {
@@ -3526,6 +3557,7 @@ public class GT {
                         }
                         eventBusMap.remove(key);//ok
                     }
+                    deleteList.clear();
                 }
 
             } catch (Exception e) {
@@ -3735,6 +3767,7 @@ public class GT {
                     }
 
                     interceptList.clear();//清空拦截事件对象
+                    priorityList.clear();//清空优先级事件对象
                     //如果只有一个发布的那就进行返回数据
                     return t;
                 } catch (ConcurrentModificationException e) {
@@ -4126,7 +4159,11 @@ public class GT {
             });
 
             public static void unregisterAcrossProcesses(Context context) {
-                context.unbindService(connection);
+                try {
+                    context.unbindService(connection);
+                } catch (Exception e) {
+
+                }
             }
 
         }
@@ -6032,6 +6069,13 @@ public class GT {
 //            boolean setIsEncryption() default false;//默认不进行加密
         }
 
+        @Target(ElementType.TYPE)
+        @Retention(RetentionPolicy.RUNTIME)
+        public @interface GT_Table {
+            String[] setSqlNames() default {};//设置属于那个数据库的表,默认是空
+//            boolean setIsEncryption() default false;//默认不进行加密
+        }
+
         //设置主键注解
         @Target({ElementType.FIELD})
         @Retention(RetentionPolicy.RUNTIME)
@@ -6287,10 +6331,8 @@ public class GT {
                     sqLiteDatabase.execSQL(SQL_CODE); //创建数据库 sql 语句 并 执行
                     SQL_CODE = "";//初始化
                 } else {//否则用智能SQL代码
-                    for (String sqlStr : creationTableNameList) {
-                        sqLiteDatabase.execSQL(sqlStr); //创建数据库 sql 语句 并 执行
-                    }
-
+                    //创建数据库 sql 语句 并 执行
+                    for (String sqlStr : creationTableNameList) sqLiteDatabase.execSQL(sqlStr);
                     //检查是否需要建立索引
                     if (tableIndexList.size() != 0) {
                         for (String indexCode : tableIndexList) {
@@ -7206,6 +7248,12 @@ public class GT {
                 case "java.util.ArrayMap": {
                     return ArrayMap.class;
                 }
+                case "java.util.HashMap": {
+                    return HashMap.class;
+                }
+                case "java.util.Map": {
+                    return Map.class;
+                }
                 default:
                     //特殊类型
                     return null;
@@ -7473,9 +7521,10 @@ public class GT {
                     Object val = field.get(bean);// 得到此属性的值
 
                     //判断当前字段子表是否存在，如果存在，那就优先录用子表的，跳过本次解析
-                    if (contentValues.containsKey(name)) {
-                        continue;
-                    }
+                    if (contentValues.containsKey(name)) continue;
+
+                    //适配 Kotlin 语言中 隐示 字段
+                    if(name.equals("$stable") || name.equals("Companion")) continue;
 
                     GT_Column gt_Column = field.getAnnotation(GT_Column.class);//如果是不被初始化的那就进行跳过解析
                     if (gt_Column != null && gt_Column.setNotInit()) {
@@ -7671,6 +7720,9 @@ public class GT {
                     Object val = field.get(bean);// 得到此属性的值
                     if (val == null) continue;
 
+                    //适配 Kotlin 语言中 隐示 字段
+                    if(name.equals("$stable") || name.equals("Companion")) continue;
+
                     GT_Column gt_Column = field.getAnnotation(GT_Column.class);//如果是不被初始化的那就进行跳过解析
                     if (gt_Column != null && gt_Column.setNotInit()) {
                         continue;
@@ -7757,7 +7809,6 @@ public class GT {
                         contentValues.put(name, (byte[]) val);
                     }
 
-
                     //数组类型
                     else if (String[].class == type ||
                             int[].class == type ||
@@ -7792,9 +7843,18 @@ public class GT {
                             } else {
                                 data = val.toString();
                             }
-                        } else if (val.getClass() == ArrayMap.class) {
-                            Set<?> keys = ((ArrayMap<?, ?>) val).keySet();
-                            Collection<?> values = ((ArrayMap<?, ?>) val).values();
+                        } else if (val.getClass() == ArrayMap.class || val.getClass() == HashMap.class) {
+                            Set<?> keys = null;
+                            Collection<?> values = null;
+
+                            if (val.getClass() == ArrayMap.class){
+                                keys = ((ArrayMap<?, ?>) val).keySet();
+                                values = ((ArrayMap<?, ?>) val).values();
+                            }else if(val.getClass() == HashMap.class){
+                                keys = ((HashMap<?, ?>) val).keySet();
+                                values = ((HashMap<?, ?>) val).values();
+                            }
+
                             if (values.size() != 0) {
                                 Object keyObj = keys.iterator().next();
                                 Object valObj = values.iterator().next();
@@ -7824,6 +7884,8 @@ public class GT {
                             } else {
                                 data = val.toString();
                             }
+                        }else{
+
                         }
 
                         contentValues.put(name, data);
@@ -7877,6 +7939,10 @@ public class GT {
 
                 String valueName = field.getName();
                 Class<?> type = field.getType();
+
+                //适配 Kotlin 语言中 隐示 字段
+                if(valueName.equals("$stable") || valueName.equals("Companion")) continue;
+
                 field.setAccessible(true);
                 for (String str : tableChar) {
                     Object obj = null;
@@ -8186,6 +8252,10 @@ public class GT {
                         String valueName = field.getName();
                         Class<?> type = field.getType();
                         field.setAccessible(true);
+
+                        //适配 Kotlin 语言中 隐示 字段
+                        if(valueName.equals("$stable") || valueName.equals("Companion")) continue;
+
                         if (returnValues != null) {
                             for (String str : returnValues) {
                                 Object obj = null;
@@ -8583,6 +8653,10 @@ public class GT {
 
                         String valueName = field.getName();
                         Class<?> type = field.getType();
+
+                        //适配 Kotlin 语言中 隐示 字段
+                        if(valueName.equals("$stable") || valueName.equals("Companion")) continue;
+
                         field.setAccessible(true);
                         if (returnValues != null) {
                             for (String str : returnValues) {
@@ -9702,19 +9776,25 @@ public class GT {
                 if (lockWrite != null) {
                     lockWrite.lock();
                 }
-                Class<?> aClass = classOrBean.getClass();
+
+                Class<?> aClass;
+                if(classOrBean.toString().contains("class ")){
+                    aClass = AnnotationAssist.stringToClass(classOrBean.toString());
+                }else{
+                    aClass = classOrBean.getClass();
+                }
+                if(aClass == null){
+                    if (classOrBean.getClass() == Class.class) {
+                        aClass = (Class) classOrBean;
+                    } else {
+                        aClass = classOrBean.getClass();
+                    }
+                }
+
 
                 if (classOrBean == null || (classOrBean.getClass() == Class.class && (conditions == null || values == null))) {
                     err(getLineInfo(LOG.lineInfoIndex), "删除的 " + classOrBean + " 数据为null，操作失败");
                     return this;
-                }
-
-
-                if (classOrBean.getClass() == Class.class) {
-                    aClass = (Class) classOrBean;
-                } else {
-                    aClass = classOrBean.getClass();
-
                 }
 
                 String simpleName = aClass.getSimpleName();//获取表名
@@ -10526,7 +10606,6 @@ public class GT {
                 if (KeySqlCode == null || KeySqlCode.length() == 0) {
                     KeySqlCode = tableName + "_ID INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL";
                 }
-
                 creationTableNameList.add(tableSqlCode + KeySqlCode + sqlChar + ")");//添加在创建表时需要执行的
             }
 
@@ -10553,11 +10632,11 @@ public class GT {
                 fieldPropertyCode = "";//初始化
                 Class<?> type = field.getType();//获取当前字段类型
                 String tableChar = field.getName();//获取当前字段的名称
+                //适配 Kotlin 语言中 隐示 字段
+                if(tableChar.equals("$stable") || tableChar.equals("Companion")) continue;
 
                 GT_Column gt_Column = field.getAnnotation(GT_Column.class);//创建表时的
-                if (gt_Column != null && gt_Column.setNotInit()) {//过滤掉 不映射的字段
-                    continue;
-                }
+                if (gt_Column != null && gt_Column.setNotInit()) continue;//过滤掉 不映射的字段
 
                 //解析主键：优先使用子表主键
                 GT_Key gt_Key = field.getAnnotation(GT_Key.class);//创建表时的
@@ -10882,8 +10961,9 @@ public class GT {
                     //过滤掉未被注解过的类
                     GT_Bean bean_Bean = clazz1.getAnnotation(GT_Bean.class);//获取该类 ContextView 的注解类
                     GT_Entity bean_Entity = clazz1.getAnnotation(GT_Entity.class);//获取该类 ContextView 的注解类
+                    GT_Table bean_Table = clazz1.getAnnotation(GT_Table.class);//获取该类 ContextView 的注解类
 
-                    if (bean_Bean != null || bean_Entity != null) {
+                    if (bean_Bean != null || bean_Entity != null || bean_Table != null) {
 
                         //分库映射(如果实体类中指定了被映射的数据库，那就根据数据库名称来判断该表是否映射)
                         String[] userSqlName = new String[0];
@@ -10892,6 +10972,8 @@ public class GT {
                             userSqlName = bean_Bean.setSqlNames();//获取用户指定的数据库名称
                         } else if (bean_Entity != null) {
                             userSqlName = bean_Entity.setSqlNames();//获取用户指定的数据库名称
+                        }else if (bean_Table != null) {
+                            userSqlName = bean_Table.setSqlNames();//获取用户指定的数据库名称
                         }
 
                         if (userSqlName != null && userSqlName.length != 0) {
@@ -10915,6 +10997,15 @@ public class GT {
 
         private static Map<String, String[]> parameterNameMap = new ArrayMap<>();//存储一个接口里方法的形参名称
 
+        /**
+         * 创建动态代理
+         * 尽量使用 懒加载 方式创建引用：
+         * val sqlApi by lazy { GT.Hibernate.create(SQLApi::class.java, GT.GT_Cache.getHibernate(dbName)) }
+         * @param classz
+         * @param hibernates
+         * @return
+         * @param <T>
+         */
         public static <T> T create(Class<T> classz, Hibernate... hibernates) {
             //设置并发请求个数
             ExecutorService executor = null;
@@ -13438,7 +13529,6 @@ public class GT {
             } else if (object instanceof Byte) {
                 intent.putExtra(key, (Byte) object);
             } else if (object instanceof Serializable) {
-                GT.logt("object:" + object);
                 intent.putExtra(key, (Serializable) object);
             } else if (object instanceof Parcelable) {
                 intent.putExtra(key, (Parcelable) object);
@@ -14012,40 +14102,44 @@ public class GT {
          * @return String   返回当前 ip 地址
          */
         public static String getIPAddress(Context context) {
-            @SuppressLint("MissingPermission") NetworkInfo info = ((ConnectivityManager) context
-                    .getSystemService(Context.CONNECTIVITY_SERVICE)).getActiveNetworkInfo();
-            if (info != null && info.isConnected()) {
-                if (info.getType() == ConnectivityManager.TYPE_MOBILE) {//当前使用2G/3G/4G网络
-                    try {
-                        //Enumeration<NetworkInterface> en=NetworkInterface.getNetworkInterfaces();
-                        for (Enumeration<NetworkInterface> en = NetworkInterface.getNetworkInterfaces(); en.hasMoreElements(); ) {
-                            NetworkInterface intf = en.nextElement();
-                            for (Enumeration<InetAddress> enumIpAddr = intf.getInetAddresses(); enumIpAddr.hasMoreElements(); ) {
-                                InetAddress inetAddress = enumIpAddr.nextElement();
-                                if (!inetAddress.isLoopbackAddress() && inetAddress instanceof Inet4Address) {
-                                    return inetAddress.getHostAddress();
+            try{
+                @SuppressLint("MissingPermission") NetworkInfo info = ((ConnectivityManager) context
+                        .getSystemService(Context.CONNECTIVITY_SERVICE)).getActiveNetworkInfo();
+                if (info != null && info.isConnected()) {
+                    if (info.getType() == ConnectivityManager.TYPE_MOBILE) {//当前使用2G/3G/4G网络
+                        try {
+                            //Enumeration<NetworkInterface> en=NetworkInterface.getNetworkInterfaces();
+                            for (Enumeration<NetworkInterface> en = NetworkInterface.getNetworkInterfaces(); en.hasMoreElements(); ) {
+                                NetworkInterface intf = en.nextElement();
+                                for (Enumeration<InetAddress> enumIpAddr = intf.getInetAddresses(); enumIpAddr.hasMoreElements(); ) {
+                                    InetAddress inetAddress = enumIpAddr.nextElement();
+                                    if (!inetAddress.isLoopbackAddress() && inetAddress instanceof Inet4Address) {
+                                        return inetAddress.getHostAddress();
+                                    }
                                 }
                             }
+                        } catch (SocketException e) {
+                            e.printStackTrace();
                         }
-                    } catch (SocketException e) {
-                        e.printStackTrace();
+
+
+                    } else if (info.getType() == ConnectivityManager.TYPE_WIFI) {//当前使用无线网络
+                        WifiManager wifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
+                        @SuppressLint("MissingPermission") WifiInfo wifiInfo = wifiManager.getConnectionInfo();
+
+                        int ipAddress1 = wifiInfo.getIpAddress();
+                        String ipAddress = (ipAddress1 & 0xFF) + "." +
+                                ((ipAddress1 >> 8) & 0xFF) + "." +
+                                ((ipAddress1 >> 16) & 0xFF) + "." +
+                                (ipAddress1 >> 24 & 0xFF);
+                        return ipAddress;
                     }
+                } else {
+                    //当前无网络连接,请在设置中打开网络
 
-
-                } else if (info.getType() == ConnectivityManager.TYPE_WIFI) {//当前使用无线网络
-                    WifiManager wifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
-                    @SuppressLint("MissingPermission") WifiInfo wifiInfo = wifiManager.getConnectionInfo();
-
-                    int ipAddress1 = wifiInfo.getIpAddress();
-                    String ipAddress = (ipAddress1 & 0xFF) + "." +
-                            ((ipAddress1 >> 8) & 0xFF) + "." +
-                            ((ipAddress1 >> 16) & 0xFF) + "." +
-                            (ipAddress1 >> 24 & 0xFF);
-                    return ipAddress;
                 }
-            } else {
-                //当前无网络连接,请在设置中打开网络
-                GT.toast_s("当前无网络");
+            }catch (Exception e){
+
             }
             return null;
         }
@@ -15959,7 +16053,8 @@ public class GT {
 
         /**
          * 创建动态代理对象
-         *
+         * 尽量使用 懒加载 方式创建引用：
+         * val httpApi by load { GT.HttpCall.create(HttpApi::class.java) }
          * @param classz
          * @param onRunMethod
          * @param <T>
@@ -21835,6 +21930,8 @@ public class GT {
                     Class<?> type = field.getType();
                     String name = field.getName();
                     Object value = field.get(obj);
+                    //适配 Kotlin 语言中 隐示 字段
+                    if(name.equals("$stable") || name.equals("Companion")) continue;
                     if (type == String.class) {
                         stringBuilder.append(name + "='" + value + "', ");
                     } else if (type == Boolean.class) {
@@ -22032,7 +22129,7 @@ public class GT {
         /**
          * 连续点击2次退出
          */
-        public static void clickTwice(Context context, OnListener<Boolean> onListener, long... times) {
+        public static boolean clickTwice(Context context, OnListener<Boolean> onListener, long... times) {
             long time = 2000;
             if (times != null && times.length > 0) {
                 time = times[0];
@@ -22043,6 +22140,7 @@ public class GT {
             } else {
                 onListener.onListener(true);
             }
+            return true;
         }
 
         /**
@@ -22759,6 +22857,29 @@ public class GT {
             Pattern r = Pattern.compile(pattern);
             Matcher m = r.matcher(input);
             return m.matches();
+        }
+
+        /**
+         * 判断是否为正常的IP地址
+         * @param ipAddress
+         * @return
+         */
+        public static boolean isValidIpAddress(String ipAddress) {
+            String[] parts = ipAddress.split("\\.");
+            if (parts.length!= 4) {
+                return false;
+            }
+            for (String part : parts) {
+                try {
+                    int num = Integer.parseInt(part);
+                    if (num < 0 || num > 255) {
+                        return false;
+                    }
+                } catch (NumberFormatException e) {
+                    return false;
+                }
+            }
+            return true;
         }
 
         /**
@@ -27222,10 +27343,10 @@ public class GT {
 
     }
 
-//=========================================== 字符串加密类 =========================================
+//=========================================== 算法代码区 =========================================
 
     /**
-     * @加密类
+     * @字符串加密类
      */
     public static class Encryption {
 
@@ -27642,6 +27763,1094 @@ public class GT {
             }
 
         }
+    }
+
+    /**
+     * @算法类
+     */
+    public static class AlgorithmUtils {
+
+        /**
+         * 字段排除大小写限制，进行判断是否包含
+         * @param mainStr
+         * @param targetStr
+         * @return
+         */
+        public static boolean containsIgnoreCase(String mainStr, String targetStr) {
+            if (mainStr == null || targetStr == null) return false;
+            // 将两个字符串都转换为小写形式后再判断包含关系
+            return mainStr.toLowerCase().contains(targetStr.toLowerCase());
+        }
+
+        /**
+         * TGJ光标控制算法
+         * @param onReturnListener    算法过后返回的 陀螺仪 z 、x 值
+         * @param t_j_jg        依次传入 陀螺仪、非重力加速度（非线性加速度）、重力加速度（线性加速度）
+         */
+        public static void cursorControlTGJ(OnReturnListener<Float> onReturnListener, float[]... t_j_jg) {
+            if (onReturnListener == null || t_j_jg == null || t_j_jg.length < 3) return;
+
+            //陀螺仪、非重力加速度、重力加速度原始数据
+            float[] gyros = t_j_jg[0];
+            float[] accs = t_j_jg[1];
+            float[] accsG = t_j_jg[2];
+
+            //陀螺仪
+            float tx = gyros[0];
+            float ty = gyros[1];
+            float tz = gyros[2];
+
+            //非重力 加速度
+            float jx = accs[0];
+            float jy = accs[1];
+            float jz = accs[2];
+
+            //重力 加速度
+            float gx = accsG[0];
+            float gy = accsG[1];
+            float gz = accsG[2];
+
+            float xG = (float) Math.pow(gx - jx, 2);
+            float yG = (float) Math.pow(gy - jy, 2);
+            float zG = (float) Math.pow(gz - jz, 2);
+            float g = (float) Math.sqrt((xG + yG + zG));
+
+            float cosA = (gz - jz) / g;
+            float cosB = (gx - jx) / g;
+
+            float fA = 0;
+            float fB = 0;
+            if (cosA > 0 && cosB >= 0) {
+                fA = -1;
+                fB = 1;
+            } else if (cosA <= 0 && cosB > 0) {
+                fA = -1;
+                fB = -1;
+            } else if (cosA < 0 && cosB <= 0) {
+                fA = 1;
+                fB = -1;
+            } else if (cosA >= 0 && cosB < 0) {
+                fA = 1;
+                fB = 1;
+            }
+
+            float sinA = (float) (fA * Math.sqrt(1 - Math.pow(cosA, 2)));
+            float sinB = (float) (fB * Math.sqrt(1 - Math.pow(cosB, 2)));
+
+            float zValue = tz * cosA + tx * cosB;
+            float xValue = tz * sinA + tx * sinB;
+
+            //调整 方向
+            zValue *= -1;
+            onReturnListener.onListener(zValue, xValue);
+        }
+
+
+        // 检查数组中是否有先负后正的数字序列
+        public boolean isNegativePositive(List<Integer> list) {
+            if (list == null || list.size() <= 2) return false;
+            boolean z = false;
+            boolean f = false;
+            for (int value : list) {
+                if (value < 0) {
+                    z = true;
+                } else if (value > 0) {
+                    if (z) {
+                        f = true;
+                    }
+                }
+            }
+            return f;
+        }
+
+        //数据滤波算法 - 滑动平均滤波 - 专门用来过滤加速度计 在快速撞击的时候出现的一次值
+        public static class AccelerationFilter {
+
+            private final int windowSize;
+            private float[] buffer;
+            private int index;
+            private float sum;
+
+            public AccelerationFilter(int windowSize) {
+                this.windowSize = windowSize;
+                buffer = new float[windowSize];
+                index = 0;
+                sum = 0;
+            }
+
+            public float filter(float input) {
+                sum -= buffer[index];
+                buffer[index] = input;
+                sum += input;
+                index = (index + 1) % windowSize;
+                return sum / windowSize;
+            }
+
+        }
+
+        // 定义接近不动的坐标范围阈值，可根据实际情况调整
+        private static final float STILLNESS_THRESHOLD = 0.0001f;
+        // 定义正常速度系数
+        private static final float NORMAL_SPEED_FACTOR = 10000.0f;
+        // 定义慢速度系数，取值小于1，可调整慢的程度
+        private static final float SLOW_SPEED_FACTOR = 0.2f;
+        // 记录上一次鼠标的x坐标
+        private static float previousX = 0.001925f;
+        // 记录上一次鼠标的y坐标
+        private static float previousY = 0.001925f;
+
+        /**
+         * 渐变速度调整算法
+         *
+         * @param x
+         * @param y
+         * @param oneListener
+         */
+        public static void adjustMouseMovement(float x, float y, OneListener<Float[]> oneListener) {
+            // 计算x方向和y方向的坐标差值
+            double deltaX = x - previousX;
+            double deltaY = y - previousY;
+
+            // 判断鼠标是否接近不动状态
+            boolean isNearStill = Math.abs(deltaX) < STILLNESS_THRESHOLD && Math.abs(deltaY) < STILLNESS_THRESHOLD;
+
+            double speedFactor;
+            if (isNearStill) {
+                speedFactor = SLOW_SPEED_FACTOR;
+            } else {
+                // 计算鼠标移动的距离（二维距离）
+                double distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                // 根据距离来动态调整速度系数，距离越大，越接近正常速度系数
+                speedFactor = Math.min(1, distance / 10 * (NORMAL_SPEED_FACTOR - SLOW_SPEED_FACTOR) + SLOW_SPEED_FACTOR);
+                // 这里的10是一个距离参考值，用于控制速度变化的敏感度，可调整
+            }
+
+            // 根据速度系数调整坐标变化
+            float adjustedX = (float) (previousX + deltaX * speedFactor);
+            float adjustedY = (float) (previousY + deltaY * speedFactor);
+
+            // 更新上一次的坐标值
+            previousX = adjustedX;
+            previousY = adjustedY;
+
+            // 在这里可以添加代码将调整后的坐标用于实际操作，比如更新图形位置等
+            oneListener.onOneListener(new Float[]{adjustedX, adjustedY});
+        }
+
+        /**
+         * 解算所有的算法数据
+         *
+         * @param onReturnListener
+         * @param lists
+         */
+        public static void getAlgorithmDataAll(OnListener<String> onReturnListener, List<Integer>... lists) {
+            if (onReturnListener == null || lists == null || lists.length == 0 || lists[0] == null) return;
+            String[] resultArray = new String[lists.length];
+            for (int i = 0; i < lists.length; i++) {
+                int finalI = i;
+                getAlgorithmData(new OneListener<String>() {
+                    @Override
+                    public void onOneListener(String value) {
+                        if (value == null || !value.contains(WaveBean.WAVE_SPLIT_A)) return;
+                        resultArray[finalI] = value.split(WaveBean.WAVE_SPLIT_A)[0];
+                    }
+                }, lists[i]);
+            }
+            //最终结果，返回
+            onReturnListener.onListener(resultArray);
+        }
+
+
+        /**
+         * 获取算法数据
+         *
+         * @param oneListener 波经过算法后的数据反馈
+         * @param list        波原始数据
+         */
+        public static void getAlgorithmData(OneListener<String> oneListener, List<Integer> list) {
+            if (oneListener == null || list == null || list.isEmpty()) return;
+            List<Integer> list1 = new ArrayList<>(list);
+            double[] data = new double[list1.size()];
+            for (int i = 0; i < list1.size(); i++) data[i] = list1.get(i);
+            list1.clear();
+            list1 = null;
+            // 峰谷 算法
+            peakValleyAlgorithm(null, medianFilter(data, null), new OneListener<String>() {
+                @Override
+                public void onOneListener(String value) {
+                    super.onOneListener(value);
+                    if (value == null) {
+                        oneListener.onOneListener(null);
+                        return;
+                    }
+                    String[] split = value.split(WaveBean.WAVE_SPLIT_A);
+                    if (split.length != 2) {
+                        oneListener.onOneListener(null);
+                        return;
+                    }
+                    oneListener.onOneListener(value);
+                }
+            });
+        }
+
+
+        private static final int DEFAULT_COUNT = 5;// 默认个数
+        private static final long DEFAULT_TIME = 500L;// 默认时间
+
+        /**
+         * 前帧滤波算法 资源释放
+         */
+        public static void previousFrameInit() {
+            oldObj = null;
+            numberOfFiltration = Integer.MAX_VALUE;
+            timelist.clear();
+            valuelist.clear();
+        }
+
+        /**
+         * 前帧污点过滤算法
+         *
+         * @param <T>
+         * @param value
+         * @param oneListener
+         * @param timeOrNumber Long 类型值 按 时间毫秒处理, Int 类型值 按 个数处理
+         * @return
+         */
+        public static <T> T previousFrameBlemishFiltering(T value, OneListener<T> oneListener, Object... timeOrNumber) {
+            if (value == null) return null;
+            if (timeOrNumber != null && timeOrNumber.length != 0 && timeOrNumber[0] != null) {
+                Object object = timeOrNumber[0];
+                if (object instanceof Integer) {// 按照个数处理
+                    return previousFrameBlemishFilteringCount(value, oneListener, Integer.parseInt(object.toString()));
+                } else if (object instanceof Long) {// 按照时间处理
+                    return previousFrameBlemishFilteringTime(value, oneListener, Long.parseLong(object.toString()));
+                }
+            } else {// 默认按照时间方法来处理
+                return previousFrameBlemishFilteringTime(value, oneListener, DEFAULT_TIME);
+            }
+            return null;
+        }
+
+        private static Object oldObj = null;
+        private static int numberOfFiltration = Integer.MAX_VALUE;// 过滤次数
+
+        /**
+         * 按照个数方法来处理
+         *
+         * @param <T>
+         * @param value
+         * @param oneListener
+         * @param count(个数)
+         * @return
+         */
+        private static <T> T previousFrameBlemishFilteringCount(T value, OneListener<T> oneListener, int count) {
+            if (count <= 0)
+                count = DEFAULT_COUNT;
+            if (numberOfFiltration == Integer.MAX_VALUE)
+                numberOfFiltration = count;
+            if (oldObj == null) {
+                oldObj = value;
+                if (oneListener != null) oneListener.onOneListener(value);
+                return value;
+            } else if (!oldObj.toString().equals(value.toString())) {
+                if (numberOfFiltration > 0) {
+                    numberOfFiltration--;
+                    if (oneListener != null) oneListener.onOneListener((T) oldObj);
+                    return (T) oldObj;
+                } else {
+                    numberOfFiltration = count;
+                    oldObj = value;
+                    if (oneListener != null) oneListener.onOneListener(value);
+                    return value;
+                }
+            }
+            oldObj = value;
+            if (oneListener != null) oneListener.onOneListener(value);
+            return value;
+        }
+
+        private static final List<Long> timelist = new ArrayList<>(); // 记录的时间
+        private static final List<Object> valuelist = new ArrayList<>(); // 对应时间记录的值
+
+        /**
+         * 按照时间方法来处理
+         *
+         * @param <T>
+         * @param value
+         * @param oneListener
+         * @param time(毫秒)
+         * @return
+         */
+        private static <T> T previousFrameBlemishFilteringTime(T value, OneListener<T> oneListener, long time) {
+            if (time <= 0)
+                time = DEFAULT_TIME;
+
+            // 添加最新数据
+            timelist.add(System.currentTimeMillis());
+            valuelist.add(value);
+
+            // 清除掉，过滤时间之前的数据
+            for (int i = 0; i < timelist.size(); i++) {
+                if (System.currentTimeMillis() - timelist.get(i) > time) {
+                    timelist.remove(i);
+                    valuelist.remove(i);
+                }
+            }
+
+            Map<T, Integer> map = new HashMap<T, Integer>();
+            for (Object key : valuelist) {
+                if (map.containsKey(key)) {
+                    map.put((T) key, map.get(key) + 1);
+                } else {
+                    map.put((T) key, 1);
+                }
+            }
+
+            int maxCount = 0;
+            T maxObj = null;
+            for (T key : map.keySet()) {
+                int integer = map.get(key);
+                if (maxCount < integer) {
+                    maxCount = integer;
+                    maxObj = key;
+                }
+            }
+            map.clear();
+            map = null;
+            if (oneListener != null) oneListener.onOneListener(maxObj);
+            return maxObj;
+        }
+
+        //是否 开启峰谷日志
+        public static boolean isStartPeakValleyLog = false;
+
+        /**
+         * @param startEndTime            峰谷的 起点终点时间
+         *                                峰谷算法 nun
+         * @param medianFilter            需要进行 峰谷计算的数据 (必填)
+         * @param oneListener             解算后的数据返回 (选填)
+         * @param nuHeight_or_add_nuWidth (不达标的峰谷将不计算在内) 参数 nuHeight_or_add_nuWidth解析：
+         *                                该参数最多支持填4个参数(100,50,
+         *                                30,20)分表代表(峰的高度，峰的宽度，谷的高度，谷的宽度)
+         *                                也支持填2个参数(100,50)代表(峰谷的高度，峰谷的宽度) 也支持填1个参数(100)
+         *                                代表(峰谷的宽高) 也支持填0个参数() 代表(峰谷的宽高不限制)
+         *                                也支持自定义填(100,0,0,20)代表(峰的高度，峰的宽度不限制，谷的高度不限制，谷的宽度)
+         * @return 返回峰谷个数 例如:1,-2,3 标识 峰1，谷2，峰3
+         */
+        public static int[] peakValleyAlgorithm(long[] startEndTime, double[] medianFilter, OneListener<String> oneListener,
+                                                double... nuHeight_or_add_nuWidth) {
+
+            if (medianFilter == null || medianFilter.length < 3) {
+                if (oneListener != null)
+                    oneListener.onOneListener(null);
+                return null;
+            }
+
+            // 初始化 峰谷宽高
+            double[] initWH = initWH(medianFilter, nuHeight_or_add_nuWidth);
+            double nWidth = initWH[0];
+            double nHeight = initWH[1];
+            double uWidth = initWH[2];
+            double uHeight = initWH[3];
+
+            StringBuilder nuString = new StringBuilder();
+            StringBuilder nuMaxAddMin = new StringBuilder();
+            double old = Double.MAX_VALUE; // 记录上一帧值
+            boolean nuboolean = true;// 峰n+:true 谷u-:false
+            boolean upOrDown = true;// 上下走方向
+
+            double leftOrigin = 0; // 左起点
+            double middlePeak = 0; // 中间顶点
+            double rightEndPoint = 0; // 右结点
+            int leftAndRightSpacing = 0;// 左右起结点的距离
+
+            int zeroCount = 0;// 0计数
+            boolean whether0FilterExists = false;// 是否有多重0过滤
+
+            for (int i = 0; i < medianFilter.length; i++) {
+                double value = medianFilter[i];
+                if (value == 0) {
+                    zeroCount++;
+                    if (zeroCount >= 2) {
+                        whether0FilterExists = true;
+                    }
+                } else {
+                    zeroCount = 0;
+                    leftAndRightSpacing++;// 累计间隔
+                }
+
+                if (value == old && (i != medianFilter.length - 1))
+                    continue;
+
+                // 初次记录 过滤
+                if (i == 0) {
+                    if (isStartPeakValleyLog)
+                        GT.logt("开始寻找峰谷");
+                    old = value;// 更新上一帧的值
+                    leftOrigin = value;// 记录第一次的左起点
+                    // 设置初始方向
+                    if (old > 0) {
+                        nuboolean = true; // 赋值为 峰
+                        upOrDown = true; // 赋值为 上走方向
+                    } else {
+                        nuboolean = false; // 赋值为 谷
+                        upOrDown = false; // 赋值为 下走方向
+                    }
+                    continue;
+                }
+
+                // 如果不是第一次，那就进行导向计算
+                if (value > 0 || (old > 0 && value == 0)) {// 峰
+                    if (isStartPeakValleyLog)
+                        GT.logt("\n峰 old:" + (int) old + "->value:" + (int) value + ":" + (upOrDown ? "向上" : "向下") + ":顶点:"
+                                + (int) middlePeak + " 总帧:" + (i + 1) + "点");
+
+                    // 根据 上下来进行不同的判断
+                    if (upOrDown) {// 向上走
+
+                        if (value > old) {// 当前值 大于旧值
+                            if (isStartPeakValleyLog)
+                                GT.logt("峰向上走1");
+                            rightEndPoint = 0;
+
+                            // 代表非常标准的 谷入峰 然后在这里计算谷
+                            if (old <= 0) {
+
+                                if (addPeakValley(leftAndRightSpacing, medianFilter, leftOrigin, rightEndPoint,
+                                        middlePeak > 0 ? nWidth : uWidth, middlePeak > 0 ? nHeight : uHeight, middlePeak,
+                                        nuString, nuMaxAddMin, startEndTime)) {
+                                    // 全部完成后，再将右结点 设为 左起点
+                                    leftOrigin = rightEndPoint;
+                                    // 清空累计的间隔，进行下一次起结点的距离计算
+                                    leftAndRightSpacing = 0;
+                                    // 清空顶点
+                                    middlePeak = 0;
+                                }
+
+                                //清空重叠0状态
+                                whether0FilterExists = false;
+
+                                // 清空右结点的值
+                                rightEndPoint = 0;
+                            } else {
+                                // 记录当前顶点
+                                if (middlePeak == 0 || middlePeak < old)
+                                    middlePeak = old;
+
+                            }
+
+                        } else if (value < old) {// 当前值 小于旧值
+                            if (isStartPeakValleyLog)
+                                GT.logt("峰向下走1");
+                            upOrDown = false;
+                            // 记录当前顶点
+                            if (middlePeak == 0 || middlePeak < old)
+                                middlePeak = old;
+
+                            if (value == 0) {
+
+                                // 在重叠过滤0的情况情况下
+                                if (!whether0FilterExists) {
+                                    leftAndRightSpacing++;
+                                }
+
+                                // 判断当前 峰谷是否符合要求
+                                if (addPeakValley(leftAndRightSpacing, medianFilter, leftOrigin, rightEndPoint, nWidth,
+                                        nHeight, middlePeak, nuString, nuMaxAddMin, startEndTime)) {
+                                    // 全部完成后，再将右结点 设为 左起点
+                                    leftOrigin = rightEndPoint;
+                                    // 清空累计的间隔，进行下一次起结点的距离计算
+                                    leftAndRightSpacing = 0;
+                                    // 清空顶点
+                                    middlePeak = 0;
+                                    if (isStartPeakValleyLog)
+                                        GT.logt("清空顶点:" + upOrDown);
+                                }
+
+                                //清空重叠0状态
+                                whether0FilterExists = false;
+
+                                // 清空右结点的值
+                                rightEndPoint = 0;
+                            }
+
+                        }
+
+                    } else {// 向下走
+
+                        if (value <= old) {// 当前值 小于旧值
+                            if (isStartPeakValleyLog)
+                                GT.logt("峰向下走2");
+
+                            // 如果是最后一个了，那就计算最后一个峰
+                            if (i == medianFilter.length - 1) {
+                                if (isStartPeakValleyLog)
+                                    GT.logt("开始计算最后一个峰");
+                                rightEndPoint = value;
+                                addPeakValley(leftAndRightSpacing, medianFilter, leftOrigin, rightEndPoint,
+                                        middlePeak > 0 ? nWidth : uWidth, middlePeak > 0 ? nHeight : uHeight, middlePeak,
+                                        nuString, nuMaxAddMin, startEndTime);
+                            } else if (value == 0) {
+                                // 出现一个峰
+                                if (addPeakValley(leftAndRightSpacing, medianFilter, leftOrigin, rightEndPoint,
+                                        middlePeak > 0 ? nWidth : uWidth, middlePeak > 0 ? nHeight : uHeight, middlePeak,
+                                        nuString, nuMaxAddMin, startEndTime)) {
+                                    // 全部完成后，再将右结点 设为 左起点
+                                    leftOrigin = rightEndPoint;
+                                    // 清空累计的间隔，进行下一次起结点的距离计算
+                                    leftAndRightSpacing = 0;
+                                    // 清空顶点
+                                    middlePeak = 0;
+                                }
+
+                                // 清空右结点的值
+                                rightEndPoint = 0;
+                                //清空重叠0状态
+                                whether0FilterExists = false;
+                            }
+
+                        } else if (value > old) {// 当前值 大于旧值
+                            if (isStartPeakValleyLog)
+                                GT.logt("峰向上走2");
+                            upOrDown = true;
+                            // 赋值，右结点
+                            if (rightEndPoint == 0) {
+
+                                rightEndPoint = old < 0 ? 0 : old;
+
+                                // 第一次进入峰
+                                if (!nuboolean && old < 0) {
+                                    if (isStartPeakValleyLog)
+                                        GT.logt("第一次从谷进入峰 ");
+                                    if (middlePeak == 0 || middlePeak < old)
+                                        middlePeak = old;
+                                }
+
+                                if (addPeakValley(leftAndRightSpacing, medianFilter, leftOrigin, rightEndPoint,
+                                        middlePeak > 0 ? nWidth : uWidth, middlePeak > 0 ? nHeight : uHeight, middlePeak,
+                                        nuString, nuMaxAddMin, startEndTime)) {
+                                    // 全部完成后，再将右结点 设为 左起点
+                                    leftOrigin = rightEndPoint;
+                                    // 清空累计的间隔，进行下一次起结点的距离计算
+                                    leftAndRightSpacing = 0;
+                                    // 清空顶点
+                                    middlePeak = 0;
+                                }
+
+                                // 清空右结点的值
+                                rightEndPoint = 0;
+
+                                //清空重叠0状态
+                                if (middlePeak != 0) whether0FilterExists = false;
+
+                                if (!nuboolean && old < 0) {
+                                    leftOrigin = old;
+                                }
+
+                            }
+
+                        }
+                    }
+
+                    nuboolean = true;
+
+                } else {// 谷
+
+                    if (isStartPeakValleyLog)
+                        GT.logt("\n谷 old:" + (int) old + "->value:" + (int) value + ":" + (upOrDown ? "向上" : "向下") + ":顶点:"
+                                + (int) middlePeak + " 总帧:" + (i + 1) + "点");
+
+                    // 根据 上下来进行不同的判断
+                    if (upOrDown) {// 向上走
+
+                        if (value >= old) {// 当前值 大于旧值
+                            if (isStartPeakValleyLog)
+                                GT.logt("谷向上走1");
+
+                            // 如果是最后一个了，那就计算最后一个谷
+                            if (i == medianFilter.length - 1) {
+                                if (isStartPeakValleyLog)
+                                    GT.logt("开始计算最后一个谷");
+
+                                rightEndPoint = value;
+
+                                addPeakValley(leftAndRightSpacing, medianFilter, leftOrigin, rightEndPoint,
+                                        middlePeak > 0 ? nWidth : uWidth, middlePeak > 0 ? nHeight : uHeight, middlePeak,
+                                        nuString, nuMaxAddMin, startEndTime);
+                            }
+
+                            // 记录当前顶点 拿最小值
+                            if (middlePeak == 0 || middlePeak > old)
+                                middlePeak = old;
+
+                        } else if (value < old) {// 当前值 小于旧值 谷里的向下走
+                            if (isStartPeakValleyLog)
+                                GT.logt("谷向下走1");
+                            upOrDown = false;
+
+                            // 第一次进入谷,且非正常谷
+                            if (nuboolean && old > 0) {
+                                if (isStartPeakValleyLog)
+                                    GT.logt("第一次从峰进入谷");
+
+                                leftAndRightSpacing--;
+                                rightEndPoint = 0;
+
+                                // 记录当前顶点 拿最小值
+                                if (middlePeak == 0 || middlePeak < old)
+                                    middlePeak = old;
+
+                                if (addPeakValley(leftAndRightSpacing, medianFilter, leftOrigin, rightEndPoint, nWidth,
+                                        nHeight, middlePeak, nuString, nuMaxAddMin, startEndTime)) {
+                                    // 全部完成后，再将右结点 设为 左起点
+                                    leftOrigin = middlePeak;
+                                    // 清空累计的间隔，进行下一次起结点的距离计算
+                                    leftAndRightSpacing = 0;
+                                    // 清空顶点
+                                    middlePeak = 0;
+                                }
+
+                                // 清空右结点的值
+                                rightEndPoint = 0;
+
+                                //清空重叠0状态
+                                whether0FilterExists = false;
+
+                            } else {
+                                // 走正常的谷计算
+
+                                if (leftOrigin > 0)
+                                    leftOrigin = 0;
+                                rightEndPoint = old;
+
+                                if (middlePeak == 0 || middlePeak > value)
+                                    middlePeak = value;
+
+                                if (addPeakValley(leftAndRightSpacing, medianFilter, leftOrigin, rightEndPoint, uWidth,
+                                        uHeight, middlePeak, nuString, nuMaxAddMin, startEndTime)) {
+                                    // 全部完成后，再将右结点 设为 左起点
+                                    leftOrigin = rightEndPoint;
+                                    // 清空累计的间隔，进行下一次起结点的距离计算
+                                    leftAndRightSpacing = 0;
+                                    // 清空顶点
+                                    middlePeak = 0;
+                                }
+                                // 清空右结点的值
+                                rightEndPoint = 0;
+                                //清空重叠0状态
+                                whether0FilterExists = false;
+                            }
+
+                        }
+
+                    } else {// 向下走
+
+                        if (value < old) {// 当前值 小于旧值
+                            if (isStartPeakValleyLog)
+                                GT.logt("谷向下走2");
+
+                            // 代表非常标准的 峰入谷 然后在这里计算峰
+                            if (old >= 0) {
+
+                                // 如果是最后一个了，那就计算最后一个谷
+                                if (i == medianFilter.length - 1) {
+                                    if (isStartPeakValleyLog)
+                                        GT.logt("开始计算最后一个谷");
+
+                                    if (middlePeak == 0 || middlePeak > value)
+                                        middlePeak = value;
+
+                                    addPeakValley(leftAndRightSpacing, medianFilter, leftOrigin, rightEndPoint, uWidth,
+                                            uHeight, middlePeak, nuString, nuMaxAddMin, startEndTime);
+
+                                } else {
+
+                                    if (addPeakValley(leftAndRightSpacing, medianFilter, leftOrigin, rightEndPoint,
+                                            middlePeak > 0 ? nWidth : uWidth, middlePeak > 0 ? nHeight : uHeight,
+                                            middlePeak, nuString, nuMaxAddMin, startEndTime)) {
+                                        // 全部完成后，再将右结点 设为 左起点
+                                        leftOrigin = rightEndPoint;
+                                        // 清空累计的间隔，进行下一次起结点的距离计算
+                                        leftAndRightSpacing = 0;
+                                        // 清空顶点
+                                        middlePeak = 0;
+                                    }
+                                    // 清空右结点的值
+                                    rightEndPoint = 0;
+                                    //清空重叠0状态
+                                    whether0FilterExists = false;
+                                }
+
+                            }
+
+                        } else if (value > old) {// 当前值 大于旧值
+                            if (isStartPeakValleyLog)
+                                GT.logt("谷向上走2");
+                            upOrDown = true;
+
+                            // 记录当前顶点 拿最小值
+                            if (middlePeak == 0 || middlePeak > old)
+                                middlePeak = old;
+                        }
+                    }
+                    nuboolean = false;
+                }
+
+                // 更新上一帧的值
+                old = value;
+            }
+
+            // 计算出最终结果,如果有峰谷，那就做最后的统计
+            return result(oneListener, nuString, nuMaxAddMin);
+
+        }
+
+
+        //波的实体类信息
+        public static class WaveBean {
+            double leftOrigin;        //左起点
+            double middlePeak;        //中顶点
+            double rightEndPoint;    //右终点
+            int frameNumber;        //帧数(从起点到终点所有的帧数)
+            int peakOrValley;        //峰或谷
+            double height;            //高度
+            double width;            //宽度
+            long resultRecognitionTime;//波结果识别的时间(算法识别成峰谷的时间)
+            long startWaveTime;        //总波长的开始耗时(毫秒)
+            long endWaveTime;        //总波长的结束耗时(毫秒)
+            long totalWaveTime;        //总波长的总共耗时(毫秒)
+            long wavelengthTimeConsuming;//每段波各耗时(毫秒)
+            double limitedHeight;    //当前限制的高度
+            double limitedWidth;    //当前限制的宽度
+            String result;    //当前识别波的结果
+
+            final static String WAVE_SPLIT_A = "_A_";
+            final static String WAVE_SPLIT_B = "_B_";
+
+            @Override
+            public String toString() {
+                return "WaveBean{" +
+                        "result=" + result +
+                        "leftOrigin=" + formatNumber(leftOrigin) +
+                        ", middlePeak=" + formatNumber(middlePeak) +
+                        ", rightEndPoint=" + formatNumber(rightEndPoint) +
+                        ", frameNumber=" + formatNumber(frameNumber) +
+                        ", peakOrValley=" + formatNumber(peakOrValley) +
+                        ", height=" + formatNumber(height) +
+                        ", width=" + formatNumber(width) +
+                        ", resultRecognitionTime=" + resultRecognitionTime +
+                        ", startWaveTime=" + startWaveTime +
+                        ", endWaveTime=" + endWaveTime +
+                        ", totalWaveTime=" + totalWaveTime +
+                        ", wavelengthTimeConsuming=" + wavelengthTimeConsuming +
+                        ", limitedHeight=" + formatNumber(limitedHeight) +
+                        ", limitedWidth=" + formatNumber(limitedWidth) +
+                        '}';
+            }
+        }
+
+        /**
+         * 初始化 能识别到峰谷的宽高
+         */
+        private static double[] initWH(double[] medianFilter, double[] nuHeight_or_add_nuWidth) {
+            double nWidth = 0, nHeight = 0; // 初始化 峰的宽高
+            double uWidth = 0, uHeight = 0; // 初始化 谷的宽高
+
+            // 设置 峰谷的宽高
+            if (nuHeight_or_add_nuWidth != null) {// 手动设置
+                switch (nuHeight_or_add_nuWidth.length) {
+                    case 0:// 不限制宽高
+                        // 拿到峰谷最低最顶值
+                        double max = 0;
+                        double min = 0;
+                        for (double value : medianFilter) {
+                            if (max < value)
+                                max = value;
+                            if (min > value)
+                                min = value;
+                        }
+
+                        // 智能设置 峰谷宽高
+                        if (max > 0 && min < 0) {
+                            nWidth = nHeight = uWidth = uHeight = (Math.abs(min) + max) / 6;
+                        } else if (max > 0) {
+                            nWidth = nHeight = uWidth = uHeight = max / 1.5;
+                        } else {
+                            nWidth = nHeight = uWidth = uHeight = Math.abs(min) / 1.5;
+                        }
+                        break;
+                    case 1:// 峰谷宽高一样
+                        nWidth = nHeight = uWidth = uHeight = Math.abs(nuHeight_or_add_nuWidth[0]);
+                        break;
+                    case 2:// 峰谷宽高 统一设置
+                        nWidth = uWidth = Math.abs(nuHeight_or_add_nuWidth[0]);
+                        nHeight = uHeight = Math.abs(nuHeight_or_add_nuWidth[1]);
+                        break;
+                    case 3:// 峰谷宽高
+                        nWidth = Math.abs(nuHeight_or_add_nuWidth[0]);
+                        nHeight = Math.abs(nuHeight_or_add_nuWidth[1]);
+                        uWidth = uHeight = Math.abs(nuHeight_or_add_nuWidth[2]);
+                        break;
+                    case 4:
+                        nWidth = Math.abs(nuHeight_or_add_nuWidth[0]);
+                        nHeight = Math.abs(nuHeight_or_add_nuWidth[1]);
+                        uWidth = Math.abs(nuHeight_or_add_nuWidth[2]);
+                        uHeight = Math.abs(nuHeight_or_add_nuWidth[3]);
+                        break;
+                }
+            }
+            // 返回最终定下的 宽高
+            double[] doubleArray = new double[4];
+            doubleArray[0] = nWidth;
+            doubleArray[1] = nHeight;
+            doubleArray[2] = uWidth;
+            doubleArray[3] = uHeight;
+            return doubleArray;
+        }
+
+        /**
+         * 计算最后结果
+         *
+         * @param oneListener
+         * @param nuString
+         * @param nuMaxAddMin
+         * @return
+         */
+        private static int[] result(OneListener<String> oneListener, StringBuilder nuString, StringBuilder nuMaxAddMin) {
+            String nuValue = nuString.toString();
+            String nuMaxMin = nuMaxAddMin.toString();
+
+            // 判断当前是否有峰谷
+            if (nuValue.isEmpty()) {
+                if (oneListener != null) {
+                    oneListener.onOneListener(null);
+                    return null;
+                }
+                return null;
+            }
+            nuValue = nuValue.substring(0, nuValue.length() - 1);
+            nuMaxMin = nuMaxMin.substring(0, nuMaxMin.length() - WaveBean.WAVE_SPLIT_B.length());
+            String[] split = nuValue.split(",");
+            int[] inArray = new int[split.length];
+            int z = 0, f = 0;
+            boolean state = false;
+            StringBuilder result = new StringBuilder();
+
+            for (int i = 0; i < split.length; i++) {
+                inArray[i] = Integer.parseInt(split[i]);
+                // 初始化 状态值
+                if (z == 0 && f == 0) {
+                    if (inArray[i] > 0) {
+                        z++;
+                        state = true;
+                    } else {
+                        f++;
+                        state = false;
+                    }
+                } else {
+                    if (inArray[i] > 0) {
+                        if (!state) {
+                            state = true;
+                            result.append(-f).append(",");
+                            f = 0;
+                        }
+                        z++;
+                    } else {
+                        if (state) {
+                            state = false;
+                            result.append(z).append(",");
+                            z = 0;
+                        }
+                        f++;
+                    }
+                }
+            }
+
+            if (state) {
+                result.append(z).append(",");
+            } else {
+                result.append(-f).append(",");
+            }
+            result = new StringBuilder(result.substring(0, result.length() - 1));
+
+            result = new StringBuilder("[" + result + "]" + WaveBean.WAVE_SPLIT_A + nuMaxMin);
+
+            if (oneListener != null) {
+                oneListener.onOneListener(result.toString());
+                return null;
+            }
+            return inArray;
+        }
+
+        /**
+         * 添加峰谷
+         *
+         * @param leftAndRightSpacing 帧率(波的宽度)
+         * @param medianFilter        波点
+         * @param leftOrigin          左起点
+         * @param rightEndPoint       右结点
+         * @param width               波的宽度
+         * @param height              波的高度
+         * @param middlePeak          中顶点
+         * @param nuString            波结果
+         * @param nuMaxAddMin         波具体信息
+         * @param startEndTime        波的开始和结束时间
+         * @return
+         */
+        private static boolean addPeakValley(int leftAndRightSpacing, double[] medianFilter, double leftOrigin, double rightEndPoint,
+                                             double width, double height, double middlePeak, StringBuilder nuString, StringBuilder nuMaxAddMin, long[] startEndTime) {
+
+            leftOrigin = (double) getFactionalismValue(middlePeak, "-", 0.0, leftOrigin);
+            rightEndPoint = (double) getFactionalismValue(middlePeak, "-", 0.0, rightEndPoint);
+
+            if (leftOrigin == 0) leftAndRightSpacing++;
+            if (rightEndPoint == 0) leftAndRightSpacing++;
+
+            if (isStartPeakValleyLog)
+                GT.logt("左起点" + (int) leftOrigin + " 中顶点:" + (int) middlePeak + " 右结点:" + (int) rightEndPoint + " 帧数:"
+                        + (int) leftAndRightSpacing);
+            double min = getMaxMin(Math.abs(leftOrigin), Math.abs(rightEndPoint))[1];
+            double h = Math.abs(middlePeak) - Math.abs(min);
+
+            if (leftAndRightSpacing >= width && h >= height) {
+                nuString.append(middlePeak > 0 ? 1 : -1).append(",");
+                WaveBean waveBean = new WaveBean();
+                waveBean.leftOrigin = leftOrigin;
+                waveBean.middlePeak = middlePeak;
+                waveBean.rightEndPoint = rightEndPoint;
+                waveBean.frameNumber = leftAndRightSpacing;
+                waveBean.peakOrValley = middlePeak > 0 ? 1 : -1;
+                waveBean.height = h;
+                waveBean.width = leftAndRightSpacing;
+                waveBean.resultRecognitionTime = System.currentTimeMillis();
+                if (startEndTime != null && startEndTime.length >= 2) {
+                    waveBean.startWaveTime = startEndTime[0];
+                    waveBean.endWaveTime = startEndTime[1];
+                    waveBean.totalWaveTime = Math.abs(startEndTime[0] - startEndTime[1]);
+                    waveBean.wavelengthTimeConsuming = Math.abs(startEndTime[0] - startEndTime[1]) / (medianFilter.length / leftAndRightSpacing);
+                }
+                waveBean.limitedHeight = height;
+                waveBean.limitedWidth = width;
+                String json2 = GT.JSON.toJson2(waveBean);
+//            GT.logt("存json时:" + json2);
+                nuMaxAddMin.append(json2);
+                nuMaxAddMin.append(WaveBean.WAVE_SPLIT_B);
+
+                if (isStartPeakValleyLog)
+                    GT.logt("出现一个" + (middlePeak > 0 ? "峰" : "谷") + " 宽:" + (int) leftAndRightSpacing + ",高:" + (int) h);
+                return true;
+            }
+
+
+            return false;
+        }
+
+        /**
+         * 去掉0
+         *
+         * @param number
+         * @return
+         */
+        public static String formatNumber(double number) {
+            if (number == (int) number) {
+                return String.valueOf((int) number);
+            }
+            return String.valueOf(number);
+        }
+
+        /**
+         * 中值滤波算法:专门用于过滤掉， 有干扰值(污点)的数据,让数据呈现出一个比较规则的峰谷数值
+         *
+         * @param inputData   需要进行过滤的干扰值 (必填)
+         * @param oneListener 过滤后的数据返回 (选填)
+         * @param boxSizes    进行过滤盒子的大小设置，数值越大，峰谷越平滑 (默认盒子大小为:数据量 / 9) (选填)
+         */
+        public static double[] medianFilter(double[] inputData, GT.OneListener<Double> oneListener, int... boxSizes) {
+            if (inputData == null || inputData.length < 5)
+                return inputData;
+            double[] outputData = new double[inputData.length];
+            try {
+                int boxSize = inputData.length / 9;// 默认盒子大小
+                // 手动赋值
+                if (boxSizes != null && boxSizes.length != 0 && boxSizes[0] > 0)
+                    boxSize = boxSizes[0];
+                // 盒子必须是奇数
+                boxSize = boxSize % 2 == 0 ? boxSize + 1 : boxSize;
+                // 峰谷算法
+                int halfWindow = boxSize / 2;
+                for (int i = 0; i < inputData.length; i++) {
+                    double[] windowData = new double[boxSize];
+                    int dataIndex = 0;
+                    for (int j = Math.max(0, i - halfWindow); j <= Math.min(i + halfWindow, inputData.length - 1); j++) {
+                        windowData[dataIndex++] = inputData[j];
+                    }
+                    Arrays.sort(windowData);
+                    outputData[i] = windowData[halfWindow];
+                }
+                // 遍历输出峰谷值
+                if (oneListener != null) {
+                    for (double value : outputData)
+                        oneListener.onOneListener(value);
+                }
+            } catch (Exception e) {
+
+            }
+            return outputData;
+        }
+
+
+        /**
+         * 党派之争
+         *
+         * @param <T>
+         * @param king         党派首领
+         * @param key          是否忠心的参照物
+         * @param returnValue  如果有成员不忠诚，那返回的就是这个值
+         * @param childMembers 进行检验的所有成员
+         * @return 如果返回 returnValue 表示整个成员都是不忠诚的， 如果返回了某个成员，表示返回的这个成员忠诚
+         */
+        public static <T> T getFactionalismValue(T king, String key, T returnValue, T... childMembers) {
+            if (childMembers == null || childMembers.length == 0 || key == null) return king;
+            if (king.toString().contains(key)) {
+                for (T value : childMembers) if (value.toString().contains(key)) return value;
+            } else {
+                for (T value : childMembers) if (!value.toString().contains(key)) return value;
+            }
+            return returnValue;
+        }
+
+        /**
+         * 返回最大值与最小值
+         *
+         * @param numbers
+         * @return
+         */
+        public static double[] getMaxMin(double... numbers) {
+            if (numbers == null || numbers.length == 0) return null;
+            if (numbers.length == 1) {
+                return new double[]{numbers[0]};
+            }
+            double max = -Double.MAX_VALUE, min = Double.MAX_VALUE;
+            for (double value : numbers) {
+                if (max < value) max = value;
+                if (min > value) min = value;
+            }
+            double[] doubleArray = new double[2];
+            doubleArray[0] = max;
+            doubleArray[1] = min;
+            return doubleArray;
+        }
+
+        public static double calculateAverage(double... numbers) {
+            int sum = 0;
+            for (double number : numbers) {
+                sum += (int) number;
+            }
+            return sum / (double) numbers.length;
+        }
+
+
+
     }
 
 //=========================================== APP权限类 =========================================
@@ -29661,6 +30870,12 @@ public class GT {
 
             private String cacheKey;//缓存关键字
 
+            private int delayLoadTime = 220;//延迟时间
+
+            public int setDelayTime() {
+                return delayLoadTime;
+            }
+
             /**
              * 设置 Activity 切换特效
              * 1  淡入淡出
@@ -29705,10 +30920,26 @@ public class GT {
              */
             protected abstract void initView(Bundle savedInstanceState);
 
-            /**
-             * 功能方法
-             */
+            //加载数据
             public void loadData() {
+
+                //延迟加载
+                GT.Thread.getInstance(0).execute(new Runnable() {
+                    @Override
+                    public void run() {
+                        GT.Thread.sleep(setDelayTime());
+                        GT.Thread.runAndroid(new Runnable() {
+                            @Override
+                            public void run() {
+                                delayLoadData();
+                            }
+                        });
+                    }
+                });
+            }
+
+            //延迟加载
+            public void delayLoadData() {
             }
 
             //是否缓存开启数据
@@ -29764,7 +30995,6 @@ public class GT {
                     getCache(GT_Cache.getCacheData(cacheKey, String.class));//获取缓存数据
                     loadData();// 功能方法
                 }
-
             }
 
             /**
@@ -30083,8 +31313,7 @@ public class GT {
             @Override
             protected void onDestroy() {
                 super.onDestroy();
-                EventBus.getDefault().unregister(this);//取消订阅者
-                GT.EventBus.unregisterInteriors(this);//取消内部订阅者
+                GT.EventBus.getDefault().unregisterAll(this);
             }
 
             /**
@@ -31852,7 +33081,9 @@ public class GT {
                         fragment = GT.ARouter.getInstance()
                                 .build(fragmentObj.toString())
                                 .navigation();
-                        fragmentClass = fragment.getClass();
+                        if (fragment != null) {
+                            fragmentClass = fragment.getClass();
+                        }
                     } catch (Exception e) {
 
                     }
@@ -31862,6 +33093,12 @@ public class GT {
             } else if (fragmentObj instanceof Fragment) {
                 fragment = (Fragment) fragmentObj;
                 fragmentClass = fragment.getClass();
+            }else{
+                if(fragmentObj.toString().contains("class ")){
+                    fragmentClass = AnnotationAssist.stringToClass(fragmentObj.toString());
+                }else{
+                    fragmentClass = fragmentObj.getClass();
+                }
             }
 
             if (resLayouts != null && resLayouts.length > 0 && resLayouts[0] > 0) {
@@ -31873,6 +33110,7 @@ public class GT {
             if (modeManagement(transaction, fragmentClass)) {
                 fragmentSwitchingModeManagement(resLayout, transaction, fragment, fragmentClass);
             } else {
+                if (LOG.GT_LOG_TF) logt("启动的Fragment 解析错误:" + fragmentClass);
             }
             return this;
         }
@@ -32310,28 +33548,32 @@ public class GT {
                     try {
                         if (fragmentManager == null) return;
                         List<Fragment> fragments = fragmentManager.getFragments();
+
+                        //过滤掉 FragmentDialog，在一些特殊情况，这个会被加进去
+                        for(Fragment fragment : fragments){
+                            if(fragment instanceof DialogFragment){
+                                fragments.remove(fragment);
+                            }
+                        }
+
 //                        logt("栈内Fragment:" + getGT_Fragment().getStackFragmentSimpleNames());
                         if (fragments != null && fragments.size() > 0) {
                             Fragment fragment = fragments.get(fragments.size() - 1);
-//                            logt("启动Fragment:" + fragment.getClass().getSimpleName());
-//                            stackTopFragmentName = fragment.getClass().getName();//将上个页面设置到最顶端栈
+                            stackTopFragmentName = fragment.getClass().getName();//将上个页面设置到最顶端栈
 
                             //栈顶游标 始终指向 可见的最顶端 Fragment 页面
                             if (operatingFragmentRecord.size() != 0) {
                                 operatingFragmentRecord.remove(operatingFragmentRecord.get(operatingFragmentRecord.size() - 1));
                                 String fragmentStr = operatingFragmentRecord.get(operatingFragmentRecord.size() - 1);
-//                                logt("fragmentStr:" + fragmentStr);
                                 stackTopFragmentName = fragmentStr;
                             }
 
-//                            logt("记录:" + operatingFragmentRecord);
-//                            logt("赋值给最顶端栈：" + stackTopFragmentName);
                             if (fragment instanceof BaseFragment) {
                                 BaseFragment baseFragment = (BaseFragment) fragment;
                                 Thread.runAndroid(new Runnable() {
                                     @Override
                                     public void run() {
-                                        baseFragment.show();
+                                        baseFragment.show();//调用显示告知开发者
                                     }
                                 });
                             }
@@ -32426,6 +33668,11 @@ public class GT {
 
             private boolean isPrepare;//是否已经创建了
             private boolean isLazyLoad = false;//是否懒加载
+            private int delayLoadTime = 220;//默认延迟加载时间
+
+            public int setDelayTime() {
+                return delayLoadTime;
+            }
 
             //是否懒加载
             public boolean isLazyLoad() {
@@ -32559,6 +33806,23 @@ public class GT {
              * 主要实现的功能 当页面可见的时候，才加载当前页面数据。 没有打开的页面，就不会预加载
              */
             public void loadData() {
+                //延迟加载
+                GT.Thread.getInstance(0).execute(new Runnable() {
+                    @Override
+                    public void run() {
+                        GT.Thread.sleep(setDelayTime());
+                        GT.Thread.runAndroid(new Runnable() {
+                            @Override
+                            public void run() {
+                                delayLoadData();
+                            }
+                        });
+                    }
+                });
+            }
+
+            //延迟加载
+            public void delayLoadData() {
             }
 
             //是否解决EditText bug
@@ -32580,6 +33844,7 @@ public class GT {
             @Override
             public void onViewCreated(View view, @Nullable Bundle savedInstanceState) {
                 super.onViewCreated(view, savedInstanceState);
+                if (view == null) return;
                 isPrepare = true;
                 view.setOnClickListener(null);//防止点击穿透
                 //如果没有设置背景，那就设置默认背景
@@ -32982,8 +34247,7 @@ public class GT {
             public void onDestroy() {
                 super.onDestroy();
                 Runtime.getRuntime().gc();
-                EventBus.getDefault().unregister(this);//取消订阅者
-                GT.EventBus.unregisterInteriors(this);//取消内部订阅者
+                GT.EventBus.getDefault().unregisterAll(this);
 
                 if (popBackStackError.contains(this.toString())) {
                     popBackStackError.remove(this.toString());
@@ -33546,6 +34810,17 @@ public class GT {
             public Window window;
             public Dialog dialog;
 
+
+            private int delayLoadTime = 220;//延迟时间
+
+            public int setDelayTime() {
+                return delayLoadTime;
+            }
+
+            //延迟加载
+            public void delayLoadData() {
+            }
+
             //是否缓存开启数据
             protected boolean isCacheData() {
                 return false;
@@ -33645,6 +34920,19 @@ public class GT {
              * 主要实现的功能
              */
             public void loadData() {
+                //延迟加载
+                GT.Thread.getInstance(0).execute(new Runnable() {
+                    @Override
+                    public void run() {
+                        GT.Thread.sleep(setDelayTime());
+                        GT.Thread.runAndroid(new Runnable() {
+                            @Override
+                            public void run() {
+                                delayLoadData();
+                            }
+                        });
+                    }
+                });
             }
 
             /**
@@ -33902,9 +35190,13 @@ public class GT {
             @Nullable
             @Override
             public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
-                view = inflater.inflate(loadLayout(), container, false);
-                createView(view);
-                return view;
+                int layout = loadLayout();
+                if (layout > 0) {
+                    view = inflater.inflate(layout, container, false);
+                    createView(view);
+                    return view;
+                }
+                return null;
             }
 
 
@@ -34179,8 +35471,7 @@ public class GT {
             @Override
             public void onDestroy() {
                 super.onDestroy();
-                EventBus.getDefault().unregister(this);//取消订阅者
-                GT.EventBus.unregisterInteriors(this);//取消内部订阅者
+                GT.EventBus.getDefault().unregisterAll(this);
             }
 
             /**
@@ -34212,6 +35503,88 @@ public class GT {
      * GT 适配器
      */
     public static class Adapters {
+
+        public static class TabLayoutViewPagerAdapter extends FragmentStateAdapter {
+
+            //标题关键词
+            public static final String TAB_NAME = "tabName";
+
+            private List<Fragment> fragmentList = new ArrayList<>();
+
+            public TabLayoutViewPagerAdapter(@NonNull FragmentManager fragmentManager, @NonNull Lifecycle lifecycle) {
+                super(fragmentManager, lifecycle);
+            }
+
+            public List<Fragment> getFragmentList() {
+                return fragmentList;
+            }
+
+            public void close() {
+                fragmentList.clear();
+            }
+
+            /**
+             * 添加 Fragment
+             *
+             * @param fragment
+             */
+            public void addTabFragment(Fragment fragment) {
+                if (fragment == null) return;
+                if (fragmentList.contains(fragment)) return;
+                fragmentList.add(fragment);
+            }
+
+            /**
+             * 初始化 tab name
+             *
+             * @param tabLayout
+             * @param viewPager2
+             */
+            public void initTabNameData(TabLayout tabLayout, ViewPager2 viewPager2) {
+                //通过mediator将TabLayout和ViewPager2关联起来,将自动根据position下标将对应的标签进行修改
+                TabLayoutMediator mediator = new TabLayoutMediator(
+                        tabLayout,
+                        viewPager2,
+                        (tab, position) -> {
+                            //根据下标将对应的标签的名字改成对应的fragment的名字
+                            Fragment fragment = fragmentList.get(position);
+                            if (fragment != null && fragment.getArguments() != null) {
+                                String tabName = fragment.getArguments().getString(TAB_NAME);
+                                if (tabName != null) tab.setText(tabName);
+                            }
+
+                        }
+                );
+                //调用attach方法使关联生效
+                mediator.attach();
+            }
+
+            /**
+             * 提交页面并关联 Tab标题
+             *
+             * @param viewPager2
+             * @param tabLayout
+             */
+            public void commit(ViewPager2 viewPager2, TabLayout tabLayout) {
+                viewPager2.setAdapter(this);
+                initTabNameData(tabLayout, viewPager2);
+            }
+
+
+            @Override
+            public Fragment createFragment(int position) {
+                //通过位置获取对应的Fragment
+                return fragmentList.get(position);
+            }
+
+            @Override
+            public int getItemCount() {
+                //返回Fragment的数量
+                return fragmentList.size();
+            }
+
+        }
+
 
         /**
          * 用于旧版继承的 适配器基类
@@ -34437,9 +35810,19 @@ public class GT {
             }
 
             //局部刷新
+            public void setDataList(int position) {
+                setBeanList(position);
+            }
+
+            //局部刷新
             public void setBeanList(int position) {
                 if (this.beanList == null) return;
                 notifyItemChanged(position);
+            }
+
+            //局部刷新
+            public void setDataList(List<T> beanList, int... pages) {
+                setBeanList(beanList, pages);
             }
 
             /**
@@ -34465,6 +35848,12 @@ public class GT {
                 notifyDataSetChanged();
 //                if(rv != null)rv.setItemViewCacheSize(getItemCount());
             }
+
+            //局部刷新
+            public void setDataLists(List<T> beanList, int... pages) {
+                setBeanLists(beanList, pages);
+            }
+
 
             /**
              * 用于累计刷新加载数据 (分页加载)
@@ -34856,21 +36245,8 @@ public class GT {
 
             }
 
-            @NonNull
-            @Override
-            public ViewModelStore getViewModelStore() {
-                return new ViewModelStore();
-            }
-
             //使用观察者模式
             private LifecycleRegistry mLifecycleRegistry;
-
-            @Override
-            public Lifecycle getLifecycle() {
-                //利用监听者模式，实时监听 Lifecycle 状态
-                return mLifecycleRegistry;
-            }
-
             public Context context;                           //上下活动
             private WindowManager windowManager;
             private WindowManager.LayoutParams layoutParams;
@@ -34894,6 +36270,39 @@ public class GT {
             private static int TYPE_SCREEN_TYPE = TYPE_DEFAULT;          //创建屏幕的类型,默认是使用用户设置的Xml宽高
 
             private static double screenSizeCoefficient = 1.8;     //屏幕大小系数,系数越大，创建屏幕越小 注意：该系数不能 <= 0
+
+            private int delayLoadTime = 220;//延迟时间
+
+            public int setDelayTime() {
+                return delayLoadTime;
+            }
+
+            //延迟加载
+            public void delayLoadData() {
+            }
+
+            @Override
+            public ViewModelStore getViewModelStore() {
+                return new ViewModelStore();
+            }
+
+            @Override
+            public Lifecycle getLifecycle() {
+                //利用监听者模式，实时监听 Lifecycle 状态
+                return mLifecycleRegistry;
+            }
+
+            //设置 悬浮窗的悬浮类型
+            private int suspensionType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;//默认是 悬浮在 桌面层面
+
+            //通过重写这个方法，进行动态设置 悬浮窗的悬浮类型, 如果悬浮的类型 和 windowManager 不对应就会报错
+            public int getSuspensionType() {
+                return suspensionType;
+            }
+
+            public void setSuspensionType(int suspensionType) {
+                this.suspensionType = suspensionType;
+            }
 
             private Bundle mArguments;
 
@@ -34929,7 +36338,7 @@ public class GT {
                 return view.findViewById(id);
             }
 
-            public WindowManager getWindowManager() {
+            public WindowManager bindingActivityWindowManager() {
                 return windowManager;
             }
 
@@ -35047,6 +36456,19 @@ public class GT {
              * @param view    当前加载的View
              */
             public void loadData(Context context, Intent intent, View view) {
+                //延迟加载
+                GT.Thread.getInstance(0).execute(new Runnable() {
+                    @Override
+                    public void run() {
+                        GT.Thread.sleep(setDelayTime());
+                        GT.Thread.runAndroid(new Runnable() {
+                            @Override
+                            public void run() {
+                                delayLoadData();
+                            }
+                        });
+                    }
+                });
             }
 
 
@@ -35141,15 +36563,26 @@ public class GT {
             public void onCreate() {
                 super.onCreate();
                 context = this;
-                windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
                 layoutParams = new WindowManager.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-
-                //默认事件不穿透
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    layoutParams.type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
-                } else {
-                    layoutParams.type = WindowManager.LayoutParams.TYPE_PHONE;
+                windowManager = bindingActivityWindowManager();
+                //如果不为 null，表示向要绑定一个 Activity 的 windowManager
+                if(windowManager != null){
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        layoutParams.type = WindowManager.LayoutParams.TYPE_APPLICATION;
+                    } else {
+                        layoutParams.type = WindowManager.LayoutParams.TYPE_PHONE;
+                    }
+                }else{//普通 悬浮窗 和 自定义悬浮窗
+                    //默认事件不穿透
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        layoutParams.type = getSuspensionType();
+                    } else {
+                        layoutParams.type = WindowManager.LayoutParams.TYPE_PHONE;
+                    }
                 }
+
+                if(windowManager == null) windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+
                 layoutParams.format = PixelFormat.RGBA_8888;
                 layoutParams.gravity = Gravity.TOP | Gravity.LEFT;
                 layoutParams.flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
@@ -35526,13 +36959,13 @@ public class GT {
             @Override
             protected void initView(View view) {
                 GT.build(this);
+                EventBus.getDefault().register(this);//注册订阅者
             }
 
             @Override
             public void onDestroy() {
                 super.onDestroy();
-                EventBus.getDefault().unregister(this);//取消订阅者
-                GT.EventBus.unregisterInteriors(this);//取消内部订阅者
+                GT.EventBus.getDefault().unregisterAll(this);
             }
 
         }
@@ -35558,6 +36991,16 @@ public class GT {
 
         //封装第一代 PopupWindow
         public static abstract class BasePopupWindow implements Frame.ViewModelFeedback, LifecycleOwner {
+
+            private int delayLoadTime = 220;//延迟时间
+
+            public int setDelayTime() {
+                return delayLoadTime;
+            }
+
+            //延迟加载
+            public void delayLoadData() {
+            }
 
             @Override
             public void onViewModeFeedback(Object... obj) {
@@ -35688,6 +37131,19 @@ public class GT {
             }
 
             public void loadData(View view, PopupWindow popWindow) {
+                //延迟加载
+                GT.Thread.getInstance(0).execute(new Runnable() {
+                    @Override
+                    public void run() {
+                        GT.Thread.sleep(setDelayTime());
+                        GT.Thread.runAndroid(new Runnable() {
+                            @Override
+                            public void run() {
+                                delayLoadData();
+                            }
+                        });
+                    }
+                });
             }
 
             //简单缓存 存储 与 获取
@@ -35881,8 +37337,7 @@ public class GT {
             @Override
             public void finish() {
                 super.finish();
-                EventBus.getDefault().unregister(this);//取消订阅者
-                GT.EventBus.unregisterInteriors(this);//取消内部订阅者
+                GT.EventBus.getDefault().unregisterAll(this);
             }
 
         }
@@ -35957,6 +37412,16 @@ public class GT {
             private View view_main;
 
             private String cacheKey;//缓存标识
+
+            private int delayLoadTime = 220;//延迟时间
+
+            public int setDelayTime() {
+                return delayLoadTime;
+            }
+
+            //延迟加载
+            public void delayLoadData() {
+            }
 
             //是否缓存开启数据
             protected boolean isCacheData() {
@@ -36271,6 +37736,19 @@ public class GT {
             }
 
             protected void loadData(View view) {
+                //延迟加载
+                GT.Thread.getInstance(0).execute(new Runnable() {
+                    @Override
+                    public void run() {
+                        GT.Thread.sleep(setDelayTime());
+                        GT.Thread.runAndroid(new Runnable() {
+                            @Override
+                            public void run() {
+                                delayLoadData();
+                            }
+                        });
+                    }
+                });
             }
 
             //简单缓存 存储 与 获取
@@ -36332,6 +37810,7 @@ public class GT {
             }
 
             protected void onDestroy() {
+                GT.EventBus.getDefault().unregisterAll(this);
                 try {
                     if (mLifecycleRegistry != null) {
                         mLifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP);
@@ -36507,6 +37986,16 @@ public class GT {
             //手机或电脑默认数据
             public static String defaultPhone = "Mozilla/5.0 (Linux; Android 14; NE2210 Build/UKQ1.230924.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/119.0.6045.66 Mobile Safari/537.36";
             public static String defaultPC = "Mozilla/5.0 (WindowUtilss NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/43.0.2357.134 Safari/537.36";
+
+            private int delayLoadTime = 220;//延迟时间
+
+            public int setDelayTime() {
+                return delayLoadTime;
+            }
+
+            //延迟加载
+            public void delayLoadData() {
+            }
 
             private Bundle mArguments;
 
@@ -36788,6 +38277,20 @@ public class GT {
                     WebViewUtils.addListener(this, onLoadWebViewListener);
                 }
 
+
+                //延迟加载
+                GT.Thread.getInstance(0).execute(new Runnable() {
+                    @Override
+                    public void run() {
+                        GT.Thread.sleep(setDelayTime());
+                        GT.Thread.runAndroid(new Runnable() {
+                            @Override
+                            public void run() {
+                                delayLoadData();
+                            }
+                        });
+                    }
+                });
             }
 
             public static void setPhotoName(String photoName) {
@@ -37809,8 +39312,7 @@ public class GT {
             @Override
             public void finish() {
                 super.finish();
-                EventBus.getDefault().unregister(this);//取消订阅者
-                GT.EventBus.unregisterInteriors(this);//取消内部订阅者
+                GT.EventBus.getDefault().unregisterAll(this);
             }
 
 
@@ -38151,6 +39653,17 @@ public class GT {
             private long time;
             public int NOTIFYID = 0x1079; //通知id
             private String cacheKey;//缓存标识
+
+            private int delayLoadTime = 220;//延迟时间
+
+            public int setDelayTime() {
+                return delayLoadTime;
+            }
+
+            //延迟加载
+            public void delayLoadData() {
+            }
+
             private Bundle mArguments;
 
             public void setArguments(@Nullable Bundle args) {
@@ -38379,6 +39892,21 @@ public class GT {
                 if (remoteViews2 != null) {
                     builder.setCustomBigContentView(remoteViews2);
                 }
+
+
+                //延迟加载
+                GT.Thread.getInstance(0).execute(new Runnable() {
+                    @Override
+                    public void run() {
+                        GT.Thread.sleep(setDelayTime());
+                        GT.Thread.runAndroid(new Runnable() {
+                            @Override
+                            public void run() {
+                                delayLoadData();
+                            }
+                        });
+                    }
+                });
 
             }
 
@@ -38701,8 +40229,7 @@ public class GT {
             @Override
             protected void onDestroy() {
                 super.onDestroy();
-                EventBus.getDefault().unregister(this);//取消订阅者
-                GT.EventBus.unregisterInteriors(this);//取消内部订阅者
+                GT.EventBus.getDefault().unregisterAll(this);
                 try {
                     context.unregisterReceiver(mBroadcastReceiver);
                 } catch (Exception e) {
@@ -43605,10 +45132,219 @@ public class GT {
         }
     }
 
+    public static class GT_VideoView extends VideoView {
+
+        private SeekBar seekBar;//进度条
+        private boolean isPlay = false;//是否播放
+        private boolean isRun = true;//是否播放中
+
+        private int currentPosition = 0;//当前进度
+
+        private boolean isDragProgressBar = false;//是否拖动进度条
+
+        public GT_VideoView(Context context) {
+            super(context);
+            initView(context);
+        }
+
+        public GT_VideoView(Context context, AttributeSet attrs) {
+            super(context, attrs);
+            initView(context);
+        }
+
+        public GT_VideoView(Context context, AttributeSet attrs, int defStyleAttr) {
+            super(context, attrs, defStyleAttr);
+            initView(context);
+        }
+
+        @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+        public GT_VideoView(Context context, AttributeSet attrs, int defStyleAttr, int defStyleRes) {
+            super(context, attrs, defStyleAttr, defStyleRes);
+            initView(context);
+        }
+
+
+        /**
+         * 初始化 View
+         *
+         * @param context
+         */
+        private void initView(Context context) {
+
+        }
+
+        /**
+         * 绑定 SeekBar
+         *
+         * @param seekBar
+         */
+        @SuppressLint("ClickableViewAccessibility")
+        public void setSeekBar(SeekBar seekBar) {
+            if (seekBar == null) return;
+            this.seekBar = seekBar;
+            //进度条 触摸逻辑
+            seekBar.setOnTouchListener((v, event) -> {
+                if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                    isDragProgressBar = true;
+                    isPlay = isPlaying();
+                } else if ((event.getAction() == MotionEvent.ACTION_UP)) {
+                    isDragProgressBar = false;
+                }
+                return false;
+            });
+
+            //视频的进度
+            seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+                @Override
+                public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                    if (progress == 0 || !isDragProgressBar) {
+                        return;
+                    }
+                    if (isPlaying()) pause();
+                    seekTo(progress);//跳转指定视频位置
+                }
+
+                @Override
+                public void onStartTrackingTouch(SeekBar seekBar) {
+
+                }
+
+                @Override
+                public void onStopTrackingTouch(SeekBar seekBar) {
+                    if (isPlay) start();
+
+                }
+            });
+
+            //设置最新进度
+            GT.Thread.getInstance(0).execute(new Runnable() {
+                @Override
+                public void run() {
+                    //等待加载完成
+                    while (getDuration() == -1) GT.Thread.sleep(100);//关键
+                    //关联进度条
+                    seekBar.setMax(getDuration());
+
+                    while (isRun) {
+                        if (!isPlaying()) continue;
+                        GT.Thread.sleep(300);
+                        GT.Thread.runAndroid(new Runnable() {
+                            @Override
+                            public void run() {
+                                currentPosition = getCurrentPosition();
+                                seekBar.setProgress(currentPosition);
+                            }
+                        });
+                    }
+
+                }
+            });
+
+        }
+
+
+        /**
+         * 加载 资源，与播放
+         *
+         * @param obj     加载视频资源
+         *                目前支持类型:
+         *                1.String :   网址 MP4、 assets 资源
+         *                2.Uri :      正确的 Uri 资源 （本地资源）
+         *                3.Integer :  res/raw 资源
+         *                3.File :     本地资源
+         *                3.Intent :   本地资源 已选中返回的 资源
+         * @param isStart 是否加载完资源自动播放
+         */
+        public void loadVideo(Object obj, boolean... isStart) {
+
+            if (obj instanceof String) {
+                String url = (String) obj;
+                if (!url.contains("http")) {//如果是 assets 资源就处理路径
+                    url = "file:///android_asset/" + url;
+                }
+                setVideoPath(url);
+            } else if (obj instanceof Uri) {
+                setVideoURI((Uri) obj);
+            } else if (obj instanceof Integer) {
+                int videoResourceId = (int) obj;
+                Uri uri = Uri.parse(ContentResolver.SCHEME_ANDROID_RESOURCE + "://" +
+                        getResources().getResourcePackageName(videoResourceId) + '/' +
+                        getResources().getResourceTypeName(videoResourceId) + '/' +
+                        getResources().getResourceEntryName(videoResourceId));
+                setVideoURI(uri);
+            } else if (obj instanceof File) {
+                Uri uri;
+                try {
+                    uri = FileProvider.getUriForFile(getContext(), "com.example.fileprovider", (File) obj);
+                } catch (Exception e) {
+                    uri = Uri.fromFile((File) obj);
+                }
+                if (uri != null) {
+                    setVideoURI(uri);
+                }
+            } else if (obj instanceof Intent) {
+                Uri uri = ((Intent) obj).getData();
+                if (uri != null) {
+                    setVideoURI(uri);
+                }
+            } else {
+
+            }
+
+            //释放自动播放
+            if (isStart != null && isStart.length != 0 && isStart[0]) {
+                start();
+                isPlay = true;
+            }
+        }
+
+
+        /**
+         * 设置循环播放
+         *
+         * @param isLoop    释放循环
+         * @param delayTime 播放完毕后，延迟循环播放的时间
+         */
+        public void setLoop(boolean isLoop, long... delayTime) {
+            if (isLoop) {
+                //监听播放完毕后，重新播放
+                setOnCompletionListener(mp -> {
+                    if (delayTime != null && delayTime.length != 0 && delayTime[0] > 0) {
+                        GT.Thread.getInstance(0).execute(() -> {
+                            GT.Thread.sleep(delayTime[0]);
+                            GT.Thread.runAndroid(() -> start());
+                        });
+                    } else {
+                        start();
+                    }
+                });
+            }
+        }
+
+        //关闭播放，并释放资源
+        public void close() {
+            isRun = false;
+            stopPlayback();
+            suspend();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
+                getHolder().getSurface().release();
+            }
+            ViewGroup parent = (ViewGroup) getParent();
+            if (parent != null) {
+                parent.removeView(this);//重父类将WebView移除
+                parent = null;
+            }
+            seekBar = null;
+
+            Runtime.getRuntime().gc();
+        }
+
+    }
+
     /**
-     * 播放视频
+     * SurfaceView 播放视频
      */
-    public static class GT_Video implements SurfaceHolder.Callback {
+    public static class GT_SurfaceViewVideo implements SurfaceHolder.Callback {
 
         /**
          * 使用说明：
@@ -43631,7 +45367,7 @@ public class GT {
          * @param resId       资源id
          * @param surfaceView surfaceView
          */
-        public GT_Video(Context context, int resId, SurfaceView surfaceView) {
+        public GT_SurfaceViewVideo(Context context, int resId, SurfaceView surfaceView) {
             this.context = context;
             this.surfaceView = surfaceView;
             this.resId = resId;
@@ -43644,7 +45380,7 @@ public class GT {
          *
          * @return
          */
-        public GT_Video play() {
+        public GT_SurfaceViewVideo play() {
             if (mediaPlayer != null) {
                 recover_play();
                 mediaPlayer.start();
@@ -43657,7 +45393,7 @@ public class GT {
          *
          * @return
          */
-        public GT_Video pause() {
+        public GT_SurfaceViewVideo pause() {
             if (mediaPlayer != null) {
                 recover_play();
                 mediaPlayer.pause();
@@ -43670,7 +45406,7 @@ public class GT {
          *
          * @return
          */
-        public GT_Video stop() {
+        public GT_SurfaceViewVideo stop() {
             if (mediaPlayer != null) {
                 mediaPlayer.stop();
                 isPlay = false;
@@ -46728,6 +48464,8 @@ public class GT {
         public static Class<?> stringToClass(String className) {
             if (className == null || !className.contains(".")) return null;
             try {
+                //适配多余情况
+                if(className.contains("class ")) className = className.split(" ")[1];
                 return Class.forName(className);
             } catch (ClassNotFoundException e) {
                 e.printStackTrace();
@@ -48262,6 +50000,40 @@ public class GT {
 
 //=============================================== 接口模块 ===================================================
 
+    //常见的 请求成功和失败
+    public static interface OnSfListener<T> extends SaveObject.SaveBean {
+        public void onSuccess(T obj);  //返回多个参数，或带有首表示的参数
+        public void onFailure(T obj);  //返回多个参数，或带有首表示的参数
+    }
+
+    //多参数接口
+    public static interface OnReturnListener<T> extends SaveObject.SaveBean {
+        public T[] onListener(T... objs);  //返回多个参数，或带有首表示的参数
+    }
+
+
+    //单参数接口
+    public static class OneReturnListener<T> implements OnReturnListener<T> {
+
+        @Override
+        public T[] onListener(T... objs) {
+            return objs;
+        }
+
+        public T onOneListener(T obj) {
+            return obj;
+        }
+
+    }
+
+
+    //单参数接口
+    public static interface OnOneListener<T> extends SaveObject.SaveBean {
+        public void onListener(T obj);  //返回多个参数，或带有首表示的参数
+    }
+
+
+    //旧的接口参数
     //多参数接口
     public static interface OnListener<T> extends SaveObject.SaveBean {
         public void onListener(T... obj);  //返回多个参数，或带有首表示的参数
@@ -48761,6 +50533,16 @@ public class GT {
 
             }
 
+            private int windowIdCache = 0;//当前的 windowId，用于过滤重复解析页面
+
+            protected boolean setParseOver() {
+                return false;
+            }//是否只解析一次
+
+            protected boolean setThread() {
+                return false;
+            }//是否使用子线程解析
+
             //实现辅助功能
             @Override
             public void onAccessibilityEvent(AccessibilityEvent event) {
@@ -48770,11 +50552,34 @@ public class GT {
                 AccessibilityNodeInfo rootInfo = getRootInActiveWindow();
                 if (event == null || rootInfo == null || !RUN_STATE) return;
 
-                if (TF_LOG) {
-                    GT.log(event.getAction());
-                    GT.log(event.getPackageName());
-                    GT.log(rootInfo);
+                if (setParseOver()) {//是否只解析一遍
+
+                    if (windowIdCache == rootInfo.getWindowId()) return;
+                    windowIdCache = rootInfo.getWindowId();
+
+                    if (setThread()) {
+                        GT.Thread.getInstance(0).execute(() -> {
+                            init(event);
+                        });
+                        return;
+                    }
+
+                    init(event);
+                } else {
+                    if (setThread()) {
+                        GT.Thread.getInstance(0).execute(() -> {
+                            init(event);
+                        });
+                        return;
+                    }
+
+                    init(event);
                 }
+            }
+
+            private void init(AccessibilityEvent event) {
+                AccessibilityNodeInfo rootInfo = getRootInActiveWindow();
+                if (event == null || rootInfo == null || !RUN_STATE) return;
 
                 int action = event.getAction();
                 CharSequence packageNameCS = event.getPackageName();
@@ -48783,10 +50588,8 @@ public class GT {
                 String packageName = String.valueOf(packageNameCS);
 
                 initView(action, packageName, rootInfo, event);
-
                 if (RUN_ACTIVITY == null || RUN_ACTIVITY.length() == 0)
                     loadData(event.getAction(), packageName, rootInfo, event, RUN_ACTIVITY);
-
             }
 
             @Override
@@ -48812,7 +50615,7 @@ public class GT {
              * 辅助功能是否启动
              */
             public static boolean isStart() {
-                return mService != null;
+                return RUN_STATE;
             }
 
             public static void finish() {
@@ -49022,6 +50825,265 @@ public class GT {
         public abstract static class AccessibilityServiceUtils<T> {
 
             /**
+             * 返回上一页并设置返回后的反应时间
+             *
+             * @param accessibilityService
+             * @param times
+             */
+            public static void back(AccessibilityService accessibilityService, long... times) {
+                accessibilityService.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK);
+                if (times != null && times.length > 0 && times[0] > 0) {
+                    GT.Thread.sleep(times[0]);
+                }
+            }
+
+            /**
+             * 单击屏幕具体坐标
+             *
+             * @param accessibilityService
+             * @param x
+             * @param y
+             */
+            public static void performClick(AccessibilityService accessibilityService, float x, float y, long... times) {
+                // 创建手势
+                GestureDescription.Builder gestureBuilder = new GestureDescription.Builder();
+                Path path = new Path();
+                path.moveTo(x, y);
+                gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path, 0, 1));
+                GestureDescription gesture = gestureBuilder.build();
+
+                // 执行点击
+                accessibilityService.dispatchGesture(gesture, new AccessibilityService.GestureResultCallback() {
+                    @Override
+                    public void onCompleted(GestureDescription gesture) {
+                        super.onCompleted(gesture);
+                        // 点击完成后的回调
+                    }
+                }, null);
+
+                if (times != null && times.length > 0 && times[0] > 0) {
+                    GT.Thread.sleep(times[0]);
+                }
+            }
+
+
+            //仿滑动- 从左往右滑动
+            public static void MyGesture(AccessibilityService accessibilityService) {
+                Path path = new Path();
+                path.moveTo(1000, 1000);//滑动起点
+                path.lineTo(2000, 1000);//滑动终点
+                GestureDescription.Builder builder = new GestureDescription.Builder();
+                GestureDescription description = builder.addStroke(new GestureDescription.StrokeDescription(path, 100L, 100L)).build();
+                //100L 第一个是开始的时间，第二个是持续时间
+                accessibilityService.dispatchGesture(description, new GT.DarknessMagic.AccessibilityServiceUtils.MyCallBack(), null);
+            }
+
+            /**
+             * 万能滑动
+             *
+             * @param x   X轴滑动起点
+             * @param tox X轴滑动重终点
+             * @param y   y轴滑动起点
+             * @param toy y轴滑动重终点
+             */
+            public static void slidingUniversal(AccessibilityService accessibilityService, float x, float tox, float y, float toy, long... times) {
+                Path path = new Path();
+                path.moveTo(x, y);//滑动起点
+                path.lineTo(tox, toy);//滑动终点
+                GestureDescription.Builder builder = new GestureDescription.Builder();
+                GestureDescription description = builder.addStroke(new GestureDescription.StrokeDescription(path, 100L, 100L)).build();
+                //100L 第一个是开始的时间，第二个是持续时间
+                accessibilityService.dispatchGesture(description, new GT.DarknessMagic.AccessibilityServiceUtils.MyCallBack(), null);
+
+                if (times != null && times.length > 0 && times[0] > 0) {
+                    GT.Thread.sleep(times[0]);
+                }
+            }
+
+
+            //从左滑动
+            public static void slideLeft(AccessibilityService accessibilityService) {
+                Path path = new Path();
+                path.moveTo(1000, 500);//滑动起点
+                path.lineTo(500, 500);//滑动终点
+                GestureDescription.Builder builder = new GestureDescription.Builder();
+                GestureDescription description = builder.addStroke(new GestureDescription.StrokeDescription(path, 100L, 100L)).build();
+                //100L 第一个是开始的时间，第二个是持续时间
+                accessibilityService.dispatchGesture(description, new GT.DarknessMagic.AccessibilityServiceUtils.MyCallBack(), null);
+            }
+
+            //向右滑动
+            public static void slideRight(AccessibilityService accessibilityService) {
+                Path path = new Path();
+                path.moveTo(500, 500);//滑动起点
+                path.lineTo(1000, 500);//滑动终点
+                GestureDescription.Builder builder = new GestureDescription.Builder();
+                GestureDescription description = builder.addStroke(new GestureDescription.StrokeDescription(path, 100L, 100L)).build();
+                //100L 第一个是开始的时间，第二个是持续时间
+                accessibilityService.dispatchGesture(description, new GT.DarknessMagic.AccessibilityServiceUtils.MyCallBack(), null);
+            }
+
+            //向上滑动
+            public static void slideUp(AccessibilityService accessibilityService) {
+                Path path = new Path();
+                path.moveTo(500, 1300);//滑动起点
+                path.lineTo(500, 300);//滑动终点
+                GestureDescription.Builder builder = new GestureDescription.Builder();
+                GestureDescription description = builder.addStroke(new GestureDescription.StrokeDescription(path, 100L, 100L)).build();
+                //100L 第一个是开始的时间，第二个是持续时间
+                accessibilityService.dispatchGesture(description, new GT.DarknessMagic.AccessibilityServiceUtils.MyCallBack(), null);
+            }
+
+            //向下滑动
+            public static void slideDown(AccessibilityService accessibilityService) {
+                Path path = new Path();
+                path.moveTo(500, 300);//滑动起点
+                path.lineTo(500, 1300);//滑动终点
+                GestureDescription.Builder builder = new GestureDescription.Builder();
+                GestureDescription description = builder.addStroke(new GestureDescription.StrokeDescription(path, 100L, 100L)).build();
+                //100L 第一个是开始的时间，第二个是持续时间
+                accessibilityService.dispatchGesture(description, new GT.DarknessMagic.AccessibilityServiceUtils.MyCallBack(), null);
+            }
+
+
+            /**
+             * 立即发送移动的手势
+             * 注意7.0以上的手机才有此方法，请确保运行在7.0手机上
+             *
+             * @param path  移动路径
+             * @param mills 持续总时间
+             */
+            public static void dispatchGestureMove(AccessibilityService accessibilityService, Path path, long mills) {
+                accessibilityService.dispatchGesture(new GestureDescription.Builder().addStroke(new GestureDescription.StrokeDescription
+                        (path, 0, mills)).build(), null, null);
+            }
+
+            /**
+             * 点击指定位置
+             * 注意7.0以上的手机才有此方法，请确保运行在7.0手机上
+             */
+            public static void dispatchGestureClick(AccessibilityService accessibilityService, int x, int y) {
+                Path path = new Path();
+                path.moveTo(x - 1, y - 1);
+                path.lineTo(x + 1, y + 1);
+                accessibilityService.dispatchGesture(new GestureDescription.Builder().addStroke(new GestureDescription.StrokeDescription
+                        (path, 0, 100)).build(), null, null);
+            }
+
+            /**
+             * 长按指定位置
+             * 注意7.0以上的手机才有此方法，请确保运行在7.0手机上
+             */
+            public static void dispatchGestureLongClick(AccessibilityService accessibilityService, int x, int y) {
+                Path path = new Path();
+                path.moveTo(x - 1, y - 1);
+                path.lineTo(x, y - 1);
+                path.lineTo(x, y);
+                path.lineTo(x - 1, y);
+                accessibilityService.dispatchGesture(new GestureDescription.Builder().addStroke(new GestureDescription.StrokeDescription
+                        (path, 0, 1000)).build(), null, null);
+            }
+
+            /**
+             * 辅助显示信息
+             *
+             * @param nodeInfo         显示节点
+             * @param isFiltrationText 是否过滤掉 text == null 的和不是子View的
+             * @return
+             */
+            public static AccessibilityBean showBean(AccessibilityNodeInfo nodeInfo, boolean isFiltrationText, boolean... isLog) {
+                if (nodeInfo == null) return null;
+                CharSequence packageName = nodeInfo.getPackageName();
+                String viewIdResourceName = nodeInfo.getViewIdResourceName();
+                CharSequence className = nodeInfo.getClassName();
+                CharSequence text = nodeInfo.getText();
+                int childCount = nodeInfo.getChildCount();
+                boolean selected = nodeInfo.isSelected();
+                boolean visibleToUser = nodeInfo.isVisibleToUser();
+                if (isFiltrationText && (text == null || childCount != 0)) {
+                    return new AccessibilityBean(text, className, packageName, viewIdResourceName, childCount, selected);
+                }
+
+                if (isLog != null && isLog.length > 0 && isLog[0]) {
+                    GT.log(
+                            "text:" + text + " " +
+                                    "className:" + className + " " +
+                                    "package:" + packageName + " " +
+                                    "vIRName:" + viewIdResourceName + " " +
+                                    "child:" + childCount + " " +
+                                    "selected:" + selected + " " +
+                                    "visibleToUser:" + visibleToUser
+                    );
+                }
+                return new AccessibilityBean(text, className, packageName, viewIdResourceName, childCount, selected);
+
+            }
+
+            /**
+             * 设置名称
+             *
+             * @param nodeInfo
+             * @param data
+             */
+            public static void setEditData(AccessibilityNodeInfo nodeInfo, String data) {
+                Bundle arguments = new Bundle();
+                arguments.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, data);
+                nodeInfo.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments);
+            }
+
+            /**
+             * 根据Id获取
+             *
+             * @param accessibilityNodeInfo
+             * @param packId
+             * @return
+             */
+            public static AccessibilityNodeInfo findById(AccessibilityNodeInfo accessibilityNodeInfo, String packId) {
+                List<AccessibilityNodeInfo> ivBack = accessibilityNodeInfo.findAccessibilityNodeInfosByViewId(packId);
+                if (ivBack != null && !ivBack.isEmpty()) {
+                    AccessibilityNodeInfo accessibilityNodeInfo1 = ivBack.get(0);
+                    if (accessibilityNodeInfo1 != null) return accessibilityNodeInfo1;
+                }
+                return null;
+            }
+
+            public static class AccessibilityBean {
+                public CharSequence text;
+                public CharSequence className;
+                public CharSequence packageName;
+                public String viewIdResourceName;
+                public int childCount;
+                public boolean selected;
+
+                public AccessibilityBean(
+                        CharSequence text,
+                        CharSequence className,
+                        CharSequence packageName,
+                        String viewIdResourceName,
+                        int childCount,
+                        boolean selected) {
+                    this.text = text;
+                    this.className = className;
+                    this.packageName = packageName;
+                    this.viewIdResourceName = viewIdResourceName;
+                    this.childCount = childCount;
+                    this.selected = selected;
+                }
+
+                @Override
+                public String toString() {
+                    return "AccessibilityBean{" +
+                            "text=" + text +
+                            ", className=" + className +
+                            ", packageName=" + packageName +
+                            ", viewIdResourceName='" + viewIdResourceName + '\'' +
+                            ", childCount=" + childCount +
+                            ", selected=" + selected +
+                            '}';
+                }
+            }
+
+            /**
              * 是包含还必须相等;
              */
             protected final boolean mIsEquals;
@@ -49038,7 +51100,7 @@ public class GT {
              * 找id，就是findAccessibilityNodeInfosByViewId方法
              * 和找text一样效率最高，如果能找到，尽量使用这个
              */
-            public static class IdTF extends AccessibilityServiceUtils<String> implements IdTextTF {
+            public static class IdTF extends AccessibilityServiceUtils<String> implements AccessibilityServiceUtils.IdTextTF {
                 public IdTF(@NonNull String idFullName) {
                     super(idFullName, true);
                 }
@@ -49047,8 +51109,6 @@ public class GT {
                 public boolean checkOk(AccessibilityNodeInfo thisInfo) {
                     return true;//此处不需要实现
                 }
-
-                @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR2)
 
                 @Override
                 public AccessibilityNodeInfo findFirst(AccessibilityNodeInfo root) {
@@ -49062,8 +51122,6 @@ public class GT {
                     return list.get(0);
                 }
 
-                @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR2)
-
                 @Override
                 public List<AccessibilityNodeInfo> findAll(AccessibilityNodeInfo root) {
                     return root.findAccessibilityNodeInfosByViewId(mCheckData);
@@ -49074,7 +51132,7 @@ public class GT {
              * 普通text，就是findAccessibilityNodeInfosByText方法
              * 和找id一样效率最高，如果能找到，尽量使用这个
              */
-            public static class TextTF extends AccessibilityServiceUtils<String> implements IdTextTF {
+            public static class TextTF extends AccessibilityServiceUtils<String> implements AccessibilityServiceUtils.IdTextTF {
                 public TextTF(@NonNull String text, boolean isEquals) {
                     super(text, isEquals);
                 }
@@ -49214,7 +51272,8 @@ public class GT {
 
             public static Rect mRecycleRect = new Rect();
 
-            public static final String ST_VIEW = "android.view.View",
+            public static final String
+                    ST_VIEW = "android.view.View",
                     ST_TEXTVIEW = "android.widget.TextView",
                     ST_IMAGEVIEW = "android.widget.ImageView",
                     ST_BUTTON = "android.widget.Button",
@@ -49240,7 +51299,7 @@ public class GT {
              * @param idfullName id全称:com.android.xxx:id/tv_main
              */
             public static AccessibilityServiceUtils newId(@NonNull String idfullName) {
-                return new IdTF(idfullName);
+                return new AccessibilityServiceUtils.IdTF(idfullName);
             }
 
             /**
@@ -49248,39 +51307,39 @@ public class GT {
              * 和找id一样效率最高，如果能找到，尽量使用这个
              */
             public static AccessibilityServiceUtils newText(@NonNull String text, boolean isEquals) {
-                return new TextTF(text, isEquals);
+                return new AccessibilityServiceUtils.TextTF(text, isEquals);
             }
 
             /**
              * 类似uc浏览器，有text值但无法直接根据text来找到
              */
             public static AccessibilityServiceUtils newWebText(@NonNull String webText, boolean isEquals) {
-                return new WebTextTF(webText, isEquals);
+                return new AccessibilityServiceUtils.WebTextTF(webText, isEquals);
             }
 
             /**
              * 找ContentDescription字段
              */
             public static AccessibilityServiceUtils newContentDescription(@NonNull String cd, boolean isEquals) {
-                return new ContentDescriptionTF(cd, isEquals);
+                return new AccessibilityServiceUtils.ContentDescriptionTF(cd, isEquals);
             }
 
             /**
              * 找ClassName匹配
              */
             public static AccessibilityServiceUtils newClassName(@NonNull String className) {
-                return new ClassNameTF(className, true);
+                return new AccessibilityServiceUtils.ClassNameTF(className, true);
             }
 
             public static AccessibilityServiceUtils newClassName(@NonNull String className, boolean isEquals) {
-                return new ClassNameTF(className, isEquals);
+                return new AccessibilityServiceUtils.ClassNameTF(className, isEquals);
             }
 
             /**
              * 在某个区域内的控件
              */
             public static AccessibilityServiceUtils newRect(@NonNull Rect rect) {
-                return new RectTF(rect);
+                return new AccessibilityServiceUtils.RectTF(rect);
             }
 
 
@@ -49351,11 +51410,11 @@ public class GT {
                         return returnInfo;
                     case 1://id或text数量为1，先查出对应的id或text，然后再查其他条件
                         if (tfs.length == 1) {
-                            AccessibilityNodeInfo returnInfo2 = ((IdTextTF) tfs[idTextIndex]).findFirst(rootInfo);
+                            AccessibilityNodeInfo returnInfo2 = ((AccessibilityServiceUtils.IdTextTF) tfs[idTextIndex]).findFirst(rootInfo);
                             rootInfo.recycle();
                             return returnInfo2;
                         } else {
-                            List<AccessibilityNodeInfo> listIdText = ((IdTextTF) tfs[idTextIndex]).findAll(rootInfo);
+                            List<AccessibilityNodeInfo> listIdText = ((AccessibilityServiceUtils.IdTextTF) tfs[idTextIndex]).findAll(rootInfo);
                             if (isEmptyArray(listIdText)) {
                                 break;
                             }
@@ -49444,7 +51503,7 @@ public class GT {
                         findAllRecursive(list, rootInfo, tfs);
                         break;
                     case 1://id或text数量为1，先查出对应的id或text，然后再循环
-                        List<AccessibilityNodeInfo> listIdText = ((IdTextTF) tfs[idTextIndex]).findAll(rootInfo);
+                        List<AccessibilityNodeInfo> listIdText = ((AccessibilityServiceUtils.IdTextTF) tfs[idTextIndex]).findAll(rootInfo);
                         if (isEmptyArray(listIdText)) {
                             break;
                         }
