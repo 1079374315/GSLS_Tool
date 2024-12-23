@@ -408,13 +408,16 @@ import dalvik.system.PathClassLoader;
  * CSDN 博客/官网教程:https://blog.csdn.net/qq_39799899
  * GitHub https://github.com/1079374315/GT
  * 更新内容如下：
- * 1.新增 蓝牙工具类
+ * 1.新增 强大且齐全的蓝牙工具类
  * 2.新增 视频播放器 辅助类GT_VideoView
  * 3.新增 算法类 Algorithm(后面会慢慢收集算法)
  * 4.优化数据库保存map时的问题，新增 @GT_table 为映射表的标识
  * 5.适配 Kotlin的 data 类型的数据表映射
  * 6.解决在启动旧 Fragment 后调用的show 特殊情况下会调用失败的问题
- * 7.悬浮窗 新增 绑定 Activity 的功能，将悬浮窗设置为 Activity 层级的悬浮窗
+ * 7.悬浮窗优化：(默认悬浮窗是 桌面级)
+ * (1)桌面级悬浮窗：可在Android桌面和各种App之上显示 (缺点，无法在系统设置页面显示)
+ * (2)绑定 Activity 层级悬浮窗 ：悬浮窗 根据当前寄生的Activity进行显示和隐藏
+ * (3)绑定 无障碍 层级悬浮窗：几乎所有界面都能显示包括系统设置界面。
  * 8.
  * <p>
  * <p>
@@ -27787,8 +27790,8 @@ public class GT {
          * @param onReturnListener    算法过后返回的 陀螺仪 z 、x 值
          * @param t_j_jg        依次传入 陀螺仪、非重力加速度（非线性加速度）、重力加速度（线性加速度）
          */
-        public static void cursorControlTGJ(OnReturnListener<Float> onReturnListener, float[]... t_j_jg) {
-            if (onReturnListener == null || t_j_jg == null || t_j_jg.length < 3) return;
+        public static void cursorControlTGJ(OnListener<Float> onListener, float[]... t_j_jg) {
+            if (onListener == null || t_j_jg == null || t_j_jg.length < 3) return;
 
             //陀螺仪、非重力加速度、重力加速度原始数据
             float[] gyros = t_j_jg[0];
@@ -27842,7 +27845,7 @@ public class GT {
 
             //调整 方向
             zValue *= -1;
-            onReturnListener.onListener(zValue, xValue);
+            onListener.onListener(zValue, xValue);
         }
 
 
@@ -27943,21 +27946,21 @@ public class GT {
          * @param onReturnListener
          * @param lists
          */
-        public static void getAlgorithmDataAll(OnListener<String> onReturnListener, List<Integer>... lists) {
-            if (onReturnListener == null || lists == null || lists.length == 0 || lists[0] == null) return;
+        public static void getAlgorithmDataAll(OnListener<String> onListener, List<Integer>... lists) {
+            if (onListener == null || lists == null || lists.length == 0 || lists[0] == null) return;
             String[] resultArray = new String[lists.length];
             for (int i = 0; i < lists.length; i++) {
                 int finalI = i;
                 getAlgorithmData(new OneListener<String>() {
                     @Override
                     public void onOneListener(String value) {
-                        if (value == null || !value.contains(WaveBean.WAVE_SPLIT_A)) return;
-                        resultArray[finalI] = value.split(WaveBean.WAVE_SPLIT_A)[0];
+                        if (value == null || !value.contains(WaveBean.WAVE_SPLIT_A))
+                            resultArray[finalI] = value.split(WaveBean.WAVE_SPLIT_A)[0];
                     }
                 }, lists[i]);
             }
             //最终结果，返回
-            onReturnListener.onListener(resultArray);
+            onListener.onListener(resultArray);
         }
 
 
@@ -28152,6 +28155,9 @@ public class GT {
             double nHeight = initWH[1];
             double uWidth = initWH[2];
             double uHeight = initWH[3];
+            if (isStartPeakValleyLog){
+                GT.logt("宽高:" + uHeight);
+            }
 
             StringBuilder nuString = new StringBuilder();
             StringBuilder nuMaxAddMin = new StringBuilder();
@@ -28274,6 +28280,15 @@ public class GT {
                                 rightEndPoint = 0;
                             }
 
+                        }else if(old == value) {
+                            if (i == medianFilter.length - 1) {
+                                if (isStartPeakValleyLog)
+                                    GT.logt("开始计算最后一个峰");
+                                middlePeak = value;
+                                addPeakValley(leftAndRightSpacing, medianFilter, leftOrigin, rightEndPoint,
+                                        middlePeak > 0 ? nWidth : uWidth, middlePeak > 0 ? nHeight : uHeight, middlePeak,
+                                        nuString, nuMaxAddMin, startEndTime);
+                            }
                         }
 
                     } else {// 向下走
@@ -28341,7 +28356,7 @@ public class GT {
                                 rightEndPoint = 0;
 
                                 //清空重叠0状态
-                                if (middlePeak != 0) whether0FilterExists = false;
+                                if(middlePeak != 0) whether0FilterExists = false;
 
                                 if (!nuboolean && old < 0) {
                                     leftOrigin = old;
@@ -28393,7 +28408,10 @@ public class GT {
                                 if (isStartPeakValleyLog)
                                     GT.logt("第一次从峰进入谷");
 
-                                leftAndRightSpacing--;
+                                if (old > 0 && value < 0) {
+                                    leftAndRightSpacing--;
+                                }
+
                                 rightEndPoint = 0;
 
                                 // 记录当前顶点 拿最小值
@@ -28445,7 +28463,7 @@ public class GT {
 
                     } else {// 向下走
 
-                        if (value < old) {// 当前值 小于旧值
+                        if (value <= old) {// 当前值 小于旧值
                             if (isStartPeakValleyLog)
                                 GT.logt("谷向下走2");
 
@@ -28464,7 +28482,6 @@ public class GT {
                                             uHeight, middlePeak, nuString, nuMaxAddMin, startEndTime);
 
                                 } else {
-
                                     if (addPeakValley(leftAndRightSpacing, medianFilter, leftOrigin, rightEndPoint,
                                             middlePeak > 0 ? nWidth : uWidth, middlePeak > 0 ? nHeight : uHeight,
                                             middlePeak, nuString, nuMaxAddMin, startEndTime)) {
@@ -28479,6 +28496,20 @@ public class GT {
                                     rightEndPoint = 0;
                                     //清空重叠0状态
                                     whether0FilterExists = false;
+                                }
+
+                            }else {
+
+                                if (i == medianFilter.length - 1) {
+                                    if (isStartPeakValleyLog)
+                                        GT.logt("开始计算最后一个谷");
+
+                                    if (middlePeak == 0 || middlePeak > value)
+                                        middlePeak = value;
+
+                                    addPeakValley(leftAndRightSpacing, medianFilter, leftOrigin, rightEndPoint, uWidth,
+                                            uHeight, middlePeak, nuString, nuMaxAddMin, startEndTime);
+
                                 }
 
                             }
@@ -36235,6 +36266,17 @@ public class GT {
          *
          */
 
+        //绑定 Activity 的 WindowManager
+        public static class BindingFloatingBean {
+            WindowManager windowManager;    //绑定 Activity 的 WindowManager
+            String className;               //具体绑定到那个 悬浮窗上
+
+            public BindingFloatingBean(WindowManager windowManager, String className) {
+                this.windowManager = windowManager;
+                this.className = className;
+            }
+        }
+
         /**
          * 悬浮窗基类
          */
@@ -36250,6 +36292,7 @@ public class GT {
             public Context context;                           //上下活动
             private WindowManager windowManager;
             private WindowManager.LayoutParams layoutParams;
+            private int delayTime = 100;                       //延时创建悬浮窗界面
             private int width = -1;                            //屏幕宽度
             private int height = -1;                           //屏幕高度
             private View view;                                 //当前加载的布局
@@ -36295,7 +36338,12 @@ public class GT {
             //设置 悬浮窗的悬浮类型
             private int suspensionType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;//默认是 悬浮在 桌面层面
 
-            //通过重写这个方法，进行动态设置 悬浮窗的悬浮类型, 如果悬浮的类型 和 windowManager 不对应就会报错
+            /*
+             * 通过重写这个方法，进行动态设置 悬浮窗的悬浮类型, 如果悬浮的类型 和 windowManager 不对应就会报错
+             * WindowManager.LayoutParams.TYPE_APPLICATION:             单个Activity 内的 悬浮窗
+             * WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY:     整个桌面层面悬浮窗           :有特殊情况，无法在系统设置界面显示
+             * WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY:   无障碍的悬浮窗               :可以在系统设置界面显示
+             */
             public int getSuspensionType() {
                 return suspensionType;
             }
@@ -36562,26 +36610,41 @@ public class GT {
             @Override
             public void onCreate() {
                 super.onCreate();
-                context = this;
-                layoutParams = new WindowManager.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 windowManager = bindingActivityWindowManager();
-                //如果不为 null，表示向要绑定一个 Activity 的 windowManager
-                if(windowManager != null){
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        layoutParams.type = WindowManager.LayoutParams.TYPE_APPLICATION;
-                    } else {
-                        layoutParams.type = WindowManager.LayoutParams.TYPE_PHONE;
-                    }
-                }else{//普通 悬浮窗 和 自定义悬浮窗
-                    //默认事件不穿透
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        layoutParams.type = getSuspensionType();
-                    } else {
-                        layoutParams.type = WindowManager.LayoutParams.TYPE_PHONE;
-                    }
+                if (windowManager != null) {
+                    GT.Thread.getInstance(0).execute(new Runnable() {
+                        @Override
+                        public void run() {
+                            GT.Thread.sleep(delayTime);
+                            GT.Thread.runAndroid(new Runnable() {
+                                @Override
+                                public void run() {
+                                    onCreateView();
+                                }
+                            });
+                        }
+                    });
+                } else {
+                    onCreateView();
                 }
 
-                if(windowManager == null) windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+
+            }
+
+            //创建View 数据
+            private void onCreateView() {
+                context = this;
+                layoutParams = new WindowManager.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                //如果不为 null，表示向要绑定一个 Activity 的 windowManager
+                //默认事件不穿透
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    layoutParams.type = getSuspensionType();
+                } else {
+                    layoutParams.type = WindowManager.LayoutParams.TYPE_PHONE;
+                }
+
+                if (windowManager == null)
+                    windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
 
                 layoutParams.format = PixelFormat.RGBA_8888;
                 layoutParams.gravity = Gravity.TOP | Gravity.LEFT;
@@ -36772,6 +36835,7 @@ public class GT {
              * @param y
              */
             public void setXY(int x, int y) {
+                if(layoutParams == null) return;
                 layoutParams.x = x;
                 layoutParams.y = y;
                 windowManager.updateViewLayout(view, layoutParams);
@@ -36821,7 +36885,22 @@ public class GT {
                 if (intent != null) {
                     mArguments = intent.getExtras();
                 }
-                loadData(this, intent, view);
+                if (layoutParams == null) {
+                    GT.Thread.getInstance(0).execute(new Runnable() {
+                        @Override
+                        public void run() {
+                            GT.Thread.sleep(delayTime);
+                            GT.Thread.runAndroid(new Runnable() {
+                                @Override
+                                public void run() {
+                                    loadData(context, intent, view);
+                                }
+                            });
+                        }
+                    });
+                } else {
+                    loadData(this, intent, view);
+                }
                 return super.onStartCommand(intent, flags, startId);
             }
 
@@ -37338,6 +37417,7 @@ public class GT {
             public void finish() {
                 super.finish();
                 GT.EventBus.getDefault().unregisterAll(this);
+                GT.EventBus.unregisterInteriors(this);//取消内部订阅者
             }
 
         }
@@ -39313,6 +39393,7 @@ public class GT {
             public void finish() {
                 super.finish();
                 GT.EventBus.getDefault().unregisterAll(this);
+                GT.EventBus.unregisterInteriors(this);//取消内部订阅者
             }
 
 
@@ -40230,6 +40311,7 @@ public class GT {
             protected void onDestroy() {
                 super.onDestroy();
                 GT.EventBus.getDefault().unregisterAll(this);
+                GT.EventBus.unregisterInteriors(this);//取消内部订阅者
                 try {
                     context.unregisterReceiver(mBroadcastReceiver);
                 } catch (Exception e) {
@@ -52511,7 +52593,12 @@ public class GT {
 
     /**
      * 核心:后续GT库的开发 会向 兼容 Kotlin 语言的方向发展
-     * 1.热修复支持资源修复
+     * 1.蓝牙,WIFI,http,NFC
+     * 2.音乐播放器能一同初始化多个，并且不会卡，创建一个音乐播放池的概念(将 音乐音效播放，做成 加载图片框架类似的 思路)
+     * 3.GT库 图片封装 需要支持 Webp、SVGA 、MP4动画
+     * 4.热修复支持资源修复
+     *
+     * n.
      */
 
 }
