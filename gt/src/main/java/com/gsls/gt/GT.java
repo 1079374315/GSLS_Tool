@@ -403,12 +403,12 @@ import dalvik.system.PathClassLoader;
  * GSLS_TOOL
  * <p>
  * <p>
- * 更新时间:2024.12.20
+ * 更新时间:2024.12.28
  * 更新内容 v1.4.6.8 版本：
  * CSDN 博客/官网教程:https://blog.csdn.net/qq_39799899
  * GitHub https://github.com/1079374315/GT
  * 更新内容如下：
- * 1.新增 强大且齐全的蓝牙工具类
+ * 1.增强App工具类，并将跳转工具类 更名为 JumpUtils
  * 2.新增 视频播放器 辅助类GT_VideoView
  * 3.新增 算法类 Algorithm(后面会慢慢收集算法)
  * 4.优化数据库保存map时的问题，新增 @GT_table 为映射表的标识
@@ -24244,96 +24244,96 @@ public class GT {
     }
 
     //跳转工具类
-    public static class SkipUtils {
+    public static class JumpUtils {
 
         //网页
-        public static void skipWeb(Context context, String url) {
+        public static void jumpToWeb(Context context, String url) {
             Intent intent = new Intent(Intent.ACTION_VIEW);
             intent.setData(Uri.parse(url));
             context.startActivity(intent);
         }
 
         //壁纸
-        public static void skipWallpaper(Context context, String title) {
+        public static void jumpToWallpaper(Context context, String title) {
             Intent chooseIntent = new Intent(Intent.ACTION_SET_WALLPAPER);
             context.startActivity(Intent.createChooser(chooseIntent, title));
         }
 
         //系统设置
-        public static void skipSystemSettings(Context context) {
+        public static void jumpToSystemSettings(Context context) {
             Intent intent = new Intent(Settings.ACTION_SETTINGS);
             context.startActivity(intent);
         }
 
         //无线与网络
-        public static void skipWirelessAndNetworking(Context context) {
+        public static void jumpToWirelessAndNetworking(Context context) {
             Intent intent = new Intent(Settings.ACTION_AIRPLANE_MODE_SETTINGS);
             context.startActivity(intent);
         }
 
         //WIFI列表
-        public static void skipWIFI(Context context) {
+        public static void jumpToWIFI(Context context) {
             Intent intent = new Intent(Settings.ACTION_WIFI_SETTINGS);
             context.startActivity(intent);
         }
 
         //蓝牙
-        public static void skipBluetooth(Context context) {
+        public static void jumpToBluetooth(Context context) {
             Intent intent = new Intent(Settings.ACTION_BLUETOOTH_SETTINGS);
             context.startActivity(intent);
         }
 
         //移动网络
-        public static void skipMobileNetwork(Context context) {
+        public static void jumpToMobileNetwork(Context context) {
             Intent intent = new Intent(Settings.ACTION_DATA_ROAMING_SETTINGS);
             context.startActivity(intent);
         }
 
         //应用详情
-        public static void skipApplicationDetails(Context context) {
+        public static void jumpToApplicationDetails(Context context) {
             Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.getPackageName(), null));
             context.startActivity(intent);
         }
 
 
         //开发者选项
-        public static void skipDeveloperOptions(Context context) {
+        public static void jumpToDeveloperOptions(Context context) {
             Intent intent = new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS);
             context.startActivity(intent);
         }
 
         //所有应用
-        public static void skipAllApplications(Context context) {
+        public static void jumpToAllApplications(Context context) {
             Intent intent = new Intent(Settings.ACTION_APPLICATION_SETTINGS);
             context.startActivity(intent);
         }
 
         //日期和时间
-        public static void skipDateAddTime(Context context) {
+        public static void jumpToDateAddTime(Context context) {
             Intent intent = new Intent(Settings.ACTION_DATE_SETTINGS);
             context.startActivity(intent);
         }
 
         //关于本机
-        public static void skipAboutThisMachine(Context context) {
+        public static void jumpToAboutThisMachine(Context context) {
             Intent intent = new Intent(Settings.ACTION_DEVICE_INFO_SETTINGS);
             context.startActivity(intent);
         }
 
         //显示与亮度
-        public static void skipDisplayAndBrightness(Context context) {
+        public static void jumpToDisplayAndBrightness(Context context) {
             Intent intent = new Intent(Settings.ACTION_DISPLAY_SETTINGS);
             context.startActivity(intent);
         }
 
         //无障碍服务
-        public static void skipBarrierFreeService(Context context) {
+        public static void jumpToBarrierFreeService(Context context) {
             Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
             context.startActivity(intent);
         }
 
         //管理输入法
-        public static void skipManageInputMethods(Context context) {
+        public static void jumpToManageInputMethods(Context context) {
             Intent intent = new Intent(Settings.ACTION_INPUT_METHOD_SETTINGS);
             context.startActivity(intent);
         }
@@ -24345,25 +24345,25 @@ public class GT {
         }
 
         //存储空间
-        public static void skipStorageSpace(Context context) {
+        public static void jumpToStorageSpace(Context context) {
             Intent intent = new Intent(Settings.ACTION_INTERNAL_STORAGE_SETTINGS);
             context.startActivity(intent);
         }
 
         //位置信息
-        public static void skipLocationInformation(Context context) {
+        public static void jumpToLocationInformation(Context context) {
             Intent intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
             context.startActivity(intent);
         }
 
         //NFC
-        public static void skipNFC(Context context) {
+        public static void jumpToNFC(Context context) {
             Intent intent = new Intent(Settings.ACTION_NFC_SETTINGS);
             context.startActivity(intent);
         }
 
         //APN
-        public static void skipAPN(Context context) {
+        public static void jumpToAPN(Context context) {
             Intent intent = new Intent(Settings.ACTION_APN_SETTINGS);
             context.startActivity(intent);
         }
@@ -24375,44 +24375,52 @@ public class GT {
         }
 
         //搜索界面设置
-        public static void skipSearchInterfaceSettings(Context context) {
+        public static void jumpToSearchInterfaceSettings(Context context) {
             Intent intent = new Intent(Settings.ACTION_SEARCH_SETTINGS);
             context.startActivity(intent);
         }
 
         //密码与安全
-        public static void skipPasswordAndSecurity(Context context) {
+        public static void jumpToPasswordAndSecurity(Context context) {
             Intent intent = new Intent(Settings.ACTION_SECURITY_SETTINGS);
             context.startActivity(intent);
         }
 
         //声音与振动
-        public static void skipSoundAndVibration(Context context) {
+        public static void jumpToSoundAndVibration(Context context) {
             Intent intent = new Intent(Settings.ACTION_SOUND_SETTINGS);
             context.startActivity(intent);
         }
 
         //用户与账号
-        public static void skipUsersAndAccounts(Context context) {
+        public static void jumpToUsersAndAccounts(Context context) {
             Intent intent = new Intent(Settings.ACTION_SYNC_SETTINGS);
             context.startActivity(intent);
         }
 
         //添加账号
-        public static void skipAddAccounts(Context context) {
+        public static void jumpToAddAccounts(Context context) {
             Intent intent = new Intent(Settings.ACTION_ADD_ACCOUNT);
             context.startActivity(intent);
         }
 
         //个人字典
-        public static void skipPersonalDictionary(Context context) {
+        public static void jumpToPersonalDictionary(Context context) {
             Intent intent = new Intent(Settings.ACTION_USER_DICTIONARY_SETTINGS);
             context.startActivity(intent);
         }
 
         //屏保
-        public static void skipMobileScreen(Context context) {
+        public static void jumpToMobileScreen(Context context) {
             Intent intent = new Intent(Settings.ACTION_DREAM_SETTINGS);
+            context.startActivity(intent);
+        }
+
+        //桌面
+        private static void jumpToDesktop(Context context) {
+            Intent intent = new Intent(Intent.ACTION_MAIN);
+            intent.addCategory(Intent.CATEGORY_HOME);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             context.startActivity(intent);
         }
 
@@ -30779,35 +30787,82 @@ public class GT {
         }
 
         /**
-         * one_three:   0-6 的 值来进行强制的 横竖屏、自适应等
          * 执行强制的 横屏 或 竖屏
-         *
+         * one_three: -1到14 的 值来进行强制的 横竖屏、自适应循环等 总共15中屏幕旋转方案
          * @param activity
          */
         public static void AutoLandscapeAndPortrait(Activity activity, int one_three) {
             switch (one_three) {
+                case -1:
+                    //默认值，由系统来选择方向。它的使用策略以及由于选择时特定的上下文环境，可能会因为设备的差异而不同。
+                    activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+                    break;
                 case 0:
+                    //横向显示，即宽度比高度要大，为正向横屏。
                     activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);//强制为正横屏
                     break;
                 case 1:
+                    //与正常的横向方向相反显示，在 API Level 9 中被引入，为反向横屏。
                     activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE);//强制为反横屏
                     break;
                 case 2:
+                    //纵向显示，即高度比宽度要大，为正向竖屏。
                     activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);//强制为正竖屏
                     break;
                 case 3:
+                    //显示的方向（4 个方向）是由设备的方向传感器来决定的，除了它允许屏幕有 4 个显示方向之外，其他与设置为 “sensor” 时情况类似。
+                    // 不管什么样的设备，通常都会允许屏幕在四个方向上旋转，例如，某些设备通常不使用纵向倒转或横向反转，但是使用这个设置，还是会发生这样的反转。这个值在 API Level 9 中引入。
                     activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR);//强制为反竖屏
                     break;
                 case 4:
+                    //如果用户锁定了基于传感器的旋转，其行为与user相同，否则，其行为与fullSensor相同，允许所有 4 种可能的屏幕方向。
+                    // API 级别 18 中新增配置。
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
                         activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_FULL_USER);//为虚拟按键提供旋转屏幕提示
                     }
                     break;
                 case 5:
+                    //显示的方向是由设备的方向传感器来决定的。显示方向依赖于用户怎样持有设备，当用户旋转设备时，显示的方向会改变。
+                    // 默认情况下，有些设备不会在所有的四个方向上都旋转，若要允许在所有的四个方向上都能旋转，需要使用fullSensor属性值
                     activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR);//自动适宜 正横屏、反横屏、正竖屏
                     break;
                 case 6:
+                    //横向显示，但是基于设备传感器，既可以是按正常方向显示，也可以反向显示，在 API Level 9 中被引入
                     activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);//自动适宜 正横屏、反横屏
+                    break;
+                case 7:
+                    //使用用户当前首选的方向
+                    activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_USER);
+                    break;
+                case 8:
+                    //使用 Activity 堆栈中与该 Activity 之下的那个 Activity 的相同的方向
+                    activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_BEHIND);
+                    break;
+                case 9:
+                    //与正常的纵向方向相反显示，在 API Level 9 中被引入，为反向竖屏。
+                    activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT);
+                    break;
+                case 10:
+                    //纵向显示，但是基于设备传感器，既可以是按正常方向显示，也可以反向显示，在 API Level 9 中被引入
+                    activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT);
+                    break;
+                case 11:
+                    //屏幕的显示方向不会参照物理方向传感器。传感器会被忽略，所以显示不会因用户移动设备而旋转。除了这个差别之外，系统会使用与 “unspecified” 设置相同的策略来旋转屏幕的方向
+                    activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_NOSENSOR);
+                    break;
+                case 12:
+                    //横向方向，但根据设备传感器和用户的传感器首选项，可以是正常或反向的横向方向。
+                    // 如果用户锁定了基于传感器的旋转，其行为与landscape相同，否则，其行为与sensorLandscape相同。API 级别 18 中新增配置
+                    activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE);
+                    break;
+                case 13:
+                    //纵向方向，但根据设备传感器和用户的传感器首选项，可以是正常或反向的纵向方向。
+                    // 如果用户锁定了基于传感器的旋转，其行为与portrait相同，否则，其行为与sensorPortrait相同。API 级别 18 中新增配置
+                    activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT);
+                    break;
+                case 14:
+                    //将方向锁定在其当前的任意旋转方向。API 级别 18 中新增配置。
+                    activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LOCKED);
                     break;
             }
 
@@ -36300,7 +36355,7 @@ public class GT {
             protected Timer timer;                               //定时器来检测是否绑定APP
             private boolean isDrag = false;                      //是否可拖动
             private boolean isEventPenetration = false;          //是否事件穿透
-            private static boolean isShow = true;                //是否显示
+            public boolean isShow = true;                //是否显示
             private String cacheKey;//缓存标识
             public final static int TYPE_SELF_ADAPTION = -1;    //自适应
             public final static int TYPE_DEFAULT = -1079;    //创建屏幕的类型,默认是使用用户设置的Xml宽高
@@ -36340,6 +36395,7 @@ public class GT {
 
             /*
              * 通过重写这个方法，进行动态设置 悬浮窗的悬浮类型, 如果悬浮的类型 和 windowManager 不对应就会报错
+             * 注意:这个属性无法与 setEventPenetration 同时生效，优先采用 setEventPenetration
              * WindowManager.LayoutParams.TYPE_APPLICATION:             单个Activity 内的 悬浮窗
              * WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY:     整个桌面层面悬浮窗           :有特殊情况，无法在系统设置界面显示
              * WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY:   无障碍的悬浮窗               :可以在系统设置界面显示
@@ -36374,6 +36430,7 @@ public class GT {
 
             /**
              * 设置事件是否穿透(默认 不穿透)
+             * 这个 无法与 getSuspensionType 同时有效
              *
              * @param eventPenetration true:穿透  false(默认):不穿透
              */
@@ -36422,24 +36479,6 @@ public class GT {
                 return view;
             }
 
-            /**
-             * 是否显示当前APP，需要与 setBindingApp 方法配合
-             *
-             * @return
-             */
-            public static boolean isIsShow() {
-                return isShow;
-            }
-
-            /**
-             * 设置是否显示,一般放在绑定的APP生命周期中
-             * 注意：需要在绑定的悬浮窗中 setBindingApp 方法进行绑定才有效
-             *
-             * @param isShow
-             */
-            public static void setIsShow(boolean isShow) {
-                BaseFloatingWindow.isShow = isShow;
-            }
 
             public static double getScreenSizeCoefficient() {
                 return screenSizeCoefficient;
@@ -36546,7 +36585,8 @@ public class GT {
              * 更新View
              */
             public void updateView(int width, int height) {
-                if (windowManager == null || view == null || layoutParams == null || width == 0 || height == 0) return;
+                if (windowManager == null || view == null || layoutParams == null || width == 0 || height == 0)
+                    return;
                 layoutParams.width = width;
                 layoutParams.height = height;
                 windowManager.updateViewLayout(view, layoutParams);
@@ -36566,6 +36606,7 @@ public class GT {
                         mLifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME);
                     }
                     view.setVisibility(View.VISIBLE);
+                    isShow = true;
                 }
             }
 
@@ -36575,6 +36616,7 @@ public class GT {
                         mLifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE);
                     }
                     view.setVisibility(View.GONE);
+                    isShow = false;
                 }
             }
 
@@ -52593,7 +52635,8 @@ public class GT {
 
     /**
      * 核心:后续GT库的开发 会向 兼容 Kotlin 语言的方向发展
-     * 1.蓝牙,WIFI,http,NFC
+     * 0.万能手机传感器
+     * 1.蓝牙,NFC,WIFI,TCP,UDP
      * 2.音乐播放器能一同初始化多个，并且不会卡，创建一个音乐播放池的概念(将 音乐音效播放，做成 加载图片框架类似的 思路)
      * 3.GT库 图片封装 需要支持 Webp、SVGA 、MP4动画
      * 4.热修复支持资源修复
