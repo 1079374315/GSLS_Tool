@@ -203,6 +203,7 @@ import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.PopupWindow;
+import android.widget.RelativeLayout;
 import android.widget.RemoteViews;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
@@ -228,6 +229,7 @@ import androidx.annotation.StringRes;
 import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.AppCompatImageView;
+import androidx.constraintlayout.widget.ConstraintLayout;
 import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
@@ -408,7 +410,7 @@ import dalvik.system.PathClassLoader;
  * CSDN 博客/官网教程:https://blog.csdn.net/qq_39799899
  * GitHub https://github.com/1079374315/GT
  * 更新内容如下：
- * 1.增强App工具类，并将跳转工具类 更名为 JumpUtils
+ * 1.新增 强大且齐全的蓝牙工具类
  * 2.新增 视频播放器 辅助类GT_VideoView
  * 3.新增 算法类 Algorithm(后面会慢慢收集算法)
  * 4.优化数据库保存map时的问题，新增 @GT_table 为映射表的标识
@@ -7527,7 +7529,7 @@ public class GT {
                     if (contentValues.containsKey(name)) continue;
 
                     //适配 Kotlin 语言中 隐示 字段
-                    if(name.equals("$stable") || name.equals("Companion")) continue;
+                    if (name.equals("$stable") || name.equals("Companion")) continue;
 
                     GT_Column gt_Column = field.getAnnotation(GT_Column.class);//如果是不被初始化的那就进行跳过解析
                     if (gt_Column != null && gt_Column.setNotInit()) {
@@ -7724,7 +7726,7 @@ public class GT {
                     if (val == null) continue;
 
                     //适配 Kotlin 语言中 隐示 字段
-                    if(name.equals("$stable") || name.equals("Companion")) continue;
+                    if (name.equals("$stable") || name.equals("Companion")) continue;
 
                     GT_Column gt_Column = field.getAnnotation(GT_Column.class);//如果是不被初始化的那就进行跳过解析
                     if (gt_Column != null && gt_Column.setNotInit()) {
@@ -7850,10 +7852,10 @@ public class GT {
                             Set<?> keys = null;
                             Collection<?> values = null;
 
-                            if (val.getClass() == ArrayMap.class){
+                            if (val.getClass() == ArrayMap.class) {
                                 keys = ((ArrayMap<?, ?>) val).keySet();
                                 values = ((ArrayMap<?, ?>) val).values();
-                            }else if(val.getClass() == HashMap.class){
+                            } else if (val.getClass() == HashMap.class) {
                                 keys = ((HashMap<?, ?>) val).keySet();
                                 values = ((HashMap<?, ?>) val).values();
                             }
@@ -7887,7 +7889,7 @@ public class GT {
                             } else {
                                 data = val.toString();
                             }
-                        }else{
+                        } else {
 
                         }
 
@@ -7944,7 +7946,7 @@ public class GT {
                 Class<?> type = field.getType();
 
                 //适配 Kotlin 语言中 隐示 字段
-                if(valueName.equals("$stable") || valueName.equals("Companion")) continue;
+                if (valueName.equals("$stable") || valueName.equals("Companion")) continue;
 
                 field.setAccessible(true);
                 for (String str : tableChar) {
@@ -8257,7 +8259,7 @@ public class GT {
                         field.setAccessible(true);
 
                         //适配 Kotlin 语言中 隐示 字段
-                        if(valueName.equals("$stable") || valueName.equals("Companion")) continue;
+                        if (valueName.equals("$stable") || valueName.equals("Companion")) continue;
 
                         if (returnValues != null) {
                             for (String str : returnValues) {
@@ -8658,7 +8660,7 @@ public class GT {
                         Class<?> type = field.getType();
 
                         //适配 Kotlin 语言中 隐示 字段
-                        if(valueName.equals("$stable") || valueName.equals("Companion")) continue;
+                        if (valueName.equals("$stable") || valueName.equals("Companion")) continue;
 
                         field.setAccessible(true);
                         if (returnValues != null) {
@@ -9781,12 +9783,12 @@ public class GT {
                 }
 
                 Class<?> aClass;
-                if(classOrBean.toString().contains("class ")){
+                if (classOrBean.toString().contains("class ")) {
                     aClass = AnnotationAssist.stringToClass(classOrBean.toString());
-                }else{
+                } else {
                     aClass = classOrBean.getClass();
                 }
-                if(aClass == null){
+                if (aClass == null) {
                     if (classOrBean.getClass() == Class.class) {
                         aClass = (Class) classOrBean;
                     } else {
@@ -10636,7 +10638,7 @@ public class GT {
                 Class<?> type = field.getType();//获取当前字段类型
                 String tableChar = field.getName();//获取当前字段的名称
                 //适配 Kotlin 语言中 隐示 字段
-                if(tableChar.equals("$stable") || tableChar.equals("Companion")) continue;
+                if (tableChar.equals("$stable") || tableChar.equals("Companion")) continue;
 
                 GT_Column gt_Column = field.getAnnotation(GT_Column.class);//创建表时的
                 if (gt_Column != null && gt_Column.setNotInit()) continue;//过滤掉 不映射的字段
@@ -10975,7 +10977,7 @@ public class GT {
                             userSqlName = bean_Bean.setSqlNames();//获取用户指定的数据库名称
                         } else if (bean_Entity != null) {
                             userSqlName = bean_Entity.setSqlNames();//获取用户指定的数据库名称
-                        }else if (bean_Table != null) {
+                        } else if (bean_Table != null) {
                             userSqlName = bean_Table.setSqlNames();//获取用户指定的数据库名称
                         }
 
@@ -11004,10 +11006,11 @@ public class GT {
          * 创建动态代理
          * 尽量使用 懒加载 方式创建引用：
          * val sqlApi by lazy { GT.Hibernate.create(SQLApi::class.java, GT.GT_Cache.getHibernate(dbName)) }
+         *
          * @param classz
          * @param hibernates
-         * @return
          * @param <T>
+         * @return
          */
         public static <T> T create(Class<T> classz, Hibernate... hibernates) {
             //设置并发请求个数
@@ -13512,7 +13515,7 @@ public class GT {
          */
         public static Intent putIntent(String key, Object object, Intent... intents) {
             Intent intent = null;
-            if(intents == null || intents.length == 0 || intents[0] == null){
+            if (intents == null || intents.length == 0 || intents[0] == null) {
                 intent = new Intent();
             }
             if (object instanceof String) {
@@ -14105,7 +14108,7 @@ public class GT {
          * @return String   返回当前 ip 地址
          */
         public static String getIPAddress(Context context) {
-            try{
+            try {
                 @SuppressLint("MissingPermission") NetworkInfo info = ((ConnectivityManager) context
                         .getSystemService(Context.CONNECTIVITY_SERVICE)).getActiveNetworkInfo();
                 if (info != null && info.isConnected()) {
@@ -14141,7 +14144,7 @@ public class GT {
                     //当前无网络连接,请在设置中打开网络
 
                 }
-            }catch (Exception e){
+            } catch (Exception e) {
 
             }
             return null;
@@ -16058,6 +16061,7 @@ public class GT {
          * 创建动态代理对象
          * 尽量使用 懒加载 方式创建引用：
          * val httpApi by load { GT.HttpCall.create(HttpApi::class.java) }
+         *
          * @param classz
          * @param onRunMethod
          * @param <T>
@@ -21934,7 +21938,7 @@ public class GT {
                     String name = field.getName();
                     Object value = field.get(obj);
                     //适配 Kotlin 语言中 隐示 字段
-                    if(name.equals("$stable") || name.equals("Companion")) continue;
+                    if (name.equals("$stable") || name.equals("Companion")) continue;
                     if (type == String.class) {
                         stringBuilder.append(name + "='" + value + "', ");
                     } else if (type == Boolean.class) {
@@ -22864,12 +22868,13 @@ public class GT {
 
         /**
          * 判断是否为正常的IP地址
+         *
          * @param ipAddress
          * @return
          */
         public static boolean isValidIpAddress(String ipAddress) {
             String[] parts = ipAddress.split("\\.");
-            if (parts.length!= 4) {
+            if (parts.length != 4) {
                 return false;
             }
             for (String part : parts) {
@@ -23689,6 +23694,7 @@ public class GT {
 
         /**
          * 单击拦截时间
+         *
          * @param view
          * @param onClickListener
          * @param intervalTimes
@@ -27783,6 +27789,7 @@ public class GT {
 
         /**
          * 字段排除大小写限制，进行判断是否包含
+         *
          * @param mainStr
          * @param targetStr
          * @return
@@ -27795,8 +27802,9 @@ public class GT {
 
         /**
          * TGJ光标控制算法
-         * @param onReturnListener    算法过后返回的 陀螺仪 z 、x 值
-         * @param t_j_jg        依次传入 陀螺仪、非重力加速度（非线性加速度）、重力加速度（线性加速度）
+         *
+         * @param onReturnListener 算法过后返回的 陀螺仪 z 、x 值
+         * @param t_j_jg           依次传入 陀螺仪、非重力加速度（非线性加速度）、重力加速度（线性加速度）
          */
         public static void cursorControlTGJ(OnListener<Float> onListener, float[]... t_j_jg) {
             if (onListener == null || t_j_jg == null || t_j_jg.length < 3) return;
@@ -28163,7 +28171,7 @@ public class GT {
             double nHeight = initWH[1];
             double uWidth = initWH[2];
             double uHeight = initWH[3];
-            if (isStartPeakValleyLog){
+            if (isStartPeakValleyLog) {
                 GT.logt("宽高:" + uHeight);
             }
 
@@ -28288,7 +28296,7 @@ public class GT {
                                 rightEndPoint = 0;
                             }
 
-                        }else if(old == value) {
+                        } else if (old == value) {
                             if (i == medianFilter.length - 1) {
                                 if (isStartPeakValleyLog)
                                     GT.logt("开始计算最后一个峰");
@@ -28364,7 +28372,7 @@ public class GT {
                                 rightEndPoint = 0;
 
                                 //清空重叠0状态
-                                if(middlePeak != 0) whether0FilterExists = false;
+                                if (middlePeak != 0) whether0FilterExists = false;
 
                                 if (!nuboolean && old < 0) {
                                     leftOrigin = old;
@@ -28506,7 +28514,7 @@ public class GT {
                                     whether0FilterExists = false;
                                 }
 
-                            }else {
+                            } else {
 
                                 if (i == medianFilter.length - 1) {
                                     if (isStartPeakValleyLog)
@@ -28887,7 +28895,6 @@ public class GT {
             }
             return sum / (double) numbers.length;
         }
-
 
 
     }
@@ -30789,6 +30796,7 @@ public class GT {
         /**
          * 执行强制的 横屏 或 竖屏
          * one_three: -1到14 的 值来进行强制的 横竖屏、自适应循环等 总共15中屏幕旋转方案
+         *
          * @param activity
          */
         public static void AutoLandscapeAndPortrait(Activity activity, int one_three) {
@@ -33179,10 +33187,10 @@ public class GT {
             } else if (fragmentObj instanceof Fragment) {
                 fragment = (Fragment) fragmentObj;
                 fragmentClass = fragment.getClass();
-            }else{
-                if(fragmentObj.toString().contains("class ")){
+            } else {
+                if (fragmentObj.toString().contains("class ")) {
                     fragmentClass = AnnotationAssist.stringToClass(fragmentObj.toString());
-                }else{
+                } else {
                     fragmentClass = fragmentObj.getClass();
                 }
             }
@@ -33636,8 +33644,8 @@ public class GT {
                         List<Fragment> fragments = fragmentManager.getFragments();
 
                         //过滤掉 FragmentDialog，在一些特殊情况，这个会被加进去
-                        for(Fragment fragment : fragments){
-                            if(fragment instanceof DialogFragment){
+                        for (Fragment fragment : fragments) {
+                            if (fragment instanceof DialogFragment) {
                                 fragments.remove(fragment);
                             }
                         }
@@ -36303,22 +36311,20 @@ public class GT {
          * 悬浮窗需要注意以下问题：
          * 1.申请悬浮窗权限：
          * <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-         *
+         * <p>
          * 2.需要动态处理权限
-         *  if (Build.VERSION.SDK_INT >= 23) {
-         *                     if (!Settings.canDrawOverlays(activity)) {
-         *                         Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName()));
-         *                         startActivityForResult(intent, 0);
-         *                     } else {
-         *                         startService(new Intent(activity, FloatingDemo.class));
-         *                     }
-         *                 } else {
-         *                     startService(new Intent(activity, FloatingDemo.class));
-         *                 }
-         *
+         * if (Build.VERSION.SDK_INT >= 23) {
+         * if (!Settings.canDrawOverlays(activity)) {
+         * Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName()));
+         * startActivityForResult(intent, 0);
+         * } else {
+         * startService(new Intent(activity, FloatingDemo.class));
+         * }
+         * } else {
+         * startService(new Intent(activity, FloatingDemo.class));
+         * }
+         * <p>
          * 3.静态注册 <service android:name=".service.test.FloatingDemo"  android:exported="true"/>
-         *
-         *
          */
 
         //绑定 Activity 的 WindowManager
@@ -36347,7 +36353,7 @@ public class GT {
             public Context context;                           //上下活动
             private WindowManager windowManager;
             private WindowManager.LayoutParams layoutParams;
-            private int delayTime = 100;                       //延时创建悬浮窗界面
+            private int delayTime = 200;                       //延时创建悬浮窗界面
             private int width = -1;                            //屏幕宽度
             private int height = -1;                           //屏幕高度
             private View view;                                 //当前加载的布局
@@ -36371,6 +36377,14 @@ public class GT {
 
             private int delayLoadTime = 220;//延迟时间
 
+            public int getDelayTime() {
+                return delayTime;
+            }
+
+            public void setDelayTime(int delayTime) {
+                this.delayTime = delayTime;
+            }
+
             public int setDelayTime() {
                 return delayLoadTime;
             }
@@ -36390,9 +36404,6 @@ public class GT {
                 return mLifecycleRegistry;
             }
 
-            //设置 悬浮窗的悬浮类型
-            private int suspensionType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;//默认是 悬浮在 桌面层面
-
             /*
              * 通过重写这个方法，进行动态设置 悬浮窗的悬浮类型, 如果悬浮的类型 和 windowManager 不对应就会报错
              * 注意:这个属性无法与 setEventPenetration 同时生效，优先采用 setEventPenetration
@@ -36400,12 +36411,9 @@ public class GT {
              * WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY:     整个桌面层面悬浮窗           :有特殊情况，无法在系统设置界面显示
              * WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY:   无障碍的悬浮窗               :可以在系统设置界面显示
              */
+            //设置 悬浮窗的悬浮类型:默认是 悬浮在 桌面层面
             public int getSuspensionType() {
-                return suspensionType;
-            }
-
-            public void setSuspensionType(int suspensionType) {
-                this.suspensionType = suspensionType;
+                return WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
             }
 
             private Bundle mArguments;
@@ -36478,7 +36486,6 @@ public class GT {
             public View getView() {
                 return view;
             }
-
 
             public static double getScreenSizeCoefficient() {
                 return screenSizeCoefficient;
@@ -36587,8 +36594,8 @@ public class GT {
             public void updateView(int width, int height) {
                 if (windowManager == null || view == null || layoutParams == null || width == 0 || height == 0)
                     return;
-                layoutParams.width = width;
-                layoutParams.height = height;
+                if(width != -1) layoutParams.width = width;
+                if(height != -1) layoutParams.height = height;
                 windowManager.updateViewLayout(view, layoutParams);
             }
 
@@ -36598,6 +36605,18 @@ public class GT {
             public void updateWidthHeight() {
                 width = windowManager.getDefaultDisplay().getWidth();//获取当前屏幕宽度
                 height = windowManager.getDefaultDisplay().getHeight();//获取当前屏幕高度
+            }
+
+            /**
+             * 设置充满全屏
+             * @param isWidth   宽度充满全屏
+             * @param isHeight  高度充满全屏
+             */
+            public void setFullScreen(boolean isWidth, boolean isHeight){
+                updateWidthHeight();
+                if(isWidth && isHeight) updateView(width, height);
+                else if(isWidth && !isHeight) updateView(width, -1);
+                else if(!isWidth && isHeight) updateView(-1, height);
             }
 
             public void show() {
@@ -36740,7 +36759,6 @@ public class GT {
                                     WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL |
                                     WindowManager.LayoutParams.FIRST_SYSTEM_WINDOW;
                 }
-
                 windowManager.addView(view, layoutParams);
             }
 
@@ -36877,7 +36895,7 @@ public class GT {
              * @param y
              */
             public void setXY(int x, int y) {
-                if(layoutParams == null) return;
+                if (layoutParams == null) return;
                 layoutParams.x = x;
                 layoutParams.y = y;
                 windowManager.updateViewLayout(view, layoutParams);
@@ -48589,7 +48607,7 @@ public class GT {
             if (className == null || !className.contains(".")) return null;
             try {
                 //适配多余情况
-                if(className.contains("class ")) className = className.split(" ")[1];
+                if (className.contains("class ")) className = className.split(" ")[1];
                 return Class.forName(className);
             } catch (ClassNotFoundException e) {
                 e.printStackTrace();
@@ -50125,9 +50143,31 @@ public class GT {
 //=============================================== 接口模块 ===================================================
 
     //常见的 请求成功和失败
-    public static interface OnSfListener<T> extends SaveObject.SaveBean {
-        public void onSuccess(T obj);  //返回多个参数，或带有首表示的参数
-        public void onFailure(T obj);  //返回多个参数，或带有首表示的参数
+    public static interface OnSfListener extends SaveObject.SaveBean {
+        public void onSuccess();  //无参数成功回调
+
+        public void onFailure();  //无参数失败回调
+    }
+
+    //常见的 请求成功和失败
+    public static interface OnSfListenerV<T> extends SaveObject.SaveBean {
+        public void onSuccessV(T obj);  //返回多个参数，或带有首表示的参数
+
+        public void onFailureV(T obj);  //返回多个参数，或带有首表示的参数
+    }
+
+    //常见的 请求成功和失败
+    public static interface OnSfListenerR<T> extends SaveObject.SaveBean {
+        public T onSuccessR();  //返回多个参数，或带有首表示的参数
+
+        public T onFailureR();  //返回多个参数，或带有首表示的参数
+    }
+
+    //常见的 请求成功和失败
+    public static interface OnSfListenerVR<T> extends SaveObject.SaveBean {
+        public T onSuccessR(T obj);  //返回多个参数，或带有首表示的参数
+
+        public T onFailureR(T obj);  //返回多个参数，或带有首表示的参数
     }
 
     //多参数接口
